@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>태양광 입지 분석기 v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFF2EC; --card:#FFFFFF; --card-line:#D9DED5;
+    --ink:#1F2A24; --ink-soft:#4B5B50;
+    --forest:#3B6A4A; --forest-dim:#E4EEE7;
+    --amber:#C9860A; --amber-dim:#FBEBCB;
+    --rust:#AE4A2E; --rust-dim:#F6E1D8;
+    --stamp-red:#B23B2E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Noto Sans KR',sans-serif;line-height:1.55;}
+  .wrap{max-width:1180px;margin:0 auto;padding:36px 24px 80px;}
+  header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:28px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--forest);margin:0 0 8px;}
+  h1{font-family:'Noto Serif KR',serif;font-weight:700;font-size:32px;margin:0;letter-spacing:-.01em;}
+  .meta{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);text-align:right;line-height:1.7;}
+  .meta b{color:var(--rust);}
+  .layout{display:grid;grid-template-columns:380px 1fr;gap:22px;align-items:start;}
+  @media (max-width:880px){.layout{grid-template-columns:1fr;}}
+  .card{background:var(--card);border:1px solid var(--card-line);border-radius:3px;padding:22px 22px 24px;}
+  .card h2{font-family:'Noto Serif KR',serif;font-size:17px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--card-line);}
+  .field{margin-bottom:15px;}
+  .field label{display:block;font-size:12.5px;font-weight:500;color:var(--ink-soft);margin-bottom:5px;}
+  .field select, .field input{width:100%;padding:9px 10px;border:1px solid #C7CFC3;border-radius:2px;font-family:inherit;font-size:14px;background:#FCFDFB;color:var(--ink);}
+  .field select:focus, .field input:focus{outline:2px solid var(--forest);outline-offset:1px;}
+  .field .hint{font-size:11px;color:#7C8B7F;margin-top:4px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0 4px;color:var(--ink-soft);}
+  .checkrow input{width:auto;}
+  button.run{width:100%;padding:13px;margin-top:6px;background:var(--ink);color:#F6F7F3;border:none;border-radius:2px;font-family:'Noto Sans KR',sans-serif;font-weight:700;font-size:14.5px;letter-spacing:.02em;cursor:pointer;}
+  button.run:hover{background:var(--forest);}
+  .results{display:flex;flex-direction:column;gap:18px;}
+  .stamp-band{display:flex;align-items:center;gap:20px;background:var(--card);border:1px solid var(--card-line);padding:20px 24px;}
+  .stamp{width:92px;height:92px;border-radius:50%;border:3px solid var(--stamp-red);color:var(--stamp-red);display:flex;align-items:center;justify-content:center;text-align:center;font-family:'Noto Serif KR',serif;font-weight:700;font-size:15px;transform:rotate(-9deg);flex:none;opacity:.92;}
+  .stamp.ok{border-color:var(--forest);color:var(--forest);}
+  .stamp.warn{border-color:var(--amber);color:var(--amber);}
+  .stamp-text h3{margin:0 0 6px;font-family:'Noto Serif KR',serif;font-size:19px;}
+  .stamp-text p{margin:0;font-size:13.5px;color:var(--ink-soft);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media (max-width:700px){.grid2{grid-template-columns:1fr;}}
+  .checklist{list-style:none;margin:0;padding:0;}
+  .checklist li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #EEF1EA;font-size:13.5px;}
+  .checklist li:last-child{border-bottom:none;}
+  .tag{flex:none;width:64px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;padding:3px 0;border-radius:2px;height:fit-content;}
+  .tag.need{background:var(--rust-dim);color:var(--rust);}
+  .tag.check{background:var(--amber-dim);color:#8A5F06;}
+  .tag.clear{background:var(--forest-dim);color:var(--forest);}
+  .li-body b{display:block;font-weight:700;margin-bottom:2px;}
+  .li-body span{color:var(--ink-soft);font-size:12.5px;}
+  .cost-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  .cost-table td{padding:9px 4px;border-bottom:1px solid #EEF1EA;vertical-align:top;}
+  .cost-table td.num{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
+  .cost-table tr.total td{border-top:2px solid var(--ink);border-bottom:none;font-weight:700;padding-top:12px;}
+  .cost-table tr.total td.num{font-size:16px;color:var(--rust);}
+  .footnote{font-size:11.5px;color:#8A968B;margin-top:10px;line-height:1.6;}
+  .reco{background:var(--forest-dim);border:1px solid #CBE0D2;padding:16px 18px;font-size:13.5px;}
+  .reco.warn{background:var(--rust-dim);border-color:#E7BEB0;}
+  .reco ul{margin:8px 0 0;padding-left:18px;}
+  .reco li{margin-bottom:6px;}
+  .ordinance-table, .ref-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px;}
+  .ordinance-table th, .ordinance-table td, .ref-table th, .ref-table td{border:1px solid var(--card-line);padding:7px 8px;text-align:left;}
+  .ordinance-table th, .ref-table th{background:#F5F7F2;font-weight:500;color:var(--ink-soft);}
+  .verified-badge{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:1px 6px;border-radius:8px;white-space:nowrap;}
+  .v-true{background:var(--forest-dim);color:var(--forest);}
+  .v-false{background:var(--rust-dim);color:var(--rust);}
+  details{margin-top:10px;}
+  summary{cursor:pointer;font-size:12.5px;color:var(--forest);font-weight:500;}
+  .placeholder{display:flex;align-items:center;justify-content:center;min-height:220px;color:#9AA69B;font-size:13.5px;text-align:center;padding:20px;}
+  .grade-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+  .grade-table td, .grade-table th{border:1px solid var(--card-line);padding:8px;}
+  .grade-table th{background:#F5F7F2;text-align:left;}
+  .grade-A{color:var(--forest);font-weight:700;}
+  .grade-D{color:var(--rust);font-weight:700;}
+  .keyline{background:var(--forest-dim);border-left:3px solid var(--forest);padding:10px 14px;margin:10px 0;font-size:13px;}
+  .subhide{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <p class="eyebrow">Solar Site Feasibility v2 · 태양광 입지·인허가·부담금 분석</p>
+      <h1>태양광 입지 분석기</h1>
+    </div>
+    <div class="meta">
+      기준일 2026.08 · 국가 법령·고시 + 실무자료 기준<br>
+      <b>이격거리: 도로 폐지 / 주거지 200m 상한 (2026.9.18 시행)</b><br>
+      데이터는 대화를 통해 계속 보강됩니다
+    </div>
+  </header>
+
+  <div class="card" style="margin-bottom:22px;">
+    <h2>주소로 위치 확인</h2>
+    <div class="row2" style="align-items:end;">
+      <div class="field" style="margin-bottom:0;">
+        <label for="siteAddress">지번 주소 (예: 충남 천안시 동남구 광덕면 대평리 178-1)</label>
+        <input type="text" id="siteAddress" placeholder="주소를 입력하세요" value="충남 천안시 동남구 광덕면 대평리 178-1">
+      </div>
+      <button class="run" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
+    </div>
+    <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
+    <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
+      <iframe id="mapEmbed" style="width:100%;height:340px;border:1px solid var(--card-line);border-radius:3px;" loading="lazy"></iframe>
+    </div>
+    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다 — 위치 확인을 누르면 카카오맵이 새 탭으로 자동으로 열립니다. 아래 미리보기는 구글맵 기준이라 국내 위성·지적 정보는 정확도가 떨어질 수 있어 참고용으로만 봐주세요. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요.</p>
+  </div>
+
+  <div class="layout">
+
+    <!-- INPUT -->
+    <div class="card">
+      <h2>01 · 부지 조건 입력</h2>
+
+      <div class="field">
+        <label for="landCategory">지목</label>
+        <select id="landCategory">
+          <option value="farm">전 · 답 · 과수원 (농지)</option>
+          <option value="forest">임야 (산지)</option>
+          <option value="misc">잡종지 · 대지 등 (전용 절차 없음)</option>
+        </select>
+      </div>
+
+      <div class="field" id="farmZoneField">
+        <label for="farmZone">농지 구분</label>
+        <select id="farmZone">
+          <option value="out">농업진흥지역 밖 (부과율 20%)</option>
+          <option value="protect">농업보호구역 — 진흥지역 내, 전용 1만㎡ 이하만 가능 (30%)</option>
+          <option value="core">농업진흥구역(절대농지) — 노지 태양광 원칙적 불허</option>
+        </select>
+      </div>
+
+      <div class="field" id="forestTypeField" style="display:none;">
+        <label for="forestType">산지 구분</label>
+        <select id="forestType">
+          <option value="jun">준보전산지</option>
+          <option value="bo">보전산지 — 발전시설 원칙적 불허</option>
+          <option value="restrict">산지전용·일시사용제한지역</option>
+        </select>
+      </div>
+
+      <div class="field" id="slopeField" style="display:none;">
+        <label for="slope">평균 경사도</label>
+        <select id="slope">
+          <option value="10">10° 미만</option>
+          <option value="20">10° ~ 20° 미만</option>
+          <option value="30">20° ~ 30° 미만</option>
+          <option value="99">30° 이상</option>
+        </select>
+        <p class="hint">산지 태양광은 통상 15° 초과 시 지자체 조례상 불허가 많음 (조례 없을 시 25° 참고)</p>
+      </div>
+
+      <div class="field">
+        <label for="useZone">용도지역</label>
+        <select id="useZone">
+          <optgroup label="도시지역">
+            <option value="urban_res">주거·상업지역</option>
+            <option value="urban_green">자연녹지·생산녹지지역</option>
+            <option value="urban_ind">공업지역</option>
+            <option value="urban_conserve">보전녹지지역 — 발전시설 원칙적 제한</option>
+          </optgroup>
+          <optgroup label="관리지역">
+            <option value="mgmt_plan">계획관리지역</option>
+            <option value="mgmt_prod">생산관리지역</option>
+            <option value="mgmt_conserve">보전관리지역</option>
+          </optgroup>
+          <option value="agri_forest">농림지역</option>
+          <option value="nature_conserve">자연환경보전지역</option>
+        </select>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="area">면적 (㎡)</label>
+          <input type="number" id="area" value="9900" min="1">
+        </div>
+        <div class="field">
+          <label for="price">개별공시지가 (원/㎡)</label>
+          <input type="number" id="price" value="35000" min="0">
+        </div>
+      </div>
+
+      <label class="checkrow"><input type="checkbox" id="useLocalOrdinance"> 이 지역 개발행위허가 규모가 국가 기본치보다 조례로 축소되어 있음</label>
+      <div class="field subhide" id="localLimitField">
+        <label for="localLimit">조례상 허가 면적 상한 (㎡)</label>
+        <input type="number" id="localLimit" value="10000">
+        <p class="hint">예: 거제시 도시계획조례 제17조 — 생산관리 1만㎡ / 보전관리 5천㎡ / 농림 1만㎡ 미만</p>
+      </div>
+
+      <details style="margin-top:10px;">
+        <summary style="font-size:12.5px;color:var(--forest);font-weight:700;">+ 토목공사비 · 개발부담금 계산 (선택 입력, 펼치기)</summary>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--card-line);">
+          <p class="hint" style="margin-bottom:10px;">아래 단가는 <b>일반적인 참고 범위(추정치)</b>이며, 현장 조건·시공사 견적에 따라 크게 달라질 수 있습니다. 경사도를 선택하면 정지·사면보호 단가가 자동으로 채워지며, 직접 수정할 수 있습니다.</p>
+
+          <p style="font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:10px 0 4px;">① 토목공사비 (㎡ 단가)</p>
+          <div class="row2">
+            <div class="field"><label for="cwGrading">정지작업(절성토) 원/㎡</label><input type="number" id="cwGrading" value="3000"></div>
+            <div class="field"><label for="cwDrain">배수시설 원/㎡</label><input type="number" id="cwDrain" value="800"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label for="cwSlope">사면보호(코아매트 등) 원/㎡</label><input type="number" id="cwSlope" value="0"></div>
+            <div class="field"><label for="cwFence">울타리·부대시설 원/㎡</label><input type="number" id="cwFence" value="1200"></div>
+          </div>
+          <p style="font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:12px 0 4px;">② 별도 공사비 (총액)</p>
+          <div class="row2">
+            <div class="field"><label for="cwWall">옹벽 등 구조물 (원)</label><input type="number" id="cwWall" value="0"></div>
+            <div class="field"><label for="cwRoad">진입로 공사 (원)</label><input type="number" id="cwRoad" value="0"></div>
+          </div>
+          <div class="field"><label for="cwDesign">설계·측량·인허가 대행비 (원)</label><input type="number" id="cwDesign" value="15000000"></div>
+
+          <p style="font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:12px 0 4px;">③ 개발부담금 (지목변경이 수반되는 경우만 대상)</p>
+          <label class="checkrow"><input type="checkbox" id="landChange"> 이 사업으로 지목변경이 발생함 (임야는 원칙적으로 대상 아님)</label>
+          <div class="row2">
+            <div class="field"><label for="isCapital">권역</label>
+              <select id="isCapital"><option value="no">비수도권</option><option value="yes">수도권(서울·인천·경기)</option></select>
+            </div>
+            <div class="field"><label for="devRate">부과율 (개발이익환수법 제13조)</label>
+              <select id="devRate">
+                <option value="0.25" selected>25% — 일반 개발행위(기본값)</option>
+                <option value="0.20">20% — 대규모 계획입지·GB 원소유자</option>
+              </select>
+              <p class="hint">태양광 발전소는 지구단위계획 없이 개발행위허가로 형질변경하는 방식이 대부분이라 <b>25%가 기본값</b>입니다. 미리 지구단위계획을 수립한 대규모 사업이거나, 개발제한구역 지정 당시부터 소유해온 토지를 본인이 직접 개발하는 경우에만 20%가 적용됩니다.</p>
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field"><label for="endPrice">종료시점지가 (원/㎡)</label><input type="number" id="endPrice" value="0" placeholder="개발 완료 후 예상 지가"></div>
+            <div class="field"><label for="normalRise">정상지가상승분 (원/㎡)</label><input type="number" id="normalRise" value="0"></div>
+          </div>
+          <p class="hint">개시시점지가는 위에서 입력한 개별공시지가를 그대로 사용합니다. 종료시점지가·정상지가상승분을 모르면 0으로 두면 개발부담금 계산이 생략됩니다.</p>
+        </div>
+      </details>
+
+      <button class="run" onclick="runAnalysis()">부지 분석 실행</button>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="results" id="resultsWrap">
+      <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
+    </div>
+
+  </div>
+
+  <!-- 실무 핵심 체크포인트 -->
+  <div class="card" style="margin-top:24px;">
+    <h2>02 · 실무 핵심 체크포인트 <span style="font-weight:400;font-size:12px;color:#9AA69B;">(업로드 자료 요약)</span></h2>
+    <div class="keyline">지목보다 용도지역, 용도지역보다 <b>중첩규제(토지이용계획확인원의 '다른 법령' 칸)</b>를 먼저 본다. 이격거리·진입로에서 대부분 탈락한다.</div>
+    <table class="grade-table">
+      <tr><th>등급</th><th>지목</th><th>필요 절차</th><th>코멘트</th></tr>
+      <tr><td class="grade-A">A</td><td>잡종지, 대(나대지), 공장·창고용지, 주차장</td><td>전용 불필요, 개발행위허가만</td><td>부담금 없음 — 가장 가볍다</td></tr>
+      <tr><td>B</td><td>전, 답, 과수원, 목장용지</td><td>농지전용허가 + 농지보전부담금</td><td>평탄해 토목비 저렴 · 농업진흥구역이면 불가</td></tr>
+      <tr><td>C</td><td>임야</td><td>산지일시사용허가 + 대체산림자원조성비</td><td>경사도·입목축적 관문 · 20년 후 원상복구, 지목변경 불가</td></tr>
+      <tr><td class="grade-D">D</td><td>도로·하천·구거·제방·묘지 등</td><td>개발행위 대상 아님</td><td>부지 안에 포함되어 있으면 문제</td></tr>
+    </table>
+    <p class="footnote" style="margin-top:12px;">
+      <b>즉시 탈락 사유(토지이용계획확인원 '다른 법령' 칸에 보이면 사실상 종료):</b>
+      농업진흥구역, 보전산지(공익용), 백두대간보호지역, 자연공원, 상수원보호구역, 개발제한구역(일부 협의 가능).<br>
+      <b>구거:</b> 가로지르면(횡단) 대체로 협의 가능하지만, 따라가는(종단) 것은 원칙적으로 매우 어렵다.<br>
+      <b>진입로:</b> 현황도로(지목 전·답·구거)는 사용승낙서가 사실상 예외 없이 필요. 이미 국비·지방비로 포장된 마을안길은 승낙 불요로 처리되는 경우가 있어 도로 지정·공고 이력부터 확인.<br>
+      <b>인접 필지 합산 규정:</b> 소규모환경영향평가 대상 미만으로 승인받은 부지의 경계로부터 직선거리 <b>50m 이내</b> 지역에서 동일인·동일 필지·분할 후 <b>10년 이내</b> 추가 승인 시, 기존 면적과 신규 면적을 합산해 판단합니다(환경영향평가법 시행령 별표4 비고 11호). 필지를 쪼개 기준면적을 회피하는 방식은 통하지 않습니다.
+    </p>
+  </div>
+
+  <!-- REFERENCE DATA -->
+  <div class="card" style="margin-top:18px;">
+    <h2>03 · 참고 데이터 — 지자체 조례 예시</h2>
+    <p class="footnote" style="margin-top:-6px;">이격거리·개발행위허가 규모 축소는 <b>지자체 조례 사항</b>으로 전국 기준이 통일되어 있지 않습니다. 대상 지역이 정해지면 해당 조례를 추가해 데이터베이스를 넓혀갈 수 있습니다.</p>
+    <div class="keyline" style="margin-bottom:14px;">
+      <b>2026.8.11 국무회의 의결 — 「신에너지 및 재생에너지 개발·이용·보급 촉진법 시행령」 개정 (2026.9.18 시행)</b><br>
+      전국 지자체 조례에 <b>국가 상한선</b>이 도입되었습니다.
+      ① <b>도로 이격거리는 지자체가 아예 정할 수 없음 (사실상 전국 폐지)</b><br>
+      ② <b>주거지역(5호 이상 주택 밀집지) 이격거리는 최대 200m 이내에서만</b> 지자체 조례로 정할 수 있음 — 기존 200m 초과 조례(300m·500m·1,000m 등)는 200m 이내로 축소 의무, 기존 100~200m 조례는 유지 가능<br>
+      ③ <b>주민참여형 발전설비·지붕형 태양광·자가소비용 태양광은 이격거리 규정 자체가 적용되지 않음</b>
+    </div>
+    <table class="ordinance-table">
+      <tr><th>지자체</th><th>개발행위허가 규모</th><th>이격거리 (2026.9.18 개정 시행령 반영)</th><th>비고</th></tr>
+      <tr><td>익산시 (예시, 개정 전 조례)</td><td>국가 기본치 적용</td><td>개정 전: 도로 200m·주거지 100~300m·하천 200m → <b>개정 후: 도로 이격거리 폐지, 주거지 200m 이내로 조례 축소 필요</b></td><td>2023년 조례 강화 사례 — 신 시행령 시행(9.18)에 맞춰 조례 개정 대상</td></tr>
+      <tr><td>거제시 (조사자료 기준)</td><td>도시계획조례 제17조: 보전관리 5,000㎡ 미만 / 생산관리 10,000㎡ 미만 / 농림지역 10,000㎡ 미만 / 계획관리 30,000㎡ 미만</td><td>도로 이격거리 폐지, 주거지역(5호 이상) 200m 이내로 조례 정비 예정</td><td>국가 기본 상한(3만㎡)보다 개발행위 규모는 축소 적용 — 조례 확인의 중요성을 보여주는 사례</td></tr>
+      <tr><td colspan="4" style="color:#9AA69B;">추가할 지자체 데이터를 알려주시면 이 표에 반영해 나가겠습니다</td></tr>
+    </table>
+    <p class="footnote">근거: 기후에너지환경부 2026.8.11 보도자료(「신에너지 및 재생에너지법 시행령」 개정안 국무회의 의결). 개정 시행령은 2026.9.18부터 시행되며, 그 이전까지는 각 지자체의 기존 조례가 그대로 적용됩니다. 실제 적용 여부·개정 완료 시점은 관할 지자체에 반드시 재확인하세요.</p>
+  </div>
+
+  <div class="card" style="margin-top:18px;">
+    <h2>04 · 이 분석기가 사용하는 기준 데이터</h2>
+    <details open>
+      <summary>개발행위허가 규모 상한 (국토계획법 시행령 제55조)</summary>
+      <table class="ref-table">
+        <tr><th>용도지역</th><th>허가 규모 상한</th><th>확인</th></tr>
+        <tr><td>주거·상업지역, 자연녹지·생산녹지지역</td><td>10,000㎡ 미만</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
+        <tr><td>공업지역</td><td>30,000㎡ 미만</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
+        <tr><td>보전녹지지역</td><td>5,000㎡ 미만 (발전시설 원칙적 제한)</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
+        <tr><td>관리지역 (생산·계획·보전), 농림지역</td><td>30,000㎡ 미만 (조례로 축소 가능 — 거제시 등 다수 지자체가 실제로 축소 적용)</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
+        <tr><td>자연환경보전지역</td><td>30,000㎡ 미만 (농지 포함 시 30,000㎡ 이하)</td><td><span class="verified-badge v-true">업로드 자료 확인</span></td></tr>
+      </table>
+    </details>
+    <details>
+      <summary>소규모환경영향평가 대상 기준면적 (환경영향평가법 시행령 별표4, 2025.10.1 개정)</summary>
+      <table class="ref-table">
+        <tr><th>용도지역</th><th>대상 기준면적</th><th>확인</th></tr>
+        <tr><td>도시지역 (주거·상업·공업)</td><td>60,000㎡ 이상</td><td><span class="verified-badge v-true">별표4 원문 확인</span></td></tr>
+        <tr><td>도시지역 중 녹지지역</td><td>10,000㎡ 이상</td><td><span class="verified-badge v-true">별표4 원문 확인</span></td></tr>
+        <tr><td>보전관리지역</td><td>5,000㎡ 이상</td><td><span class="verified-badge v-true">별표4 원문 확인</span></td></tr>
+        <tr><td>생산관리지역</td><td>7,500㎡ 이상</td><td><span class="verified-badge v-true">별표4 원문 확인</span></td></tr>
+        <tr><td>계획관리지역</td><td>10,000㎡ 이상</td><td><span class="verified-badge v-true">별표4 원문 확인</span></td></tr>
+        <tr><td>농림지역</td><td>7,500㎡ 이상</td><td><span class="verified-badge v-true">별표4 원문 확인</span></td></tr>
+        <tr><td>자연환경보전지역</td><td>5,000㎡ 이상</td><td><span class="verified-badge v-true">별표4 원문 확인</span></td></tr>
+      </table>
+      <p class="footnote">둘 이상의 용도지역에 걸치는 경우, 각 용도지역 사업면적 ÷ 해당 기준면적을 합산해 1 이상이면 대상입니다(별표4 비고 9호). 또한 10년 이내·반경 50m 이내 인접 승인분은 합산됩니다(비고 11호) — 위 02번 카드 참고.</p>
+    </details>
+    <details>
+      <summary>재해영향평가 대상 기준 (자연재해대책법 시행령 별표1, 2025.9.23 개정)</summary>
+      <p class="footnote" style="margin-top:0;">
+        <b>산지전용허가</b>(산지관리법 제14조)만으로 진행하는 사업: 부지면적 5,000㎡ 이상이면 대상.<br>
+        <b>개발행위허가</b>(국토계획법 제56조)로 진행하는 일반 사업(농지·잡종지 등 포함): 해당 용도지역의 <b>개발행위허가 규모 상한을 초과하는 경우에 한정</b>하여 대상 — 즉 단순 5,000㎡ 기준이 아니라 위 04-1 표의 허가 규모 상한 초과 여부가 기준입니다.
+      </p>
+      <span class="verified-badge v-true">별표1 원문 확인</span>
+    </details>
+    <details>
+      <summary>부담금 산정식</summary>
+      <table class="ref-table">
+        <tr><th>부담금</th><th>산정식</th><th>확인</th></tr>
+        <tr><td>농지보전부담금</td><td>면적 × MIN(개별공시지가 × 20%(진흥지역 밖)/30%(진흥지역 안), 50,000원/㎡)</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
+        <tr><td>대체산림자원조성비</td><td>면적 × [기준금액 + MIN(개별공시지가×0.1%, 기준금액)] — 2026년 기준금액: 준보전 8,340원/㎡ · 보전 10,840원/㎡ · 산지전용제한지역 16,680원/㎡</td><td><span class="verified-badge v-true">업로드 자료(2026 기준) — 산림청 최신 고시 재확인 권장</span></td></tr>
+        <tr><td>산지복구비 예치금</td><td>면적÷10,000 × 평균경사도별 단가(만㎡당) — 10° 미만 8,528만4천원 · 10~20° 2억5,454만6천원 · 20~30° 3억3,695만3천원 · 30° 이상 4억3,868만1천원</td><td><span class="verified-badge v-true">업로드 자료 확인</span></td></tr>
+        <tr><td>개발부담금 (지목변경 등 발생 시)</td><td>(종료시점지가 － 개시시점지가 － 정상지가상승분) × 면적 － 개발비용, 그 결과 × <b>25%</b>(일반 개발행위·대부분의 태양광 해당) 또는 20%(택지·산단 등 대규모 계획입지 사업, 개발제한구역 원소유자) — 개발이익환수법 제13조. 대상면적: 수도권 도시지역 660㎡ / 비수도권 도시지역 990㎡ / 비도시지역 1,650㎡ 이상</td><td><span class="verified-badge v-true">법령(제13조) 확인</span></td></tr>
+      </table>
+      <p class="footnote"><b>임야 태양광은 지목변경이 없어 원칙적으로 개발부담금 부과 대상이 아닙니다.</b> 잡종지·대지 등은 전용부담금이 없으나, 실제 지목변경이 수반되는 개발이면 개발부담금 대상이 될 수 있습니다.</p>
+    </details>
+    <details>
+      <summary>개발부담금 — 부과 시기 및 종료시점지가 산정 기준</summary>
+      <table class="ref-table">
+        <tr><th>절차</th><th>내용</th><th>확인</th></tr>
+        <tr><td>부과 결정·통지</td><td>관할 시장·군수·구청장이 <b>부과종료시점(통상 준공인가일)부터 5개월 이내</b> 결정·부과 (개발이익환수법 제14조)</td><td><span class="verified-badge v-true">법령(제14조) 확인</span></td></tr>
+        <tr><td>개발비용 산출명세서 제출</td><td>납부의무자가 <b>부과종료시점부터 3개월 이내</b> 직접 제출 — 미제출·허위제출 시 과태료(최대 200만원)</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
+        <tr><td>종료시점지가 산정 원칙</td><td>부과종료시점이 속한 연도의 <b>개별공시지가 + 그 공시기준일(통상 1.1)부터 부과종료시점까지 정상지가상승분</b> 가산. 감정평가액으로 임의 대체는 위법 (대법원 판례)</td><td><span class="verified-badge v-true">법령·판례 확인</span></td></tr>
+        <tr><td>개별공시지가가 아직 없는 경우 (지목변경 직후 등)</td><td>이용상황이 가장 유사한 <b>표준지 공시지가를 기준으로 토지가격비준표를 적용</b>해 산정</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
+        <tr><td>지목변경 시 개별공시지가 재산정 시점</td><td>정기공시(매년 1.1)를 기다리지 않고 수시 산정. <b>상반기(1~6월) 변경분은 그해 7.1자</b>, <b>하반기(7~12월) 변경분은 다음해 1.1자</b>로 공시</td><td><span class="verified-badge v-true">부동산가격공시법 제10조 확인</span></td></tr>
+      </table>
+      <p class="footnote">실무적으로 준공 후 개발부담금 부과 시한(5개월)이 지목변경 후 새 공시지가 공시 시점보다 먼저 도래하는 경우가 많습니다. 이때는 새 공시지가를 기다리지 않고 유사 잡종지 표준지 비교로 종료시점지가를 추정해 부과합니다. 정확한 금액은 준공 이후 관할 지자체(개발부담금 담당 부서)에 재확인이 필요합니다.</p>
+    </details>
+    <p class="footnote">본 도구는 일반적인 참고용 분석 결과를 제공하며, 법적 효력이 있는 인허가 판단이나 정확한 부담금 고지가 아닙니다. 실제 진행 전 관할 지자체·국토정보플랫폼(토지이음) 및 산림청·농지 관련 기관에 반드시 재확인하시기 바랍니다.</p>
+  </div>
+
+</div>
+
+<script>
+const DB = {
+  developmentScale: {
+    urban_res:      {label:"주거·상업지역", limit:10000},
+    urban_green:    {label:"자연녹지·생산녹지지역", limit:10000},
+    urban_ind:      {label:"공업지역", limit:30000},
+    urban_conserve: {label:"보전녹지지역", limit:5000, restrict:true},
+    mgmt_plan:      {label:"계획관리지역", limit:30000, note:"조례로 축소 가능"},
+    mgmt_prod:      {label:"생산관리지역", limit:30000, note:"조례로 축소 가능"},
+    mgmt_conserve:  {label:"보전관리지역", limit:30000, note:"조례로 축소 가능"},
+    agri_forest:    {label:"농림지역", limit:30000, note:"조례로 축소 가능"},
+    nature_conserve:{label:"자연환경보전지역", limit:30000, note:"농지 포함 시 30,000㎡ 이하"},
+  },
+  smallEIA: {
+    mgmt_conserve:   5000,
+    mgmt_prod:       7500,
+    mgmt_plan:       10000,
+    agri_forest:     7500,
+    nature_conserve: 5000,
+    urban_res:       60000,
+    urban_ind:       60000,
+    urban_green:     10000,
+    urban_conserve:  10000,
+  },
+  forestUnitPrice: { jun:8340, bo:10840, restrict:16680 }, // 2026년 기준금액 (업로드 자료)
+  restoreCostPer10000: { 10:85284000, 20:254546000, 30:336953000, 99:438681000 }, // 산지복구비, 1만㎡당
+  disasterAssessAreaForest: 5000
+};
+
+function fmtWon(n){ return Math.round(n).toLocaleString('ko-KR') + '원'; }
+function fmtArea(n){ return Number(n).toLocaleString('ko-KR') + '㎡'; }
+
+document.getElementById('landCategory').addEventListener('change', toggleFields);
+document.getElementById('slope').addEventListener('change', applySlopeDefaults);
+function applySlopeDefaults(){
+  const slope = document.getElementById('slope').value;
+  const grading = { 10:3000, 20:6000, 30:10000, 99:15000 };
+  const slopeProt = { 10:0, 20:1500, 30:2500, 99:4000 };
+  document.getElementById('cwGrading').value = grading[slope];
+  document.getElementById('cwSlope').value = slopeProt[slope];
+}
+document.getElementById('useLocalOrdinance').addEventListener('change', function(){
+  document.getElementById('localLimitField').style.display = this.checked ? 'block' : 'none';
+});
+function toggleFields(){
+  const cat = document.getElementById('landCategory').value;
+  document.getElementById('farmZoneField').style.display = cat === 'farm' ? 'block' : 'none';
+  document.getElementById('forestTypeField').style.display = cat === 'forest' ? 'block' : 'none';
+  document.getElementById('slopeField').style.display = cat === 'forest' ? 'block' : 'none';
+}
+toggleFields();
+applySlopeDefaults();
+
+function lookupAddress(autoOpen){
+  const addr = document.getElementById('siteAddress').value.trim();
+  if(!addr){ return; }
+  const enc = encodeURIComponent(addr);
+  const kakaoUrl = `https://map.kakao.com/link/search/${enc}`;
+
+  // 미리보기는 구글맵 임베드(키 불필요)로 유지하되, 기본 동작은 카카오맵 우선 안내
+  document.getElementById('mapEmbed').src = `https://www.google.com/maps?q=${enc}&output=embed`;
+  document.getElementById('mapEmbedWrap').style.display = 'block';
+
+  // 바로가기 링크 (카카오맵을 1순위·강조 버튼으로)
+  const links = [
+    { label: '카카오맵에서 바로 보기', url: kakaoUrl, primary: true },
+    { label: '네이버지도에서 보기', url: `https://map.naver.com/v5/search/${enc}` },
+    { label: '토지이음 바로가기 (직접 검색 필요)', url: `https://www.eum.go.kr/web/am/amMain.jsp` },
+    { label: '구글맵 새 창으로 보기', url: `https://www.google.com/maps?q=${enc}` },
+  ];
+  document.getElementById('mapLinks').innerHTML = links.map(l => l.primary
+    ? `<a href="${l.url}" target="_blank" rel="noopener" style="font-size:13px;padding:9px 16px;background:var(--ink);color:#F6F7F3;border-radius:20px;text-decoration:none;font-weight:700;">${l.label} ↗</a>`
+    : `<a href="${l.url}" target="_blank" rel="noopener" style="font-size:12.5px;padding:8px 14px;background:var(--forest-dim);color:var(--forest);border-radius:20px;text-decoration:none;font-weight:500;">${l.label} ↗</a>`
+  ).join('');
+
+  // "위치 확인" 버튼을 직접 눌렀을 때만 카카오맵을 새 탭으로 자동으로 엶 (페이지 로드 시 팝업 방지)
+  if(autoOpen){ window.open(kakaoUrl, '_blank'); }
+}
+lookupAddress(false);
+
+function runAnalysis(){
+  const cat = document.getElementById('landCategory').value;
+  const farmZone = document.getElementById('farmZone').value;
+  const forestType = document.getElementById('forestType').value;
+  const slope = document.getElementById('slope').value;
+  const zoneKey = document.getElementById('useZone').value;
+  const area = parseFloat(document.getElementById('area').value) || 0;
+  const price = parseFloat(document.getElementById('price').value) || 0;
+  const useLocal = document.getElementById('useLocalOrdinance').checked;
+  const localLimit = parseFloat(document.getElementById('localLimit').value) || 0;
+
+  const zone = DB.developmentScale[zoneKey];
+  const effectiveLimit = useLocal ? localLimit : zone.limit;
+  const eiaArea = DB.smallEIA[zoneKey];
+
+  const overScale = area >= effectiveLimit;
+  const eiaTarget = area >= eiaArea;
+  const disasterTarget = cat === 'forest' ? area >= DB.disasterAssessAreaForest : overScale;
+
+  // 절대불가 판정
+  let absoluteBlock = null;
+  if(cat === 'farm' && farmZone === 'core') absoluteBlock = '농업진흥구역(절대농지) — 노지 태양광 발전시설 설치가 원칙적으로 불허됩니다 (지붕형 등 예외 있음).';
+  if(cat === 'forest' && forestType === 'bo') absoluteBlock = '보전산지 — 발전시설 설치가 원칙적으로 불허됩니다.';
+  if(zone.restrict) absoluteBlock = absoluteBlock || `${zone.label} — 발전시설 설치가 원칙적으로 제한됩니다.`;
+
+  // 부담금 계산
+  let chargeRows = [];
+  if(cat === 'farm'){
+    let rate = 0.20, rateLabel = '20% (진흥지역 밖)';
+    if(farmZone === 'protect'){ rate = 0.30; rateLabel = '30% (농업보호구역, 진흥지역 내)'; }
+    if(farmZone === 'core'){ rate = 0.30; rateLabel = '30% (농업진흥구역)'; }
+    const perSqm = Math.min(price * rate, 50000);
+    chargeRows.push({
+      label: '농지보전부담금',
+      amount: perSqm * area,
+      note: `면적 ${fmtArea(area)} × ㎡당 ${fmtWon(perSqm)} (공시지가 ${price.toLocaleString('ko-KR')}원 × ${rateLabel}, 상한 50,000원 적용)`
+    });
+  } else if(cat === 'forest'){
+    const unit = DB.forestUnitPrice[forestType];
+    const priceComponent = Math.min(price * 0.001, unit);
+    const perSqm = unit + priceComponent;
+    chargeRows.push({
+      label: '대체산림자원조성비',
+      amount: perSqm * area,
+      note: `면적 ${fmtArea(area)} × ㎡당 ${fmtWon(perSqm)} (2026 기준금액 ${unit.toLocaleString('ko-KR')}원 + 공시지가 반영분 ${Math.round(priceComponent).toLocaleString('ko-KR')}원)`
+    });
+    const restoreUnit = DB.restoreCostPer10000[slope];
+    const restoreCost = (area / 10000) * restoreUnit;
+    chargeRows.push({
+      label: '산지복구비 (예치금, 준공 후 반환)',
+      amount: restoreCost,
+      note: `면적 ${fmtArea(area)} ÷ 10,000 × 평균경사도 구간 단가(${restoreUnit.toLocaleString('ko-KR')}원/만㎡)`
+    });
+  } else {
+    chargeRows.push({ label: '전용부담금', amount: 0, note: '잡종지·대지 등은 전용부담금이 발생하지 않는 것이 일반적입니다 (지목·현황에 따라 상이할 수 있음)' });
+  }
+  const chargeTotal = chargeRows.reduce((s,r)=>s+r.amount,0);
+
+  // 종합 판정
+  let stampClass = 'ok', stampText = '검토\n가능';
+  if(absoluteBlock){ stampClass=''; stampText='원칙적\n불허'; }
+  else if(overScale){ stampClass=''; stampText='규모\n초과'; }
+  else if(eiaTarget || disasterTarget){ stampClass='warn'; stampText='조건부\n검토'; }
+
+  const checklist = [];
+  if(absoluteBlock){
+    checklist.push({ tag:'need', title:'절대/원칙적 제한 지역', desc:absoluteBlock });
+  }
+  checklist.push({
+    tag: overScale ? 'need' : 'clear',
+    title: `개발행위허가 (${useLocal ? '지자체 조례 기준' : '국토계획법 기준'})`,
+    desc: overScale
+      ? `허가 규모 상한(${fmtArea(effectiveLimit)}) 초과 — 도시계획위원회 심의 등 별도 절차 필요, 또는 면적 축소 검토`
+      : `허가 규모 상한(${fmtArea(effectiveLimit)}) 이내 — 통상적 개발행위허가 절차로 진행 가능`
+  });
+  checklist.push({
+    tag: eiaTarget ? 'check' : 'clear',
+    title: '소규모환경영향평가',
+    desc: eiaTarget
+      ? `기준면적(${fmtArea(eiaArea)}) 이상 — 협의 대상 (환경청 협의, 통상 3~6개월 소요)`
+      : `기준면적(${fmtArea(eiaArea)}) 미만 — 통상 대상 제외 (단, 인접 필지 합산 규정 확인 필요)`
+  });
+  checklist.push({
+    tag: disasterTarget ? 'check' : 'clear',
+    title: '재해영향평가 (자연재해대책법)',
+    desc: disasterTarget
+      ? (cat === 'forest' ? '산지전용면적 5,000㎡ 이상 — 재해영향평가 협의 대상' : '개발행위허가 규모 상한 초과 — 재해영향평가 협의 대상')
+      : '기준 미달 — 통상 대상 제외'
+  });
+  if(cat === 'forest' && slope !== '10'){
+    checklist.push({ tag:'check', title:'경사도 기준', desc:`평균경사도 ${slope==='99'?'30° 이상':slope+'° 구간'} — 산지 태양광은 통상 15° 초과 시 조례상 불허 사례가 많으므로 관할청 확인 필요` });
+  }
+  checklist.push({ tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc:'도로 이격거리는 적용 불가(전국 폐지). 주거지역(5호 이상 주택)은 최대 200m 이내에서 지자체 조례로 정함 — 실제 조례 값(0~200m)은 관할 지자체 확인 필요. 주민참여형·지붕형·자가소비용 태양광은 이격거리 자체가 적용되지 않음. 9.18 이전 신청 건은 기존 조례가 적용될 수 있어 시행일 확인 필요.' });
+  checklist.push({ tag:'check', title:'진입로 확인', desc:'현황도로(지목 전·답·구거)는 사용승낙서 사실상 필수. 폭 3m 이상 접도 여부와 도로 지정·공고 이력 확인' });
+  if(area >= 10000){
+    checklist.push({ tag:'check', title:'주민 의견수렴', desc:'1만㎡ 이상 발전시설은 주변 500m 이내 주민 의견 수렴을 조례로 요구하는 지자체가 많음' });
+  }
+
+  const reco = [];
+  if(absoluteBlock) reco.push('현재 조건으로는 원칙적으로 설치가 어렵습니다. 지붕형 등 예외 규정이나 부지 변경을 검토하세요.');
+  if(overScale) reco.push('면적을 허가 규모 상한 이내로 조정하거나, 도시계획위원회 심의 등 규모 제한 예외 절차를 검토하세요.');
+  if(eiaTarget) reco.push('소규모환경영향평가 협의 절차(통상 3~6개월)를 사업 일정에 반영하고, 인접 필지 합산 여부도 함께 확인하세요.');
+  if(cat === 'forest' && forestType === 'jun') reco.push('준보전산지는 산지일시사용허가(최대 20년) 대상이며, 만료 후 원상복구 의무와 지목변경 불가 조건을 지주에게 미리 설명하는 것이 좋습니다.');
+  if(cat === 'farm' && farmZone !== 'out') reco.push('농업진흥지역 관련 농지는 예외 요건(영농형 태양광 등)이나 진흥구역 해제 가능성을 함께 확인하세요.');
+  reco.push('2026.9.18부터 이격거리 상한(주거지 200m, 도로 폐지)이 전국 적용되므로, 인허가 신청 시점이 시행일 전후 어디인지에 따라 적용 조례가 달라질 수 있습니다. 관할 지자체에 조례 개정 완료 여부를 확인하세요.');
+  reco.push('본 결과는 국가 법령과 업로드 자료 기준의 일반 분석이며, 세부 조례 요건과 최신 고시 단가는 관할 지자체·산림청·농지 관련 기관에 재확인이 필요합니다.');
+
+  // ===== 토목공사비 =====
+  const cwGrading = parseFloat(document.getElementById('cwGrading').value) || 0;
+  const cwDrain = parseFloat(document.getElementById('cwDrain').value) || 0;
+  const cwSlope = parseFloat(document.getElementById('cwSlope').value) || 0;
+  const cwFence = parseFloat(document.getElementById('cwFence').value) || 0;
+  const cwWall = parseFloat(document.getElementById('cwWall').value) || 0;
+  const cwRoad = parseFloat(document.getElementById('cwRoad').value) || 0;
+  const cwDesign = parseFloat(document.getElementById('cwDesign').value) || 0;
+
+  const civilPerSqm = cwGrading + cwDrain + cwSlope + cwFence;
+  const civilAreaCost = civilPerSqm * area;
+  const civilTotal = civilAreaCost + cwWall + cwRoad + cwDesign;
+
+  const civilRows = [
+    { label:'정지작업(절성토)', amount: cwGrading*area },
+    { label:'배수시설', amount: cwDrain*area },
+    { label:'사면보호', amount: cwSlope*area },
+    { label:'울타리·부대시설', amount: cwFence*area },
+    { label:'옹벽 등 구조물', amount: cwWall },
+    { label:'진입로 공사', amount: cwRoad },
+    { label:'설계·측량·인허가 대행비', amount: cwDesign },
+  ];
+
+  // ===== 개발부담금 =====
+  const landChange = document.getElementById('landChange').checked;
+  const isCapital = document.getElementById('isCapital').value === 'yes';
+  const devRate = parseFloat(document.getElementById('devRate').value);
+  const endPrice = parseFloat(document.getElementById('endPrice').value) || 0;
+  const normalRise = parseFloat(document.getElementById('normalRise').value) || 0;
+
+  const isUrbanZone = ['urban_res','urban_green','urban_ind','urban_conserve'].includes(zoneKey);
+  let devThreshold = isUrbanZone ? (isCapital ? 660 : 990) : 1650;
+  const devSizeOk = area >= devThreshold;
+
+  let devResult = null;
+  if(cat === 'forest'){
+    devResult = { skip:true, reason:'임야 태양광은 지목변경이 없어 원칙적으로 개발부담금 부과 대상이 아닙니다.' };
+  } else if(!landChange){
+    devResult = { skip:true, reason:'"지목변경 발생" 항목을 체크하지 않아 계산을 생략했습니다. 지목변경이 없는 사업은 통상 대상이 아닙니다.' };
+  } else if(!devSizeOk){
+    devResult = { skip:true, reason:`대상 규모(${fmtArea(devThreshold)}) 미만이라 개발부담금 대상이 아닙니다.` };
+  } else if(endPrice <= 0){
+    devResult = { skip:true, reason:'종료시점지가를 입력하면 개발부담금을 계산합니다.' };
+  } else {
+    const deductibleDevCost = civilTotal + chargeTotal;
+    const gainPerSqm = endPrice - price - normalRise;
+    const rawBase = gainPerSqm * area - deductibleDevCost;
+    const base = Math.max(0, rawBase);
+    const amount = base * devRate;
+    devResult = {
+      skip:false, amount, deductibleDevCost, gainPerSqm, base,
+      note: `[(종료 ${endPrice.toLocaleString('ko-KR')} － 개시 ${price.toLocaleString('ko-KR')} － 정상상승 ${normalRise.toLocaleString('ko-KR')})원/㎡ × ${fmtArea(area)}] － 공제 개발비용 ${fmtWon(deductibleDevCost)} = ${fmtWon(base)} × ${devRate*100}%`
+    };
+  }
+
+  renderResults({stampClass, stampText, zone, effectiveLimit, chargeRows, chargeTotal, checklist, reco, area, cat, absoluteBlock, civilRows, civilTotal, devResult});
+}
+
+
+function renderResults(r){
+  const wrap = document.getElementById('resultsWrap');
+  const checklistHtml = r.checklist.map(c => `
+    <li>
+      <span class="tag ${c.tag}">${c.tag==='need'?'초과/불허':c.tag==='check'?'확인필요':'가능'}</span>
+      <div class="li-body"><b>${c.title}</b><span>${c.desc}</span></div>
+    </li>`).join('');
+
+  const recoHtml = r.reco.map(x => `<li>${x}</li>`).join('');
+
+  const chargeRowsHtml = r.chargeRows.map(c => `
+    <tr><td>${c.label}<div class="footnote" style="margin-top:2px;">${c.note}</div></td><td class="num">${fmtWon(c.amount)}</td></tr>
+  `).join('');
+
+  wrap.innerHTML = `
+    <div class="stamp-band">
+      <div class="stamp ${r.stampClass}">${r.stampText.replace('\n','<br>')}</div>
+      <div class="stamp-text">
+        <h3>${r.zone.label} · ${fmtArea(r.area)}</h3>
+        <p>선택 조건 기준 개발행위허가 규모 상한은 ${fmtArea(r.effectiveLimit)}입니다.</p>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>인허가 체크리스트</h2>
+        <ul class="checklist">${checklistHtml}</ul>
+      </div>
+      <div class="card">
+        <h2>예상 부담금</h2>
+        <table class="cost-table">
+          ${chargeRowsHtml}
+          <tr class="total"><td>합계 (추정)</td><td class="num">${fmtWon(r.chargeTotal)}</td></tr>
+        </table>
+        <p class="footnote">지목변경이 수반되는 경우 개발부담금이 추가될 수 있습니다 (아래 04번 카드 참고). 임야는 통상 대상 제외됩니다.</p>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>토목공사비 (추정)</h2>
+        <table class="cost-table">
+          ${r.civilRows.map(c => `<tr><td>${c.label}</td><td class="num">${fmtWon(c.amount)}</td></tr>`).join('')}
+          <tr class="total"><td>토목공사비 합계</td><td class="num">${fmtWon(r.civilTotal)}</td></tr>
+        </table>
+        <p class="footnote">일반적 참고 범위의 추정치입니다. 실제 비용은 현장 여건·시공사 견적에 따라 크게 달라질 수 있습니다.</p>
+      </div>
+      <div class="card">
+        <h2>개발부담금</h2>
+        ${r.devResult.skip
+          ? `<p style="font-size:13.5px;color:var(--ink-soft);">${r.devResult.reason}</p>`
+          : `<table class="cost-table">
+              <tr class="total"><td>개발부담금 (추정)</td><td class="num">${fmtWon(r.devResult.amount)}</td></tr>
+            </table>
+            <p class="footnote">${r.devResult.note}<br>공제된 개발비용에는 위 토목공사비 합계와 앞서 계산된 농지보전부담금/대체산림자원조성비가 포함되어 있습니다 (개발부담금 산정 시 이중 부과된 부담금은 공제).<br><b>부과 시기:</b> 준공(부과종료시점) 후 5개월 이내 지자체가 결정·부과하며, 개발비용 산출명세서는 준공 후 3개월 이내 직접 제출해야 합니다. 여기 입력한 종료시점지가는 실제로는 지목변경 후 새로 고시되는 개별공시지가(또는 유사 표준지 비교)로 대체해 재계산하셔야 합니다.</p>`
+        }
+      </div>
+    </div>
+
+    <div class="reco ${r.absoluteBlock ? 'warn':''}">
+      <b>추천 사항</b>
+      <ul>${recoHtml}</ul>
+    </div>
+  `;
+}
+
+</script>
+</body>
+</html>
