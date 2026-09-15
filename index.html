@@ -155,19 +155,6 @@
           <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
         </div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
-        <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
-          <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-            <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleSatellite()">🛰 위성보기</button>
-            <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
-            <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadview()">🚶 로드뷰</button>
-          </div>
-          <div id="kakaoMap" style="width:100%;height:320px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
-          <div id="roadviewWrap" style="margin-top:10px;display:none;">
-            <div id="kakaoRoadview" style="width:100%;height:280px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
-            <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-          </div>
-          <p class="footnote" style="margin-top:8px;">지적편집도는 참고용이며 현행 지적과 다를 수 있습니다. 로드뷰는 촬영 이력이 있는 곳에서만 지원됩니다.</p>
-        </div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
       </div>
 
@@ -301,6 +288,22 @@
 
     <!-- MAIN: results -->
     <div class="main-col">
+      <div class="card" id="mapEmbedWrap" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+          <h2 style="margin:0;padding:0;border:none;">주소 위치 지도</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleSatellite()">🛰 위성보기</button>
+            <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleCadastral()">🗺 지적편집도</button>
+            <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadview()">🚶 로드뷰</button>
+          </div>
+        </div>
+        <div id="kakaoMap" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
+        <div id="roadviewWrap" style="margin-top:12px;display:none;">
+          <div id="kakaoRoadview" style="width:100%;height:420px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
+          <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
+        </div>
+        <p class="footnote" style="margin-top:10px;">지적편집도는 참고용이며 현행 지적과 다를 수 있습니다. 로드뷰는 촬영 이력이 있는 곳에서만 지원됩니다.</p>
+      </div>
       <div class="results" id="resultsWrap">
         <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
       </div>
