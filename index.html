@@ -107,11 +107,15 @@
       </div>
       <button class="run" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
     </div>
+    <div style="margin-top:12px;">
+      <button class="run" id="autoFetchBtn" style="width:100%;background:var(--forest);" onclick="autoFillFromAddress()">🔎 이 주소로 지목·면적·공시지가 자동 조회 (브이월드 API)</button>
+      <p id="autoFetchStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+    </div>
     <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
     <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
       <iframe id="mapEmbed" style="width:100%;height:340px;border:1px solid var(--card-line);border-radius:3px;" loading="lazy"></iframe>
     </div>
-    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다 — 위치 확인을 누르면 카카오맵이 새 탭으로 자동으로 열립니다. 아래 미리보기는 구글맵 기준이라 국내 위성·지적 정보는 정확도가 떨어질 수 있어 참고용으로만 봐주세요. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요.</p>
+    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다 — 위치 확인을 누르면 카카오맵이 새 탭으로 자동으로 열립니다. 아래 미리보기는 구글맵 기준이라 국내 위성·지적 정보는 정확도가 떨어질 수 있어 참고용으로만 봐주세요. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요. 자동 조회 결과(지목·면적·공시지가)도 참고용이며, 최종 확정 전 반드시 토지대장·토지이용계획확인원으로 재확인하세요.</p>
   </div>
 
   <div class="layout">
@@ -430,6 +434,131 @@ function lookupAddress(autoOpen){
   if(autoOpen){ window.open(kakaoUrl, '_blank'); }
 }
 lookupAddress(false);
+
+// ===================== 브이월드(VWorld) 자동 조회 =====================
+// 인증키는 https://danny12332.github.io 도메인에서만 동작하도록 발급되어 있습니다.
+const VWORLD_KEY = 'A4601CC7-A98D-4BD5-A310-07550248056C';
+
+function setStatus(msg, isError){
+  const el = document.getElementById('autoFetchStatus');
+  el.textContent = msg;
+  el.style.color = isError ? '#b3402a' : 'var(--ink-soft)';
+}
+
+// 지목코드/지목명 -> 이 분석기의 3가지 구분(farm/forest/misc)으로 매핑
+function mapLandCategory(lndcgrCodeNm){
+  const nm = (lndcgrCodeNm || '').trim();
+  if(['전','답','과수원'].includes(nm)) return 'farm';
+  if(nm === '임야') return 'forest';
+  return 'misc'; // 대·잡종지·공장용지 등은 전용절차 없음으로 간주(실제와 다를 수 있어 반드시 재확인 필요)
+}
+
+async function vworldFetch(url){
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// 주소 -> PNU 코드 확보 (지번 주소 우선 시도, 실패 시 도로명 주소로 좌표를 구한 뒤 역지오코딩)
+async function resolvePnu(address){
+  const enc = encodeURIComponent(address);
+  const base = 'https://api.vworld.kr/req/address?service=address&request=getcoord&version=2.0&crs=epsg:4326&refine=true&simple=false&format=json&key=' + VWORLD_KEY;
+
+  // 1) 지번(parcel) 주소로 우선 시도 — 성공하면 구조체 안에 PNU(level4LC, 19자리)가 바로 들어있음
+  let data = await vworldFetch(base + '&type=parcel&address=' + enc);
+  let st = data && data.response && data.response.status;
+
+  if(st === 'OK'){
+    const structure = data.response.refined.structure;
+    if(structure && structure.level4LC && structure.level4LC.length === 19){
+      return { pnu: structure.level4LC, via: 'parcel' };
+    }
+  }
+
+  // 2) 지번으로 실패하면 도로명(road)으로 좌표만 구한 뒤, 좌표->지번 역지오코딩으로 PNU 확보
+  data = await vworldFetch(base + '&type=road&address=' + enc);
+  st = data && data.response && data.response.status;
+  if(st !== 'OK'){
+    throw new Error('주소를 찾을 수 없습니다 (지번/도로명 모두 실패). 주소 표기를 확인해주세요.');
+  }
+  const point = data.response.result.point;
+  const revUrl = `https://api.vworld.kr/req/address?service=address&request=getaddress&version=2.0&crs=epsg:4326&point=${point.x},${point.y}&format=json&type=PARCEL&key=${VWORLD_KEY}`;
+  const revData = await vworldFetch(revUrl);
+  const revSt = revData && revData.response && revData.response.status;
+  if(revSt !== 'OK'){
+    throw new Error('좌표를 지번으로 변환하지 못했습니다.');
+  }
+  const structure2 = revData.response.result[0].structure;
+  if(!structure2 || !structure2.level4LC || structure2.level4LC.length !== 19){
+    throw new Error('PNU 코드를 만들지 못했습니다.');
+  }
+  return { pnu: structure2.level4LC, via: 'road+reverse' };
+}
+
+// PNU -> 지목/면적 (토지임야정보속성조회)
+async function fetchLandInfo(pnu){
+  const url = `https://api.vworld.kr/ned/data/ladfrlList?pnu=${pnu}&format=json&numOfRows=1&pageNo=1&key=${VWORLD_KEY}`;
+  const data = await vworldFetch(url);
+  const list = data && data.ladfrlVOList && data.ladfrlVOList.ladfrlVOList;
+  const item = Array.isArray(list) ? list[0] : list; // 결과가 1건이면 배열이 아닐 수 있음
+  if(!item) throw new Error('지목·면적 정보가 없습니다 (국·공유지 등 미등록 필지일 수 있습니다).');
+  return {
+    lndcgrCodeNm: item.lndcgrCodeNm,
+    area: parseFloat(item.lndpclAr),
+    mnnmSlno: item.mnnmSlno,
+    ldCodeNm: item.ldCodeNm
+  };
+}
+
+// PNU -> 개별공시지가 (최근 3개년 중 존재하는 값 사용)
+async function fetchLandPrice(pnu){
+  const thisYear = new Date().getFullYear();
+  for(let y = thisYear; y >= thisYear - 3; y--){
+    const url = `https://api.vworld.kr/ned/data/getIndvdLandPriceAttr?pnu=${pnu}&stdrYear=${y}&format=json&numOfRows=1&pageNo=1&key=${VWORLD_KEY}`;
+    try{
+      const data = await vworldFetch(url);
+      const list = data && data.fields; // 응답 구조: {response:{fields:{field:[...]}}} 형태일 수 있어 아래에서 폭넓게 탐색
+      const container = (data.response && data.response.fields) || data.fields || data;
+      const arr = container && (container.field || container);
+      const item = Array.isArray(arr) ? arr[0] : arr;
+      if(item && item.pbIntfPcInd){
+        return { price: parseInt(item.pbIntfPcInd, 10), year: y };
+      }
+    }catch(e){ /* 해당 연도 없음 - 다음 연도 시도 */ }
+  }
+  throw new Error('최근 3개년 개별공시지가 데이터를 찾지 못했습니다.');
+}
+
+async function autoFillFromAddress(){
+  const btn = document.getElementById('autoFetchBtn');
+  const addr = document.getElementById('siteAddress').value.trim();
+  if(!addr){ setStatus('주소를 먼저 입력해주세요.', true); return; }
+
+  btn.disabled = true;
+  try{
+    setStatus('① 주소 → PNU 코드 변환 중...');
+    const { pnu, via } = await resolvePnu(addr);
+
+    setStatus('② 지목·면적 조회 중... (PNU: ' + pnu + ')');
+    const land = await fetchLandInfo(pnu);
+
+    setStatus('③ 개별공시지가 조회 중...');
+    const priceInfo = await fetchLandPrice(pnu);
+
+    // 폼에 자동 반영
+    document.getElementById('landCategory').value = mapLandCategory(land.lndcgrCodeNm);
+    toggleFields();
+    document.getElementById('area').value = Math.round(land.area);
+    document.getElementById('price').value = priceInfo.price;
+
+    setStatus(`✅ 완료 — 지목: ${land.lndcgrCodeNm} / 면적: ${land.area.toLocaleString('ko-KR')}㎡ / 공시지가: ${priceInfo.price.toLocaleString('ko-KR')}원/㎡ (${priceInfo.year}년 기준, 지번: ${land.mnnmSlno}). 산지구분·경사도·용도지역·농지구분은 자동조회가 안 되니 직접 확인해 입력해주세요.`);
+  }catch(err){
+    console.error(err);
+    setStatus('❌ 자동 조회 실패: ' + err.message + ' — 브라우저 개발자도구(F12) Console 탭에서 자세한 오류를 확인해주세요 (CORS 오류일 경우 별도 안내가 필요합니다).', true);
+  }finally{
+    btn.disabled = false;
+  }
+}
 
 function runAnalysis(){
   const cat = document.getElementById('landCategory').value;
