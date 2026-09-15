@@ -8,132 +8,173 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#EFF2EC; --card:#FFFFFF; --card-line:#D9DED5;
-    --ink:#1F2A24; --ink-soft:#4B5B50;
-    --forest:#3B6A4A; --forest-dim:#E4EEE7;
-    --amber:#C9860A; --amber-dim:#FBEBCB;
-    --rust:#AE4A2E; --rust-dim:#F6E1D8;
-    --stamp-red:#B23B2E;
+    --paper:#EDF1E8; --surface:#FFFFFF; --surface-2:#F5F8F3; --line:#DCE3D5;
+    --ink:#1B241E; --ink-soft:#57655B; --ink-faint:#8B978A;
+    --forest:#33604A; --forest-deep:#22402F; --forest-tint:#E2EEE5;
+    --amber:#B07A0C; --amber-tint:#F8ECCF;
+    --rust:#A5442A; --rust-tint:#F4E0D6;
+    --stamp-red:#AE3B2E;
+    --header-h:64px;
+    /* 이전 변수명 호환용 별칭 */
+    --card-line:var(--line); --forest-dim:var(--forest-tint); --rust-dim:var(--rust-tint); --amber-dim:var(--amber-tint); --card:var(--surface);
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Noto Sans KR',sans-serif;line-height:1.55;}
-  .wrap{max-width:1180px;margin:0 auto;padding:36px 24px 80px;}
-  header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:28px;}
-  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--forest);margin:0 0 8px;}
-  h1{font-family:'Noto Serif KR',serif;font-weight:700;font-size:32px;margin:0;letter-spacing:-.01em;}
-  .meta{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);text-align:right;line-height:1.7;}
-  .meta b{color:var(--rust);}
-  .layout{display:grid;grid-template-columns:380px 1fr;gap:22px;align-items:start;}
-  @media (max-width:880px){.layout{grid-template-columns:1fr;}}
-  .card{background:var(--card);border:1px solid var(--card-line);border-radius:3px;padding:22px 22px 24px;}
-  .card h2{font-family:'Noto Serif KR',serif;font-size:17px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--card-line);}
+  html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Noto Sans KR',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;}
+
+  /* ---------- Masthead ---------- */
+  header.top{
+    position:sticky;top:0;z-index:40;
+    background:var(--forest-deep);color:#EFF4EF;
+    padding:14px clamp(18px,3vw,40px);
+    display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  header.top .brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+  header.top h1{font-family:'Noto Serif KR',serif;font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;color:#fff;}
+  header.top .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#9FC2AC;margin:0;}
+  header.top .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#BFD2C6;text-align:right;line-height:1.7;}
+  header.top .meta b{color:#F0B074;font-weight:500;}
+
+  /* ---------- Shell ---------- */
+  .shell{max-width:1720px;margin:0 auto;padding:28px clamp(18px,3vw,40px) 90px;}
+
+  .toolbar-card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 22px 22px;margin-bottom:24px;box-shadow:0 1px 2px rgba(27,36,30,.04);}
+  .toolbar-card h2{font-family:'Noto Serif KR',serif;font-size:16px;margin:0 0 14px;}
+
+  .app-grid{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:24px;align-items:start;}
+  @media (max-width:980px){.app-grid{grid-template-columns:1fr;}}
+
+  .rail{position:sticky;top:calc(var(--header-h) + 16px);display:flex;flex-direction:column;gap:18px;max-height:calc(100vh - var(--header-h) - 32px);overflow-y:auto;padding-right:4px;}
+  @media (max-width:980px){.rail{position:static;max-height:none;overflow:visible;}}
+  .rail::-webkit-scrollbar{width:6px;}
+  .rail::-webkit-scrollbar-thumb{background:#C7D2C0;border-radius:3px;}
+
+  .main-col{display:flex;flex-direction:column;gap:18px;min-width:0;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:22px 22px 24px;box-shadow:0 1px 2px rgba(27,36,30,.04);}
+  .card h2{font-family:'Noto Serif KR',serif;font-size:17px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line);}
   .field{margin-bottom:15px;}
   .field label{display:block;font-size:12.5px;font-weight:500;color:var(--ink-soft);margin-bottom:5px;}
-  .field select, .field input{width:100%;padding:9px 10px;border:1px solid #C7CFC3;border-radius:2px;font-family:inherit;font-size:14px;background:#FCFDFB;color:var(--ink);}
-  .field select:focus, .field input:focus{outline:2px solid var(--forest);outline-offset:1px;}
-  .field .hint{font-size:11px;color:#7C8B7F;margin-top:4px;}
+  .field select, .field input{width:100%;padding:10px 11px;border:1px solid #C7D0C1;border-radius:5px;font-family:inherit;font-size:14px;background:var(--surface-2);color:var(--ink);transition:border-color .15s, background .15s;}
+  .field select:focus, .field input:focus{outline:none;border-color:var(--forest);background:var(--surface);box-shadow:0 0 0 3px var(--forest-tint);}
+  .field .hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0 4px;color:var(--ink-soft);}
   .checkrow input{width:auto;}
-  button.run{width:100%;padding:13px;margin-top:6px;background:var(--ink);color:#F6F7F3;border:none;border-radius:2px;font-family:'Noto Sans KR',sans-serif;font-weight:700;font-size:14.5px;letter-spacing:.02em;cursor:pointer;}
+  button.run{width:100%;padding:13px;margin-top:6px;background:var(--ink);color:#F6F7F3;border:none;border-radius:6px;font-family:'Noto Sans KR',sans-serif;font-weight:700;font-size:14.5px;letter-spacing:.01em;cursor:pointer;transition:background .15s, transform .1s;}
   button.run:hover{background:var(--forest);}
+  button.run:active{transform:scale(.99);}
+  button.run:disabled{opacity:.55;cursor:default;}
+
   .results{display:flex;flex-direction:column;gap:18px;}
-  .stamp-band{display:flex;align-items:center;gap:20px;background:var(--card);border:1px solid var(--card-line);padding:20px 24px;}
+  .stamp-band{display:flex;align-items:center;gap:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:22px 26px;box-shadow:0 1px 2px rgba(27,36,30,.04);}
   .stamp{width:92px;height:92px;border-radius:50%;border:3px solid var(--stamp-red);color:var(--stamp-red);display:flex;align-items:center;justify-content:center;text-align:center;font-family:'Noto Serif KR',serif;font-weight:700;font-size:15px;transform:rotate(-9deg);flex:none;opacity:.92;}
   .stamp.ok{border-color:var(--forest);color:var(--forest);}
   .stamp.warn{border-color:var(--amber);color:var(--amber);}
   .stamp-text h3{margin:0 0 6px;font-family:'Noto Serif KR',serif;font-size:19px;}
   .stamp-text p{margin:0;font-size:13.5px;color:var(--ink-soft);}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
-  @media (max-width:700px){.grid2{grid-template-columns:1fr;}}
+  @media (max-width:900px){.grid2{grid-template-columns:1fr;}}
   .checklist{list-style:none;margin:0;padding:0;}
-  .checklist li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #EEF1EA;font-size:13.5px;}
+  .checklist li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--surface-2);font-size:13.5px;}
   .checklist li:last-child{border-bottom:none;}
-  .tag{flex:none;width:64px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;padding:3px 0;border-radius:2px;height:fit-content;}
-  .tag.need{background:var(--rust-dim);color:var(--rust);}
-  .tag.check{background:var(--amber-dim);color:#8A5F06;}
-  .tag.clear{background:var(--forest-dim);color:var(--forest);}
+  .tag{flex:none;width:64px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;padding:3px 0;border-radius:4px;height:fit-content;}
+  .tag.need{background:var(--rust-tint);color:var(--rust);}
+  .tag.check{background:var(--amber-tint);color:#8A5F06;}
+  .tag.clear{background:var(--forest-tint);color:var(--forest);}
   .li-body b{display:block;font-weight:700;margin-bottom:2px;}
   .li-body span{color:var(--ink-soft);font-size:12.5px;}
   .cost-table{width:100%;border-collapse:collapse;font-size:13.5px;}
-  .cost-table td{padding:9px 4px;border-bottom:1px solid #EEF1EA;vertical-align:top;}
+  .cost-table td{padding:9px 4px;border-bottom:1px solid var(--surface-2);vertical-align:top;}
   .cost-table td.num{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
   .cost-table tr.total td{border-top:2px solid var(--ink);border-bottom:none;font-weight:700;padding-top:12px;}
   .cost-table tr.total td.num{font-size:16px;color:var(--rust);}
-  .footnote{font-size:11.5px;color:#8A968B;margin-top:10px;line-height:1.6;}
-  .reco{background:var(--forest-dim);border:1px solid #CBE0D2;padding:16px 18px;font-size:13.5px;}
-  .reco.warn{background:var(--rust-dim);border-color:#E7BEB0;}
+  .footnote{font-size:11.5px;color:var(--ink-faint);margin-top:10px;line-height:1.6;}
+  .reco{background:var(--forest-tint);border:1px solid #CBE0D2;border-radius:6px;padding:16px 18px;font-size:13.5px;}
+  .reco.warn{background:var(--rust-tint);border-color:#E7BEB0;}
   .reco ul{margin:8px 0 0;padding-left:18px;}
   .reco li{margin-bottom:6px;}
   .ordinance-table, .ref-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px;}
-  .ordinance-table th, .ordinance-table td, .ref-table th, .ref-table td{border:1px solid var(--card-line);padding:7px 8px;text-align:left;}
-  .ordinance-table th, .ref-table th{background:#F5F7F2;font-weight:500;color:var(--ink-soft);}
+  .ordinance-table th, .ordinance-table td, .ref-table th, .ref-table td{border:1px solid var(--line);padding:7px 8px;text-align:left;}
+  .ordinance-table th, .ref-table th{background:var(--surface-2);font-weight:500;color:var(--ink-soft);}
   .verified-badge{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:1px 6px;border-radius:8px;white-space:nowrap;}
-  .v-true{background:var(--forest-dim);color:var(--forest);}
-  .v-false{background:var(--rust-dim);color:var(--rust);}
+  .v-true{background:var(--forest-tint);color:var(--forest);}
+  .v-false{background:var(--rust-tint);color:var(--rust);}
   details{margin-top:10px;}
   summary{cursor:pointer;font-size:12.5px;color:var(--forest);font-weight:500;}
-  .placeholder{display:flex;align-items:center;justify-content:center;min-height:220px;color:#9AA69B;font-size:13.5px;text-align:center;padding:20px;}
+  .placeholder{display:flex;align-items:center;justify-content:center;min-height:220px;color:var(--ink-faint);font-size:13.5px;text-align:center;padding:20px;background:var(--surface-2);border-radius:6px;border:1px dashed var(--line);}
   .grade-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
-  .grade-table td, .grade-table th{border:1px solid var(--card-line);padding:8px;}
-  .grade-table th{background:#F5F7F2;text-align:left;}
+  .grade-table td, .grade-table th{border:1px solid var(--line);padding:8px;}
+  .grade-table th{background:var(--surface-2);text-align:left;}
   .grade-A{color:var(--forest);font-weight:700;}
   .grade-D{color:var(--rust);font-weight:700;}
-  .keyline{background:var(--forest-dim);border-left:3px solid var(--forest);padding:10px 14px;margin:10px 0;font-size:13px;}
+  .keyline{background:var(--forest-tint);border-left:3px solid var(--forest);padding:10px 14px;margin:10px 0;font-size:13px;border-radius:0 4px 4px 0;}
   .subhide{display:none;}
+
+  /* ---------- Reference tabs ---------- */
+  .ref-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:0;}
+  .ref-tab-btn{background:none;border:none;padding:10px 16px;font-family:'Noto Sans KR',sans-serif;font-size:13.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s, border-color .15s;}
+  .ref-tab-btn:hover{color:var(--forest);}
+  .ref-tab-btn.active{color:var(--forest);border-bottom-color:var(--forest);font-weight:700;}
+  .ref-pane{display:none;}
+  .ref-pane.active{display:block;}
 </style>
   <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=de36da69d21e4e4b2fa5a454db03c557&libraries=services"></script>
 </head>
 <body>
-<div class="wrap">
-
-  <header class="top">
-    <div>
-      <p class="eyebrow">Solar Site Feasibility v2 · 태양광 입지·인허가·부담금 분석</p>
-      <h1>태양광 입지 분석기</h1>
-    </div>
-    <div class="meta">
-      기준일 2026.08 · 국가 법령·고시 + 실무자료 기준<br>
-      <b>이격거리: 도로 폐지 / 주거지 200m 상한 (2026.9.18 시행)</b><br>
-      데이터는 대화를 통해 계속 보강됩니다
-    </div>
-  </header>
-
-  <div class="card" style="margin-bottom:22px;">
-    <h2>주소로 위치 확인</h2>
-    <div class="row2" style="align-items:end;">
-      <div class="field" style="margin-bottom:0;">
-        <label for="siteAddress">지번 주소 (예: 충남 천안시 동남구 광덕면 대평리 178-1)</label>
-        <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1">
-      </div>
-      <button class="run" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
-    </div>
-    <div style="margin-top:12px;">
-      <button class="run" id="eumBtn" style="width:100%;background:var(--forest);" onclick="openEumResult()">📄 이 주소의 토지이용계획(지목·용도지역·용도지구) 바로 조회</button>
-      <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
-    </div>
-    <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
-    <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-        <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleSatellite()">🛰 위성보기</button>
-        <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
-        <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadview()">🚶 로드뷰</button>
-      </div>
-      <div id="kakaoMap" style="width:100%;height:380px;border:1px solid var(--card-line);border-radius:3px;background:#eee;"></div>
-      <div id="roadviewWrap" style="margin-top:10px;display:none;">
-        <div id="kakaoRoadview" style="width:100%;height:320px;border:1px solid var(--card-line);border-radius:3px;background:#eee;"></div>
-        <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-      </div>
-      <p class="footnote" style="margin-top:8px;">지적편집도(지적도)는 참고용이며 현행 지적 정보와 다를 수 있습니다. 정확한 경계·지목은 반드시 토지이음 등 공식 자료로 재확인하세요. 로드뷰는 도로 촬영 이력이 있는 곳에서만 지원되며, 농지·산지·외곽 지역은 제공되지 않는 경우가 많습니다.</p>
-    </div>
-    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다. 아래 지도에서 위성보기·지적편집도·로드뷰를 켜고 끌 수 있습니다. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요. "토지이용계획 바로 조회" 버튼은 입력하신 지번 주소를 바탕으로 <b>토지이음(eum.go.kr) 공식 결과 페이지를 새 탭으로 열어드리는 기능</b>이며, 지번 주소 형식(예: OO동/OO리 123-4)일 때 가장 정확합니다.</p>
+<header class="top">
+  <div class="brand">
+    <h1>태양광 입지 분석기</h1>
+    <p class="eyebrow">Solar Site Feasibility · 입지·인허가·부담금 분석</p>
   </div>
+  <div class="meta">
+    기준일 2026.08 · 국가 법령·고시 + 실무자료 기준<br>
+    <b>이격거리: 도로 폐지 / 주거지 200m 상한 (2026.9.18 시행)</b>
+  </div>
+</header>
 
-  <div class="layout">
+<div class="shell">
 
-    <!-- INPUT -->
-    <div class="card">
-      <h2>01 · 부지 조건 입력</h2>
+  <div class="app-grid">
+
+    <!-- LEFT: sticky rail -->
+    <div class="rail">
+
+      <div class="toolbar-card">
+        <h2>주소로 위치 확인</h2>
+        <div class="row2" style="align-items:end;">
+          <div class="field" style="margin-bottom:0;">
+            <label for="siteAddress">지번 주소 (예: 충남 천안시 동남구 광덕면 대평리 178-1)</label>
+            <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1">
+          </div>
+          <button class="run" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="run" id="eumBtn" style="width:100%;background:var(--forest);" onclick="openEumResult()">📄 이 주소의 토지이용계획(지목·용도지역·용도지구) 바로 조회</button>
+          <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+        </div>
+        <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
+        <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
+          <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+            <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleSatellite()">🛰 위성보기</button>
+            <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
+            <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadview()">🚶 로드뷰</button>
+          </div>
+          <div id="kakaoMap" style="width:100%;height:320px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
+          <div id="roadviewWrap" style="margin-top:10px;display:none;">
+            <div id="kakaoRoadview" style="width:100%;height:280px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
+            <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
+          </div>
+          <p class="footnote" style="margin-top:8px;">지적편집도는 참고용이며 현행 지적과 다를 수 있습니다. 로드뷰는 촬영 이력이 있는 곳에서만 지원됩니다.</p>
+        </div>
+        <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
+      </div>
+
+      <!-- INPUT -->
+      <div class="card">
+        <h2>부지 조건 입력</h2>
+
 
       <div class="field">
         <label for="landCategory">지목</label>
@@ -256,16 +297,26 @@
       <button class="run" onclick="runAnalysis()">부지 분석 실행</button>
     </div>
 
-    <!-- RESULTS -->
-    <div class="results" id="resultsWrap">
-      <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
+    </div><!-- /rail -->
+
+    <!-- MAIN: results -->
+    <div class="main-col">
+      <div class="results" id="resultsWrap">
+        <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
+      </div>
+    </div><!-- /main-col -->
+
+  </div><!-- /app-grid -->
+
+  <!-- 참고자료: 탭 -->
+  <div class="card" style="margin-top:28px;">
+    <div class="ref-tabs">
+      <button type="button" class="ref-tab-btn active" data-tab="tab-checkpoints" onclick="switchRefTab('tab-checkpoints')">실무 핵심 체크포인트</button>
+      <button type="button" class="ref-tab-btn" data-tab="tab-ordinance" onclick="switchRefTab('tab-ordinance')">지자체 조례 예시</button>
+      <button type="button" class="ref-tab-btn" data-tab="tab-lawdata" onclick="switchRefTab('tab-lawdata')">기준 법령 데이터</button>
     </div>
 
-  </div>
-
-  <!-- 실무 핵심 체크포인트 -->
-  <div class="card" style="margin-top:24px;">
-    <h2>02 · 실무 핵심 체크포인트 <span style="font-weight:400;font-size:12px;color:#9AA69B;">(업로드 자료 요약)</span></h2>
+    <div class="ref-pane active" id="tab-checkpoints">
     <div class="keyline">지목보다 용도지역, 용도지역보다 <b>중첩규제(토지이용계획확인원의 '다른 법령' 칸)</b>를 먼저 본다. 이격거리·진입로에서 대부분 탈락한다.</div>
     <table class="grade-table">
       <tr><th>등급</th><th>지목</th><th>필요 절차</th><th>코멘트</th></tr>
@@ -281,12 +332,10 @@
       <b>진입로:</b> 현황도로(지목 전·답·구거)는 사용승낙서가 사실상 예외 없이 필요. 이미 국비·지방비로 포장된 마을안길은 승낙 불요로 처리되는 경우가 있어 도로 지정·공고 이력부터 확인.<br>
       <b>인접 필지 합산 규정:</b> 소규모환경영향평가 대상 미만으로 승인받은 부지의 경계로부터 직선거리 <b>50m 이내</b> 지역에서 동일인·동일 필지·분할 후 <b>10년 이내</b> 추가 승인 시, 기존 면적과 신규 면적을 합산해 판단합니다(환경영향평가법 시행령 별표4 비고 11호). 필지를 쪼개 기준면적을 회피하는 방식은 통하지 않습니다.
     </p>
-  </div>
+    </div><!-- /tab-checkpoints -->
 
-  <!-- REFERENCE DATA -->
-  <div class="card" style="margin-top:18px;">
-    <h2>03 · 참고 데이터 — 지자체 조례 예시</h2>
-    <p class="footnote" style="margin-top:-6px;">이격거리·개발행위허가 규모 축소는 <b>지자체 조례 사항</b>으로 전국 기준이 통일되어 있지 않습니다. 대상 지역이 정해지면 해당 조례를 추가해 데이터베이스를 넓혀갈 수 있습니다.</p>
+    <div class="ref-pane" id="tab-ordinance">
+    <p class="footnote" style="margin-top:0;">이격거리·개발행위허가 규모 축소는 <b>지자체 조례 사항</b>으로 전국 기준이 통일되어 있지 않습니다. 대상 지역이 정해지면 해당 조례를 추가해 데이터베이스를 넓혀갈 수 있습니다.</p>
     <div class="keyline" style="margin-bottom:14px;">
       <b>2026.8.11 국무회의 의결 — 「신에너지 및 재생에너지 개발·이용·보급 촉진법 시행령」 개정 (2026.9.18 시행)</b><br>
       전국 지자체 조례에 <b>국가 상한선</b>이 도입되었습니다.
@@ -301,10 +350,9 @@
       <tr><td colspan="4" style="color:#9AA69B;">추가할 지자체 데이터를 알려주시면 이 표에 반영해 나가겠습니다</td></tr>
     </table>
     <p class="footnote">근거: 기후에너지환경부 2026.8.11 보도자료(「신에너지 및 재생에너지법 시행령」 개정안 국무회의 의결). 개정 시행령은 2026.9.18부터 시행되며, 그 이전까지는 각 지자체의 기존 조례가 그대로 적용됩니다. 실제 적용 여부·개정 완료 시점은 관할 지자체에 반드시 재확인하세요.</p>
-  </div>
+    </div><!-- /tab-ordinance -->
 
-  <div class="card" style="margin-top:18px;">
-    <h2>04 · 이 분석기가 사용하는 기준 데이터</h2>
+    <div class="ref-pane" id="tab-lawdata">
     <details open>
       <summary>개발행위허가 규모 상한 (국토계획법 시행령 제55조)</summary>
       <table class="ref-table">
@@ -362,9 +410,10 @@
       <p class="footnote">실무적으로 준공 후 개발부담금 부과 시한(5개월)이 지목변경 후 새 공시지가 공시 시점보다 먼저 도래하는 경우가 많습니다. 이때는 새 공시지가를 기다리지 않고 유사 잡종지 표준지 비교로 종료시점지가를 추정해 부과합니다. 정확한 금액은 준공 이후 관할 지자체(개발부담금 담당 부서)에 재확인이 필요합니다.</p>
     </details>
     <p class="footnote">본 도구는 일반적인 참고용 분석 결과를 제공하며, 법적 효력이 있는 인허가 판단이나 정확한 부담금 고지가 아닙니다. 실제 진행 전 관할 지자체·국토정보플랫폼(토지이음) 및 산림청·농지 관련 기관에 반드시 재확인하시기 바랍니다.</p>
-  </div>
+    </div><!-- /tab-lawdata -->
+  </div><!-- /ref tab card -->
 
-</div>
+</div><!-- /shell -->
 
 <script>
 const DB = {
@@ -417,6 +466,11 @@ function toggleFields(){
   document.getElementById('slopeField').style.display = cat === 'forest' ? 'block' : 'none';
 }
 toggleFields();
+
+function switchRefTab(tabId){
+  document.querySelectorAll('.ref-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.ref-pane').forEach(p => p.classList.toggle('active', p.id === tabId));
+}
 applySlopeDefaults();
 
 function lookupAddress(autoOpen){
