@@ -82,6 +82,7 @@
   .keyline{background:var(--forest-dim);border-left:3px solid var(--forest);padding:10px 14px;margin:10px 0;font-size:13px;}
   .subhide{display:none;}
 </style>
+  <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=de36da69d21e4e4b2fa5a454db03c557&libraries=services"></script>
 </head>
 <body>
 <div class="wrap">
@@ -113,7 +114,12 @@
     </div>
     <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
     <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
-      <iframe id="mapEmbed" style="width:100%;height:340px;border:1px solid var(--card-line);border-radius:3px;" loading="lazy"></iframe>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleSatellite()">🛰 위성보기</button>
+        <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
+      </div>
+      <div id="kakaoMap" style="width:100%;height:380px;border:1px solid var(--card-line);border-radius:3px;background:#eee;"></div>
+      <p class="footnote" style="margin-top:8px;">지적편집도(지적도)는 참고용이며 현행 지적 정보와 다를 수 있습니다. 정확한 경계·지목은 반드시 토지이음 등 공식 자료로 재확인하세요.</p>
     </div>
     <p class="footnote">기본 지도는 <b>카카오맵</b>입니다 — 위치 확인을 누르면 카카오맵이 새 탭으로 자동으로 열립니다. 아래 미리보기는 구글맵 기준이라 국내 위성·지적 정보는 정확도가 떨어질 수 있어 참고용으로만 봐주세요. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요. "토지이용계획 바로 조회" 버튼은 입력하신 지번 주소를 바탕으로 <b>토지이음(eum.go.kr) 공식 결과 페이지를 새 탭으로 열어드리는 기능</b>이며, 지번 주소 형식(예: OO동/OO리 123-4)일 때 가장 정확합니다.</p>
   </div>
@@ -414,9 +420,8 @@ function lookupAddress(autoOpen){
   const enc = encodeURIComponent(addr);
   const kakaoUrl = `https://map.kakao.com/link/search/${enc}`;
 
-  // 미리보기는 구글맵 임베드(키 불필요)로 유지하되, 기본 동작은 카카오맵 우선 안내
-  document.getElementById('mapEmbed').src = `https://www.google.com/maps?q=${enc}&output=embed`;
   document.getElementById('mapEmbedWrap').style.display = 'block';
+  showKakaoMap(addr);
 
   // 바로가기 링크 (카카오맵을 1순위·강조 버튼으로)
   const links = [
@@ -434,6 +439,64 @@ function lookupAddress(autoOpen){
   if(autoOpen){ window.open(kakaoUrl, '_blank'); }
 }
 lookupAddress(false);
+
+// ===================== 카카오맵: 위성뷰 + 지적편집도 =====================
+let kakaoMapObj = null;
+let kakaoMarker = null;
+let satelliteOn = false;
+let cadastralOn = false;
+
+function ensureKakaoMap(){
+  if(kakaoMapObj) return kakaoMapObj;
+  const container = document.getElementById('kakaoMap');
+  kakaoMapObj = new kakao.maps.Map(container, {
+    center: new kakao.maps.LatLng(36.5, 127.8), // 초기 기본 위치(대한민국 중앙 부근)
+    level: 4
+  });
+  return kakaoMapObj;
+}
+
+function showKakaoMap(address){
+  if(typeof kakao === 'undefined' || !kakao.maps){
+    console.warn('카카오맵 SDK가 아직 로드되지 않았습니다.');
+    return;
+  }
+  const map = ensureKakaoMap();
+  const geocoder = new kakao.maps.services.Geocoder();
+
+  geocoder.addressSearch(address, function(result, status){
+    if(status === kakao.maps.services.Status.OK){
+      const pos = new kakao.maps.LatLng(result[0].y, result[0].x);
+      map.setCenter(pos);
+      map.setLevel(3);
+      if(kakaoMarker){ kakaoMarker.setMap(null); }
+      kakaoMarker = new kakao.maps.Marker({ position: pos, map: map });
+    } else {
+      console.warn('카카오 지오코더: 주소를 찾지 못했습니다 →', address, status);
+    }
+    // 지도 크기가 뒤늦게 표시되는 카드 안에 있을 수 있어 레이아웃 재계산
+    setTimeout(() => { map.relayout(); if(kakaoMarker){ map.setCenter(kakaoMarker.getPosition()); } }, 50);
+  });
+}
+
+function toggleSatellite(){
+  const map = ensureKakaoMap();
+  satelliteOn = !satelliteOn;
+  map.setMapTypeId(satelliteOn ? kakao.maps.MapTypeId.HYBRID : kakao.maps.MapTypeId.ROADMAP);
+  const btn = document.getElementById('satBtn');
+  btn.style.background = satelliteOn ? 'var(--ink)' : 'var(--forest-dim)';
+  btn.style.color = satelliteOn ? '#F6F7F3' : 'var(--forest)';
+}
+
+function toggleCadastral(){
+  const map = ensureKakaoMap();
+  cadastralOn = !cadastralOn;
+  if(cadastralOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT); }
+  else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT); }
+  const btn = document.getElementById('cadBtn');
+  btn.style.background = cadastralOn ? 'var(--ink)' : 'var(--forest-dim)';
+  btn.style.color = cadastralOn ? '#F6F7F3' : 'var(--forest)';
+}
 
 // ===================== 토지이음(eum.go.kr) 결과 바로가기 =====================
 // 법정동코드 데이터(bjdong.txt, 국토교통부 제공 20,555건 "존재" 상태)를 같은 폴더에서 불러와
