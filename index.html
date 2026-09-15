@@ -114,14 +114,19 @@
     </div>
     <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
     <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleSatellite()">🛰 위성보기</button>
         <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
+        <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadview()">🚶 로드뷰</button>
       </div>
       <div id="kakaoMap" style="width:100%;height:380px;border:1px solid var(--card-line);border-radius:3px;background:#eee;"></div>
-      <p class="footnote" style="margin-top:8px;">지적편집도(지적도)는 참고용이며 현행 지적 정보와 다를 수 있습니다. 정확한 경계·지목은 반드시 토지이음 등 공식 자료로 재확인하세요.</p>
+      <div id="roadviewWrap" style="margin-top:10px;display:none;">
+        <div id="kakaoRoadview" style="width:100%;height:320px;border:1px solid var(--card-line);border-radius:3px;background:#eee;"></div>
+        <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
+      </div>
+      <p class="footnote" style="margin-top:8px;">지적편집도(지적도)는 참고용이며 현행 지적 정보와 다를 수 있습니다. 정확한 경계·지목은 반드시 토지이음 등 공식 자료로 재확인하세요. 로드뷰는 도로 촬영 이력이 있는 곳에서만 지원되며, 농지·산지·외곽 지역은 제공되지 않는 경우가 많습니다.</p>
     </div>
-    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다 — 위치 확인을 누르면 카카오맵이 새 탭으로 자동으로 열립니다. 아래 미리보기는 구글맵 기준이라 국내 위성·지적 정보는 정확도가 떨어질 수 있어 참고용으로만 봐주세요. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요. "토지이용계획 바로 조회" 버튼은 입력하신 지번 주소를 바탕으로 <b>토지이음(eum.go.kr) 공식 결과 페이지를 새 탭으로 열어드리는 기능</b>이며, 지번 주소 형식(예: OO동/OO리 123-4)일 때 가장 정확합니다.</p>
+    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다. 아래 지도에서 위성보기·지적편집도·로드뷰를 켜고 끌 수 있습니다. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요. "토지이용계획 바로 조회" 버튼은 입력하신 지번 주소를 바탕으로 <b>토지이음(eum.go.kr) 공식 결과 페이지를 새 탭으로 열어드리는 기능</b>이며, 지번 주소 형식(예: OO동/OO리 123-4)일 때 가장 정확합니다.</p>
   </div>
 
   <div class="layout">
@@ -442,6 +447,9 @@ let kakaoMapObj = null;
 let kakaoMarker = null;
 let satelliteOn = false;
 let cadastralOn = false;
+let roadviewObj = null;
+let roadviewOn = false;
+let lastPosition = null; // 마지막으로 지오코딩된 위치 (로드뷰용)
 
 lookupAddress(false);
 
@@ -470,6 +478,9 @@ function showKakaoMap(address){
       map.setLevel(3);
       if(kakaoMarker){ kakaoMarker.setMap(null); }
       kakaoMarker = new kakao.maps.Marker({ position: pos, map: map });
+      lastPosition = pos;
+      // 주소가 바뀌면 이전에 열려있던 로드뷰는 닫아서 혼동을 방지
+      if(roadviewOn){ closeRoadview(); }
     } else {
       console.warn('카카오 지오코더: 주소를 찾지 못했습니다 →', address, status);
     }
@@ -495,6 +506,54 @@ function toggleCadastral(){
   const btn = document.getElementById('cadBtn');
   btn.style.background = cadastralOn ? 'var(--ink)' : 'var(--forest-dim)';
   btn.style.color = cadastralOn ? '#F6F7F3' : 'var(--forest)';
+}
+
+function closeRoadview(){
+  roadviewOn = false;
+  document.getElementById('roadviewWrap').style.display = 'none';
+  document.getElementById('roadviewStatus').textContent = '';
+  const btn = document.getElementById('roadviewBtn');
+  btn.style.background = 'var(--forest-dim)';
+  btn.style.color = 'var(--forest)';
+}
+
+function toggleRoadview(){
+  const statusEl = document.getElementById('roadviewStatus');
+  const wrap = document.getElementById('roadviewWrap');
+  const btn = document.getElementById('roadviewBtn');
+
+  if(roadviewOn){ closeRoadview(); return; }
+
+  if(!lastPosition){
+    statusEl.textContent = '먼저 주소를 입력하고 "위치 확인"을 눌러주세요.';
+    statusEl.style.color = '#b3402a';
+    wrap.style.display = 'block';
+    return;
+  }
+
+  roadviewOn = true;
+  btn.style.background = 'var(--ink)';
+  btn.style.color = '#F6F7F3';
+  wrap.style.display = 'block';
+  statusEl.style.color = 'var(--ink-soft)';
+  statusEl.textContent = '이 위치 근처에 로드뷰가 있는지 확인 중...';
+
+  const rvClient = new kakao.maps.RoadviewClient();
+  // 반경 50m 이내에서 가장 가까운 로드뷰 파노라마 검색
+  rvClient.getNearestPanoId(lastPosition, 50, function(panoId){
+    if(panoId === null){
+      statusEl.textContent = '❌ 이 위치 근처(반경 50m)에는 로드뷰 촬영 이력이 없습니다. 농지·산지·외곽 도로는 로드뷰가 제공되지 않는 경우가 많습니다.';
+      statusEl.style.color = '#b3402a';
+      document.getElementById('kakaoRoadview').innerHTML = '';
+      return;
+    }
+    if(!roadviewObj){
+      roadviewObj = new kakao.maps.Roadview(document.getElementById('kakaoRoadview'));
+    }
+    roadviewObj.setPanoId(panoId, lastPosition);
+    statusEl.textContent = '✅ 로드뷰를 표시했습니다. 마우스로 드래그하면 시점을 돌려볼 수 있습니다.';
+    setTimeout(() => { roadviewObj.relayout(); }, 50);
+  });
 }
 
 // ===================== 토지이음(eum.go.kr) 결과 바로가기 =====================
