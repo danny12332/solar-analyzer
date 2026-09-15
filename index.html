@@ -107,11 +107,15 @@
       </div>
       <button class="run" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
     </div>
+    <div style="margin-top:12px;">
+      <button class="run" id="eumBtn" style="width:100%;background:var(--forest);" onclick="openEumResult()">📄 이 주소의 토지이용계획(지목·용도지역·용도지구) 바로 조회</button>
+      <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+    </div>
     <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
     <div id="mapEmbedWrap" style="margin-top:14px;display:none;">
       <iframe id="mapEmbed" style="width:100%;height:340px;border:1px solid var(--card-line);border-radius:3px;" loading="lazy"></iframe>
     </div>
-    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다 — 위치 확인을 누르면 카카오맵이 새 탭으로 자동으로 열립니다. 아래 미리보기는 구글맵 기준이라 국내 위성·지적 정보는 정확도가 떨어질 수 있어 참고용으로만 봐주세요. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요.</p>
+    <p class="footnote">기본 지도는 <b>카카오맵</b>입니다 — 위치 확인을 누르면 카카오맵이 새 탭으로 자동으로 열립니다. 아래 미리보기는 구글맵 기준이라 국내 위성·지적 정보는 정확도가 떨어질 수 있어 참고용으로만 봐주세요. <b>실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회</b>하세요. "토지이용계획 바로 조회" 버튼은 입력하신 지번 주소를 바탕으로 <b>토지이음(eum.go.kr) 공식 결과 페이지를 새 탭으로 열어드리는 기능</b>이며, 지번 주소 형식(예: OO동/OO리 123-4)일 때 가장 정확합니다.</p>
   </div>
 
   <div class="layout">
@@ -430,6 +434,139 @@ function lookupAddress(autoOpen){
   if(autoOpen){ window.open(kakaoUrl, '_blank'); }
 }
 lookupAddress(false);
+
+// ===================== 토지이음(eum.go.kr) 결과 바로가기 =====================
+// 법정동코드 데이터(bjdong.txt, 국토교통부 제공 20,555건 "존재" 상태)를 같은 폴더에서 불러와
+// 인터넷 API 호출 없이 브라우저 안에서 직접 주소→법정동코드 매칭을 수행합니다.
+let BJDONG_LIST = null; // [{code:'1111010100', name:'서울특별시 종로구 청운동'}, ...]
+let bjdongLoadPromise = null;
+
+function loadBjdong(){
+  if(bjdongLoadPromise) return bjdongLoadPromise;
+  bjdongLoadPromise = fetch('./bjdong.txt')
+    .then(r => {
+      if(!r.ok) throw new Error('bjdong.txt 로드 실패 (HTTP ' + r.status + ')');
+      return r.text();
+    })
+    .then(text => {
+      BJDONG_LIST = text.split('\n').filter(Boolean).map(line => {
+        const idx = line.indexOf('|');
+        return { code: line.slice(0, idx), name: line.slice(idx + 1) };
+      });
+    });
+  return bjdongLoadPromise;
+}
+
+const SIDO_ALIAS = {
+  '서울':'서울특별시','서울시':'서울특별시',
+  '부산':'부산광역시','부산시':'부산광역시',
+  '대구':'대구광역시','대구시':'대구광역시',
+  '인천':'인천광역시','인천시':'인천광역시',
+  '광주':'광주광역시','광주시':'광주광역시',
+  '대전':'대전광역시','대전시':'대전광역시',
+  '울산':'울산광역시','울산시':'울산광역시',
+  '세종':'세종특별자치시','세종시':'세종특별자치시',
+  '경기':'경기도',
+  '강원':'강원특별자치도','강원도':'강원특별자치도',
+  '충북':'충청북도','충남':'충청남도',
+  '전북':'전북특별자치도','전라북도':'전북특별자치도',
+  '전남':'전라남도',
+  '경북':'경상북도','경남':'경상남도',
+  '제주':'제주특별자치도','제주도':'제주특별자치도'
+};
+
+function normalizeSpace(s){ return s.replace(/\s+/g, ' ').trim(); }
+
+function applySidoAlias(text){
+  const parts = text.split(' ');
+  if(parts.length && SIDO_ALIAS[parts[0]]){
+    parts[0] = SIDO_ALIAS[parts[0]];
+  }
+  return parts.join(' ');
+}
+
+// 주소 문자열을 { dongText, isMountain, bobn, bubn }으로 분해
+function parseAddressParts(raw){
+  let s = normalizeSpace(raw);
+  // 끝의 "번지" 같은 군더더기 제거
+  s = s.replace(/번지\s*$/, '');
+  // 맨 끝의 지번(산 포함) 패턴 추출: 예) "178-1", "산10-2", "178"
+  const m = s.match(/^(.*?)(?:\s+)(산)?\s*(\d+)(?:-(\d+))?\s*$/);
+  if(!m){ return null; }
+  const dongText = applySidoAlias(normalizeSpace(m[1]));
+  const isMountain = !!m[2];
+  const bobn = m[3];
+  const bubn = m[4] || '0';
+  return { dongText, isMountain, bobn, bubn };
+}
+
+// 동명 텍스트로 법정동코드 찾기 (정확일치 우선, 없으면 접미사 일치)
+function findBjdongCode(dongText){
+  const target = dongText;
+  // 1) 정확 일치
+  let hit = BJDONG_LIST.find(x => x.name === target);
+  if(hit) return { hit, ambiguous:false };
+
+  // 2) 접미사 일치 (입력한 부분이 법정동명 뒤쪽과 일치 — 시도 일부 생략 등 대응)
+  const candidates = BJDONG_LIST.filter(x => x.name.endsWith(target));
+  if(candidates.length === 1) return { hit: candidates[0], ambiguous:false };
+  if(candidates.length > 1) return { hit: candidates[0], ambiguous:true, count: candidates.length };
+
+  // 3) 반대로, 법정동명이 입력보다 짧을 수 있는 경우(입력에 세부 리까지 있는데 시도표기가 다른 경우 등)는 대응 어려움
+  return { hit: null, ambiguous:false };
+}
+
+function buildPnu(code, isMountain, bobn, bubn){
+  const gubun = isMountain ? '2' : '1';
+  return code + gubun + bobn.padStart(4,'0') + bubn.padStart(4,'0');
+}
+
+async function openEumResult(){
+  const statusEl = document.getElementById('eumStatus');
+  const btn = document.getElementById('eumBtn');
+  const addr = document.getElementById('siteAddress').value.trim();
+  if(!addr){ statusEl.textContent = '주소를 먼저 입력해주세요.'; statusEl.style.color = '#b3402a'; return; }
+
+  btn.disabled = true;
+  statusEl.style.color = 'var(--ink-soft)';
+  statusEl.textContent = '법정동코드 데이터 불러오는 중...';
+  try{
+    await loadBjdong();
+
+    const parsed = parseAddressParts(addr);
+    if(!parsed){
+      statusEl.textContent = '❌ 주소 끝에서 지번(예: 178-1)을 찾지 못했습니다. "OO읍/OO리 123-4" 형식으로 입력해주세요.';
+      statusEl.style.color = '#b3402a';
+      return;
+    }
+
+    const { hit, ambiguous, count } = findBjdongCode(parsed.dongText);
+    if(!hit){
+      statusEl.textContent = `❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다. 시/도부터 정확히 입력해주세요 (예: 충남 천안시 동남구 광덕면 대평리).`;
+      statusEl.style.color = '#b3402a';
+      return;
+    }
+
+    const pnu = buildPnu(hit.code, parsed.isMountain, parsed.bobn, parsed.bubn);
+    const url = `http://www.eum.go.kr/web/ar/lu/luLandDet.jsp?pnu=${pnu}&mode=search&isNoScr=script&selGbn=umd&selSido=&selSgg=&selUmd=&selRi=&landGbn=${parsed.isMountain?2:1}&bobn=${parsed.bobn}&bubn=${parsed.bubn}`;
+
+    window.open(url, '_blank');
+
+    if(ambiguous){
+      statusEl.textContent = `⚠ 동일한 이름의 지역이 ${count}곳 있어 그중 하나로 열었습니다 (${hit.name}). 결과가 다르면 시/도·시/군/구를 더 정확히 입력해주세요.`;
+      statusEl.style.color = '#8a6d1f';
+    } else {
+      statusEl.textContent = `✅ ${hit.name} · PNU ${pnu} 로 토지이음 결과를 새 탭에 열었습니다.`;
+      statusEl.style.color = 'var(--ink-soft)';
+    }
+  }catch(err){
+    console.error(err);
+    statusEl.textContent = '❌ 오류: ' + err.message;
+    statusEl.style.color = '#b3402a';
+  }finally{
+    btn.disabled = false;
+  }
+}
 
 function runAnalysis(){
   const cat = document.getElementById('landCategory').value;
