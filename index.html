@@ -298,11 +298,9 @@
           </div>
         </div>
         <div id="kakaoMap" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
-        <div id="roadviewWrap" style="margin-top:12px;display:none;">
-          <div id="kakaoRoadview" style="width:100%;height:420px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
-          <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-        </div>
-        <p class="footnote" style="margin-top:10px;">지적편집도는 참고용이며 현행 지적과 다를 수 있습니다. 로드뷰는 촬영 이력이 있는 곳에서만 지원됩니다.</p>
+        <div id="kakaoRoadview" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;display:none;"></div>
+        <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
+        <p class="footnote" style="margin-top:10px;">지적편집도는 참고용이며 현행 지적과 다를 수 있습니다. 로드뷰 보기 상태에서 지도 위 원하는 지점을 클릭하면 그 위치의 로드뷰를 바로 확인할 수 있습니다 (촬영 이력이 있는 곳만 지원).</p>
       </div>
       <div class="results" id="resultsWrap">
         <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
@@ -517,7 +515,18 @@ function ensureKakaoMap(){
     center: new kakao.maps.LatLng(36.5, 127.8), // 초기 기본 위치(대한민국 중앙 부근)
     level: 4
   });
+  // 지도를 클릭하면 그 지점으로 마커를 옮기고, 로드뷰 조회 대상 위치로 저장
+  kakao.maps.event.addListener(kakaoMapObj, 'click', function(mouseEvent){
+    setMarkerPosition(mouseEvent.latLng);
+  });
   return kakaoMapObj;
+}
+
+function setMarkerPosition(pos){
+  const map = ensureKakaoMap();
+  if(kakaoMarker){ kakaoMarker.setMap(null); }
+  kakaoMarker = new kakao.maps.Marker({ position: pos, map: map });
+  lastPosition = pos;
 }
 
 function showKakaoMap(address){
@@ -533,11 +542,9 @@ function showKakaoMap(address){
       const pos = new kakao.maps.LatLng(result[0].y, result[0].x);
       map.setCenter(pos);
       map.setLevel(3);
-      if(kakaoMarker){ kakaoMarker.setMap(null); }
-      kakaoMarker = new kakao.maps.Marker({ position: pos, map: map });
-      lastPosition = pos;
-      // 주소가 바뀌면 이전에 열려있던 로드뷰는 닫아서 혼동을 방지
-      if(roadviewOn){ closeRoadview(); }
+      setMarkerPosition(pos);
+      // 새 주소를 검색하면 로드뷰를 보고 있던 화면은 지도 화면으로 되돌림
+      if(roadviewOn){ showMapStage(); }
     } else {
       console.warn('카카오 지오코더: 주소를 찾지 못했습니다 →', address, status);
     }
@@ -565,52 +572,58 @@ function toggleCadastral(){
   btn.style.color = cadastralOn ? '#F6F7F3' : 'var(--forest)';
 }
 
-function closeRoadview(){
+// 지도 ↔ 로드뷰, 같은 자리(같은 크기)에서 화면만 전환
+function showMapStage(){
   roadviewOn = false;
-  document.getElementById('roadviewWrap').style.display = 'none';
-  document.getElementById('roadviewStatus').textContent = '';
+  document.getElementById('kakaoMap').style.display = 'block';
+  document.getElementById('kakaoRoadview').style.display = 'none';
+  document.getElementById('roadviewStatus').textContent = '지도에서 보고 싶은 지점을 클릭한 뒤 "로드뷰"를 눌러주세요.';
+  document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
   const btn = document.getElementById('roadviewBtn');
+  btn.textContent = '🚶 로드뷰';
   btn.style.background = 'var(--forest-dim)';
   btn.style.color = 'var(--forest)';
+  setTimeout(() => ensureKakaoMap().relayout(), 50);
 }
 
-function toggleRoadview(){
+function showRoadviewStage(){
   const statusEl = document.getElementById('roadviewStatus');
-  const wrap = document.getElementById('roadviewWrap');
-  const btn = document.getElementById('roadviewBtn');
-
-  if(roadviewOn){ closeRoadview(); return; }
-
   if(!lastPosition){
-    statusEl.textContent = '먼저 주소를 입력하고 "위치 확인"을 눌러주세요.';
+    statusEl.textContent = '먼저 지도에서 위치를 클릭하거나 주소를 검색해주세요.';
     statusEl.style.color = '#b3402a';
-    wrap.style.display = 'block';
     return;
   }
-
   roadviewOn = true;
+  document.getElementById('kakaoMap').style.display = 'none';
+  document.getElementById('kakaoRoadview').style.display = 'block';
+  const btn = document.getElementById('roadviewBtn');
+  btn.textContent = '🗺 지도로 보기';
   btn.style.background = 'var(--ink)';
   btn.style.color = '#F6F7F3';
-  wrap.style.display = 'block';
+
   statusEl.style.color = 'var(--ink-soft)';
   statusEl.textContent = '이 위치 근처에 로드뷰가 있는지 확인 중...';
 
   const rvClient = new kakao.maps.RoadviewClient();
+  const targetPos = lastPosition;
   // 반경 50m 이내에서 가장 가까운 로드뷰 파노라마 검색
-  rvClient.getNearestPanoId(lastPosition, 50, function(panoId){
+  rvClient.getNearestPanoId(targetPos, 50, function(panoId){
     if(panoId === null){
-      statusEl.textContent = '❌ 이 위치 근처(반경 50m)에는 로드뷰 촬영 이력이 없습니다. 농지·산지·외곽 도로는 로드뷰가 제공되지 않는 경우가 많습니다.';
+      statusEl.textContent = '❌ 이 위치 근처(반경 50m)에는 로드뷰 촬영 이력이 없습니다. 지도로 돌아가 다른 지점을 클릭해보세요.';
       statusEl.style.color = '#b3402a';
-      document.getElementById('kakaoRoadview').innerHTML = '';
       return;
     }
     if(!roadviewObj){
       roadviewObj = new kakao.maps.Roadview(document.getElementById('kakaoRoadview'));
     }
-    roadviewObj.setPanoId(panoId, lastPosition);
-    statusEl.textContent = '✅ 로드뷰를 표시했습니다. 마우스로 드래그하면 시점을 돌려볼 수 있습니다.';
+    roadviewObj.setPanoId(panoId, targetPos);
+    statusEl.textContent = '✅ 로드뷰를 표시했습니다. 드래그하면 시점을 돌려볼 수 있습니다. 다른 지점을 보려면 "지도로 보기"를 눌러 지점을 다시 클릭하세요.';
     setTimeout(() => { roadviewObj.relayout(); }, 50);
   });
+}
+
+function toggleRoadview(){
+  if(roadviewOn){ showMapStage(); } else { showRoadviewStage(); }
 }
 
 // ===================== 토지이음(eum.go.kr) 결과 바로가기 =====================
