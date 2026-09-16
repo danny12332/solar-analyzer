@@ -1023,6 +1023,7 @@ async function checkKepcoCapacity(){
 
   btn.disabled = true;
   resultEl.innerHTML = '<p class="hint">조회 중...</p>';
+  let admin = null; // catch 블록에서도 문의처를 표시하기 위해 try 바깥에 선언
   try{
     await loadBjdong();
     await loadJorye();
@@ -1037,14 +1038,14 @@ async function checkKepcoCapacity(){
       return;
     }
 
-    const admin = splitAdminName(hit.name);
+    admin = splitAdminName(hit.name);
     const jibun = (parsed.bubn && parsed.bubn !== '0') ? `${parsed.bobn}-${parsed.bubn}` : parsed.bobn;
 
     async function queryKepco(li, jb){
       const body = { dma_reqParam: { searchCondition: 'address', do: admin.do, si: admin.si, gu: admin.gu, lidong: admin.lidong, li, jibun: jb } };
       const res = await fetch('https://online.kepco.co.kr/ew/cpct/retrieveMeshNo', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify(body)
       });
       if(!res.ok) throw new Error('HTTP ' + res.status);
@@ -1094,7 +1095,9 @@ async function checkKepcoCapacity(){
       ${contactHtml(admin)}`;
   }catch(err){
     console.error(err);
-    resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ 조회 실패: ${err.message}</p>`;
+    resultEl.innerHTML = `
+      <p class="hint" style="color:#b3402a;">❌ 조회 실패: ${err.message} — 브라우저가 한전 서버 요청을 막았을 수 있습니다 (CORS). 아래 문의처를 이용해주세요.</p>
+      ${admin ? contactHtml(admin) : ''}`;
   }finally{
     btn.disabled = false;
   }
