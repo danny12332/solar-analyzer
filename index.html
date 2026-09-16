@@ -1198,11 +1198,14 @@ function splitAdminName(fullName){
   const isProvince = /(특별자치도|도)$/.test(doTok) && !/(특별시|광역시|자치시)$/.test(doTok);
   let si = '', guRaw = '', lidong = '', li = '';
   let idx = 0;
-  if(isProvince){
-    si = rest[idx] || ''; idx++;
+  if(isProvince && rest[idx] && rest[idx].endsWith('시')){
+    // 도 바로 아래에 진짜 "시" 단계가 있는 경우만 si로 사용 (예: 포항시, 안동시, 천안시)
+    si = rest[idx]; idx++;
   } else {
-    // 광역시·특별시 등 "시" 단계가 없는 경우, 한전ON 폼은 빈 문자열이 아니라
-    // "-기타지역"이라는 문자열 그대로를 si 파라미터로 요구함 (실제 네트워크 캡처로 확인됨)
+    // 광역시·특별시처럼 애초에 "시" 단계가 없는 경우뿐 아니라,
+    // 도 바로 아래가 "군"인 경우(예: 경북 울진군, 충남 태안군)에도
+    // 한전ON 폼은 si를 "-기타지역"으로 요구함 (실제 네트워크 캡처로 확인됨).
+    // 이 경우 "군"은 idx를 소비하지 않고 아래 구/군 처리로 넘어가 guRaw에 배정됨.
     si = '-기타지역';
   }
   if(rest[idx] && (rest[idx].endsWith('구') || rest[idx].endsWith('군'))){ guRaw = rest[idx]; idx++; }
@@ -1222,7 +1225,7 @@ function contactHtml(admin){
   if(localData){
     return `
     <div class="keyline" style="margin-top:10px;background:var(--amber-tint);border-left-color:var(--amber);">
-      <b>📋 ${admin.siText || admin.do} 실사 확인 자료 (사용자 제공 데이터, 방문 확인일 기준)</b>
+      <b>📋 ${admin.siText || admin.guText || admin.do} 실사 확인 자료 (사용자 제공 데이터, 방문 확인일 기준)</b>
       <p style="margin:8px 0 4px;font-size:13px;"><b>개발행위허가 규모/기준:</b> ${localData.devScale}</p>
       <p style="margin:8px 0 4px;font-size:13px;"><b>한전선로용량 관련:</b> ${localData.kepco}</p>
       <p style="margin:8px 0 0;font-size:13px;"><b>지자체 담당자·특이사항:</b> ${localData.contact}</p>
@@ -1232,7 +1235,7 @@ function contactHtml(admin){
 
   return `
     <div class="keyline" style="margin-top:10px;">
-      <p style="margin:0;font-size:13px;">📋 <b>${admin.siText || admin.do}</b>의 실사 확인 자료가 아직 없습니다. 한전ON(online.kepco.co.kr) 또는 관할 지자체·한전지사에 직접 문의해주세요.</p>
+      <p style="margin:0;font-size:13px;">📋 <b>${admin.siText || admin.guText || admin.do}</b>의 실사 확인 자료가 아직 없습니다. 한전ON(online.kepco.co.kr) 또는 관할 지자체·한전지사에 직접 문의해주세요.</p>
     </div>`;
 }
 
