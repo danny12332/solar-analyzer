@@ -1387,7 +1387,8 @@ async function checkKepcoCapacity(){
     const list = result.dlt_resultList;
     const matched = result.matched;
     const r = list[0];
-    const ok = Number(r.SUBST_PWR) > 0 && Number(r.MTR_PWR) > 0 && Number(r.DL_PWR) > 0;
+    // VOL_1/2/3 = 실제 여유용량(접속기준용량 - 접수기준 접속용량). SUBST_PWR/MTR_PWR/DL_PWR은 "이미 사용 중인 접수기준 접속용량"이며 여유가 아님 — 실제 응답 수치로 교차검증 완료.
+    const ok = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0;
 
     const levelNote = matchLevel === 'exact'
       ? ''
@@ -1399,15 +1400,15 @@ async function checkKepcoCapacity(){
 
     resultEl.innerHTML = `
       <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;">
-        <b>${ok ? '✅ 변전소·주변압기·배전선로 모두 여유전력 있음 (참고용)' : '⚠ 일부 구간 여유전력 0 — 계통연계 지연 가능'}</b>
+        <b>${ok ? '✅ 변전소·주변압기·배전선로 모두 여유용량 있음 (참고용)' : '⚠ 일부 구간 여유용량 0 — 계통연계 지연 가능'}</b>
         ${levelNote}
         <table class="ref-table" style="margin-top:8px;">
-          <tr><th></th><th>명칭</th><th>총용량(kW)</th><th>여유전력(kW)</th></tr>
-          <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td></tr>
-          <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td></tr>
-          <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td></tr>
+          <tr><th></th><th>명칭</th><th>접속기준용량(kW)</th><th>접수기준 사용중(kW)</th><th>실제 여유용량(kW)</th></tr>
+          <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_1).toLocaleString('ko-KR')}</td></tr>
+          <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_2).toLocaleString('ko-KR')}</td></tr>
+          <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_3).toLocaleString('ko-KR')}</td></tr>
         </table>
-        <p class="footnote">한전ON 배전망 여유용량 조회 결과를 그대로 옮긴 참고 자료이며, 접속 가능 여부를 최종 확정하는 것은 아닙니다. 세 값이 모두 0보다 커야 연계 가능성이 있고, 실제 신청 시점에 값이 달라질 수 있으니 반드시 한전ON에서 재확인하세요. (조회 지번: ${matched.jibun}, 소재지: ${admin.do} ${admin.siText} ${admin.guText} ${matched.lidong} ${matched.li})</p>
+        <p class="footnote">한전ON 배전망 여유용량 조회 결과를 그대로 옮긴 참고 자료이며, 접속 가능 여부를 최종 확정하는 것은 아닙니다. "실제 여유용량"이 세 항목 모두 0보다 커야 연계 가능성이 있고, 실제 신청 시점에 값이 달라질 수 있으니 반드시 한전ON에서 재확인하세요. (조회 지번: ${matched.jibun}, 소재지: ${admin.do} ${admin.siText} ${admin.guText} ${matched.lidong} ${matched.li})</p>
       </div>
       ${contactHtml(admin)}`;
   }catch(err){
