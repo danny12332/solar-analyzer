@@ -296,10 +296,13 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleSatellite()">🛰 위성보기</button>
             <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleCadastral()">🗺 지적편집도</button>
+            <button type="button" class="run" id="terrainBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleTerrain()">⛰ 지형정보</button>
+            <button type="button" class="run" id="trafficBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleTraffic()">🚦 교통정보</button>
             <button type="button" class="run" id="rvRoadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadviewRoads()">🛣 로드뷰 가능 도로</button>
             <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadview()">🚶 로드뷰</button>
             <button type="button" class="run" id="distanceBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleDistanceMode()">📏 거리재기</button>
             <button type="button" class="run" id="areaBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleAreaMode()">📐 면적재기</button>
+            <button type="button" class="run" id="radiusBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRadiusMode()">📍 반경재기</button>
             <button type="button" class="run" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--surface-2);color:var(--ink-soft);width:auto;" onclick="clearMeasurements()">🧹 측정 지우기</button>
           </div>
         </div>
@@ -309,7 +312,7 @@
           <div id="kakaoRoadview" style="width:100%;height:420px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
         </div>
         <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적은 참고용이며 실제 값과 다를 수 있습니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🚶 로드뷰" 버튼을 켠 뒤 지도를 클릭하면 그 위치의 로드뷰가 아래에 나타나고, 지도 위 카메라 아이콘이 위치·바라보는 방향을 함께 보여줍니다. 거리재기·면적재기는 지도를 클릭해 점을 찍고, 버튼을 다시 누르면 측정이 끝납니다.</p>
+        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적·반경은 참고용이며 실제 값과 다를 수 있습니다. 지도를 클릭하거나 주소를 검색하면 그 지점의 <b>지번 주소와 도로명 주소가 함께</b> 표시됩니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🚶 로드뷰" 버튼을 켠 뒤 지도를 클릭하면 그 위치의 로드뷰가 아래에 나타나고, 지도 위 카메라 아이콘이 위치·바라보는 방향을 함께 보여줍니다. 거리재기·면적재기·반경재기는 지도를 클릭해 점을 찍고, 버튼을 다시 누르면 측정이 끝납니다.</p>
       </div>
       <div class="results" id="resultsWrap">
         <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
@@ -515,14 +518,20 @@ let roadviewRoadsOn = false;
 let roadviewObj = null;
 let roadviewOn = false;
 let lastPosition = null; // 마지막으로 지오코딩(또는 클릭)된 위치 — 로드뷰 대상
-let mapMode = 'normal'; // 'normal' | 'distance' | 'area'
+let mapMode = 'normal'; // 'normal' | 'distance' | 'area' | 'radius'
 let distancePoints = [];
 let distancePolyline = null;
 let distanceLabel = null;
 let areaPoints = [];
 let areaPolygon = null;
 let areaLabel = null;
-let measureShapes = []; // 지우기 대상(선·다각형·라벨) 전체 목록
+let radiusCenter = null;
+let radiusCircle = null;
+let radiusLabel = null;
+let radiusCenterMarker = null;
+let terrainOn = false;
+let trafficOn = false;
+let measureShapes = []; // 지우기 대상(선·다각형·원·라벨) 전체 목록
 
 lookupAddress(false);
 
@@ -536,6 +545,7 @@ function ensureKakaoMap(){
   kakao.maps.event.addListener(kakaoMapObj, 'click', function(mouseEvent){
     if(mapMode === 'distance'){ addDistancePoint(mouseEvent.latLng); }
     else if(mapMode === 'area'){ addAreaPoint(mouseEvent.latLng); }
+    else if(mapMode === 'radius'){ addRadiusPoint(mouseEvent.latLng); }
     else {
       setMarkerPosition(mouseEvent.latLng);
       // 로드뷰가 열려있는 상태라면 새로 클릭한 지점으로 바로 갱신
@@ -545,21 +555,56 @@ function ensureKakaoMap(){
   return kakaoMapObj;
 }
 
+let addressOverlay = null; // 지도 위 지번/도로명 주소 라벨
+
 function setMarkerPosition(pos){
   const map = ensureKakaoMap();
   if(kakaoMarker){ kakaoMarker.setMap(null); }
   kakaoMarker = new kakao.maps.Marker({ position: pos, map: map });
   lastPosition = pos;
+  updateAddressLabel(pos);
+}
+
+function updateAddressLabel(pos){
+  if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services) return;
+  const geocoder = new kakao.maps.services.Geocoder();
+  geocoder.coord2Address(pos.getLng(), pos.getLat(), function(result, status){
+    if(status !== kakao.maps.services.Status.OK || !result[0]) return;
+    const jibun = result[0].address ? result[0].address.address_name : '지번 주소 정보 없음';
+    const road = result[0].road_address ? result[0].road_address.address_name : '(이 위치엔 도로명주소 없음)';
+    const content = `<div style="background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 10px;font-size:11.5px;line-height:1.6;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);">
+      <div><b style="color:var(--forest);">지번</b> ${jibun}</div>
+      <div><b style="color:var(--rust);">도로명</b> ${road}</div>
+    </div>`;
+    const map = ensureKakaoMap();
+    if(!addressOverlay){
+      addressOverlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.3, zIndex: 40 });
+      addressOverlay.setMap(map);
+    } else {
+      addressOverlay.setPosition(pos);
+      addressOverlay.setContent(content);
+    }
+  });
 }
 
 function setMode(mode){
   mapMode = mode;
-  ['distanceBtn','areaBtn'].forEach(id => {
+  ['distanceBtn','areaBtn','radiusBtn'].forEach(id => {
     const btn = document.getElementById(id);
-    const on = (id === 'distanceBtn' && mode === 'distance') || (id === 'areaBtn' && mode === 'area');
+    const on = (id === 'distanceBtn' && mode === 'distance') || (id === 'areaBtn' && mode === 'area') || (id === 'radiusBtn' && mode === 'radius');
     btn.style.background = on ? 'var(--ink)' : 'var(--forest-dim)';
     btn.style.color = on ? '#F6F7F3' : 'var(--forest)';
   });
+}
+
+// 두 좌표 사이 거리(미터) — Haversine 공식
+function haversineMeters(p1, p2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(p2.getLat() - p1.getLat());
+  const dLng = toRad(p2.getLng() - p1.getLng());
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(p1.getLat())) * Math.cos(toRad(p2.getLat())) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
 // ---- 거리재기 ----
@@ -662,7 +707,56 @@ function clearMeasurements(){
   measureShapes = [];
   distancePoints = []; distancePolyline = null; distanceLabel = null;
   areaPoints = []; areaPolygon = null; areaLabel = null;
+  radiusCenter = null; radiusCircle = null; radiusLabel = null;
+  if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
   document.getElementById('roadviewStatus').textContent = '측정 결과를 모두 지웠습니다.';
+}
+
+// ---- 반경재기 ----
+function addRadiusPoint(latlng){
+  const map = ensureKakaoMap();
+  if(!radiusCenter){
+    radiusCenter = latlng;
+    if(radiusCenterMarker){ radiusCenterMarker.setMap(null); }
+    radiusCenterMarker = new kakao.maps.Marker({ position: latlng, map, image: undefined });
+    document.getElementById('roadviewStatus').textContent = '중심점을 찍었습니다. 반경으로 삼을 지점을 한 번 더 클릭하세요.';
+    return;
+  }
+  const radius = haversineMeters(radiusCenter, latlng);
+  if(radiusCircle){ radiusCircle.setMap(null); }
+  radiusCircle = new kakao.maps.Circle({
+    map, center: radiusCenter, radius,
+    strokeWeight: 2, strokeColor: '#AE3B2E', strokeOpacity: 0.9, strokeStyle: 'solid',
+    fillColor: '#AE3B2E', fillOpacity: 0.15
+  });
+  measureShapes.push(radiusCircle);
+  if(radiusCenterMarker){ measureShapes.push(radiusCenterMarker); }
+
+  const area = Math.PI * radius * radius;
+  const content = `<div style="background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">반경 ${Math.round(radius).toLocaleString('ko-KR')} m · 면적 ${Math.round(area).toLocaleString('ko-KR')} ㎡</div>`;
+  if(radiusLabel){ radiusLabel.setMap(null); }
+  radiusLabel = new kakao.maps.CustomOverlay({ position: latlng, content, yAnchor: 1.6 });
+  radiusLabel.setMap(map);
+  measureShapes.push(radiusLabel);
+
+  document.getElementById('roadviewStatus').textContent = `✅ 반경 ${Math.round(radius).toLocaleString('ko-KR')} m 원을 그렸습니다. 다시 클릭하면 새 중심점으로 시작합니다.`;
+  radiusCenter = null; // 다음 클릭은 새로운 원의 중심점
+  radiusCenterMarker = null;
+}
+
+function toggleRadiusMode(){
+  if(mapMode === 'radius'){
+    setMode('normal');
+    if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
+    radiusCenter = null;
+    document.getElementById('roadviewStatus').textContent = '';
+  } else {
+    radiusCenter = null;
+    if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
+    setMode('radius');
+    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 중심점을 찍고, 반경으로 삼을 지점을 한 번 더 클릭하세요.';
+    document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
+  }
 }
 
 function showKakaoMap(address){
@@ -706,6 +800,26 @@ function toggleCadastral(){
   const btn = document.getElementById('cadBtn');
   btn.style.background = cadastralOn ? 'var(--ink)' : 'var(--forest-dim)';
   btn.style.color = cadastralOn ? '#F6F7F3' : 'var(--forest)';
+}
+
+function toggleTerrain(){
+  const map = ensureKakaoMap();
+  terrainOn = !terrainOn;
+  if(terrainOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN); }
+  else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN); }
+  const btn = document.getElementById('terrainBtn');
+  btn.style.background = terrainOn ? 'var(--ink)' : 'var(--forest-dim)';
+  btn.style.color = terrainOn ? '#F6F7F3' : 'var(--forest)';
+}
+
+function toggleTraffic(){
+  const map = ensureKakaoMap();
+  trafficOn = !trafficOn;
+  if(trafficOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC); }
+  else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC); }
+  const btn = document.getElementById('trafficBtn');
+  btn.style.background = trafficOn ? 'var(--ink)' : 'var(--forest-dim)';
+  btn.style.color = trafficOn ? '#F6F7F3' : 'var(--forest)';
 }
 
 function toggleRoadviewRoads(){
