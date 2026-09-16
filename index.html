@@ -564,6 +564,7 @@ function ensureKakaoMap(){
 }
 
 let addressOverlay = null; // 지도 위 지번/도로명 주소 라벨
+let lastJibunAddress = null; // 마지막으로 확인된 지번 주소 (도로명으로 검색해도 배전선로 조회는 항상 이 값을 사용)
 
 function setMarkerPosition(pos, geocodeInfo){
   const map = ensureKakaoMap();
@@ -602,6 +603,7 @@ function fallbackCopy(text, cb){
 
 function renderAddressLabel(pos, jibun, road){
   const map = ensureKakaoMap();
+  if(jibun){ lastJibunAddress = jibun; }
   const esc = s => (s || '').replace(/'/g, "\\'");
   const content = `<div style="background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 10px;font-size:11.5px;line-height:1.7;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);">
     <div style="display:flex;align-items:center;gap:6px;"><b style="color:var(--forest);">지번</b> <span>${jibun || '지번 주소 정보 없음'}</span>${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:none;background:var(--surface-2);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--ink-soft);">복사</button>` : ''}</div>
@@ -1141,7 +1143,9 @@ function buildPnu(code, isMountain, bobn, bubn){
 async function openEumResult(){
   const statusEl = document.getElementById('eumStatus');
   const btn = document.getElementById('eumBtn');
-  const addr = document.getElementById('siteAddress').value.trim();
+  const typedAddr = document.getElementById('siteAddress').value.trim();
+  // 도로명으로 입력/검색했어도, 카카오맵이 이미 확인해준 지번 주소가 있으면 그걸 우선 사용 (토지이음은 지번 기준)
+  const addr = (lastJibunAddress && lastJibunAddress.trim()) || typedAddr;
   if(!addr){ statusEl.textContent = '주소를 먼저 입력해주세요.'; statusEl.style.color = '#b3402a'; return; }
 
   btn.disabled = true;
@@ -1264,7 +1268,9 @@ function getJoryeEntry(admin){
 async function checkKepcoCapacity(){
   const resultEl = document.getElementById('kepcoResult');
   const btn = document.getElementById('kepcoBtn');
-  const addr = document.getElementById('siteAddress').value.trim();
+  const typedAddr = document.getElementById('siteAddress').value.trim();
+  // 도로명으로 입력/검색했어도, 카카오맵이 이미 확인해준 지번 주소가 있으면 그걸 우선 사용
+  const addr = (lastJibunAddress && lastJibunAddress.trim()) || typedAddr;
   if(!addr){ resultEl.innerHTML = '<p class="hint" style="color:#b3402a;">주소를 먼저 입력해주세요.</p>'; return; }
 
   btn.disabled = true;
