@@ -1156,12 +1156,8 @@ async function checkKepcoCapacity(){
     const jibun = (parsed.bubn && parsed.bubn !== '0') ? `${parsed.bobn}-${parsed.bubn}` : parsed.bobn;
 
     async function queryKepco(li, jb){
-      const body = { dma_reqParam: { searchCondition: 'address', do: admin.do, si: admin.si, gu: admin.gu, lidong: admin.lidong, li, jibun: jb } };
-      const res = await fetch('https://online.kepco.co.kr/ew/cpct/retrieveMeshNo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: JSON.stringify(body)
-      });
+      const params = new URLSearchParams({ do: admin.do, si: admin.si, gu: admin.gu, lidong: admin.lidong, li, jibun: jb });
+      const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco?' + params.toString());
       if(!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       return data.dlt_resultList;
