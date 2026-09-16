@@ -1094,6 +1094,25 @@ function findBjdongCode(dongText){
   return { hit: null, ambiguous:false };
 }
 
+// 같은 읍/면 안에 있는 다른 리(里) 이름 목록을 법정동 DB에서 찾기 (배전망 조회 최종 폴백용)
+function getSiblingLis(admin){
+  if(!BJDONG_LIST || !admin.lidong) return [];
+  const prefix = [admin.do, admin.si, admin.gu, admin.lidong].filter(Boolean).join(' ') + ' ';
+  const seen = new Set();
+  const result = [];
+  for(const x of BJDONG_LIST){
+    if(x.name.startsWith(prefix)){
+      const rest = x.name.slice(prefix.length).trim();
+      // rest가 "OO리" 형태인 하나의 토큰일 때만 후보로 채택 (그 이하 세부 내용이 있으면 제외)
+      if(rest && !rest.includes(' ') && rest.endsWith('리') && rest !== admin.li && !seen.has(rest)){
+        seen.add(rest);
+        result.push(rest);
+      }
+    }
+  }
+  return result;
+}
+
 function buildPnu(code, isMountain, bobn, bubn){
   const gubun = isMountain ? '2' : '1';
   return code + gubun + bobn.padStart(4,'0') + bubn.padStart(4,'0');
@@ -1165,30 +1184,22 @@ function splitAdminName(fullName){
 }
 
 function contactHtml(admin){
-  const jur = [admin.si, admin.gu].filter(Boolean).join(' ') || admin.do; // 구가 있으면 "OO시 OO구", 없으면 시/도
-  const q = (dept) => `https://www.google.com/search?q=${encodeURIComponent(jur + ' ' + dept + ' 전화번호')}`;
   const localData = getJoryeEntry(admin);
 
-  const localBlock = localData ? `
+  if(localData){
+    return `
     <div class="keyline" style="margin-top:10px;background:var(--amber-tint);border-left-color:var(--amber);">
       <b>📋 ${admin.si || admin.do} 실사 확인 자료 (사용자 제공 데이터, 방문 확인일 기준)</b>
       <p style="margin:8px 0 4px;font-size:13px;"><b>개발행위허가 규모/기준:</b> ${localData.devScale}</p>
       <p style="margin:8px 0 4px;font-size:13px;"><b>한전선로용량 관련:</b> ${localData.kepco}</p>
       <p style="margin:8px 0 0;font-size:13px;"><b>지자체 담당자·특이사항:</b> ${localData.contact}</p>
       <p class="footnote" style="margin-top:8px;">사용자가 직접 확인한 자료이며, 시점 경과로 담당자·기준이 바뀌었을 수 있어 최종 확인은 필요합니다.</p>
-    </div>` : '';
+    </div>`;
+  }
 
   return `
-    ${localBlock}
     <div class="keyline" style="margin-top:10px;">
-      <b>📞 확인 전화 — 정확한 번호는 클릭 시 검색 결과에서 확인하세요 (조직 개편으로 수시 변경됨)</b>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
-        <span style="font-size:12.5px;padding:8px 14px;background:var(--surface);border:1px solid var(--card-line);border-radius:20px;">한전 고객센터: <b>국번없이 123</b></span>
-        <a href="${q('개발행위허가과')}" target="_blank" rel="noopener" style="font-size:12.5px;padding:8px 14px;background:var(--surface);border:1px solid var(--card-line);border-radius:20px;text-decoration:none;color:var(--ink);">${jur} 개발행위허가과 찾기 ↗</a>
-        <a href="${q('건축허가과')}" target="_blank" rel="noopener" style="font-size:12.5px;padding:8px 14px;background:var(--surface);border:1px solid var(--card-line);border-radius:20px;text-decoration:none;color:var(--ink);">${jur} 건축허가과 찾기 ↗</a>
-        <a href="${q('도시계획과')}" target="_blank" rel="noopener" style="font-size:12.5px;padding:8px 14px;background:var(--surface);border:1px solid var(--card-line);border-radius:20px;text-decoration:none;color:var(--ink);">${jur} 도시계획과 찾기 ↗</a>
-        <a href="https://www.google.com/search?q=${encodeURIComponent(jur + ' 배전 담당 한전지사 전화번호')}" target="_blank" rel="noopener" style="font-size:12.5px;padding:8px 14px;background:var(--surface);border:1px solid var(--card-line);border-radius:20px;text-decoration:none;color:var(--ink);">${jur} 관할 한전지사 찾기 ↗</a>
-      </div>
+      <p style="margin:0;font-size:13px;">📋 <b>${admin.si || admin.do}</b>의 실사 확인 자료가 아직 없습니다. 한전ON(online.kepco.co.kr) 또는 관할 지자체·한전지사에 직접 문의해주세요.</p>
     </div>`;
 }
 
@@ -1258,7 +1269,7 @@ async function checkKepcoCapacity(){
       return data.dlt_resultList;
     }
 
-    // 1) 정확한 지번 → 2) 같은 리(지번 생략) → 3) 리 정보 없이 동/면 단위, 순서로 범위를 넓혀 재조회
+    // 1) 정확한 지번 → 2) 같은 리(지번 생략) → 3) 리 정보 없이 동/면 단위 → 4) 같은 면 안의 다른 리(가장 가까운 순서로 추정), 순서로 범위를 넓혀 재조회
     let list = await queryKepco(admin.li, jibun);
     let matchLevel = 'exact';
     if(!list || list.length === 0){
@@ -1269,10 +1280,23 @@ async function checkKepcoCapacity(){
       list = await queryKepco('', '');
       matchLevel = 'dong';
     }
+    let siblingLiUsed = null;
+    if(!list || list.length === 0){
+      const siblings = getSiblingLis(admin);
+      for(const sib of siblings.slice(0, 8)){
+        const sibList = await queryKepco(sib, '');
+        if(sibList && sibList.length > 0){
+          list = sibList;
+          matchLevel = 'sibling';
+          siblingLiUsed = sib;
+          break;
+        }
+      }
+    }
 
     if(!list || list.length === 0){
       resultEl.innerHTML = `
-        <p class="hint" style="color:#b3402a;">❌ 이 주소 주변에 대한 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>
+        <p class="hint" style="color:#b3402a;">❌ ${admin.lidong} 전체와 인근 리(里)까지 찾아봤지만 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>
         ${contactHtml(admin)}`;
       return;
     }
@@ -1283,7 +1307,10 @@ async function checkKepcoCapacity(){
       ? ''
       : matchLevel === 'li'
         ? `<p class="hint" style="color:#8a6d1f;margin-top:0;">⚠ 입력하신 지번(${jibun}) 기준 결과가 없어, <b>같은 리(${admin.lidong} ${admin.li})의 가장 가까운 배전선로 결과</b>로 대신 보여드립니다.</p>`
-        : `<p class="hint" style="color:#8a6d1f;margin-top:0;">⚠ 입력하신 리 단위로도 결과가 없어, <b>${admin.lidong} 전체 기준의 가장 가까운 배전선로 결과</b>로 대신 보여드립니다. 실제 위치와 차이가 클 수 있습니다.</p>`;
+        : matchLevel === 'dong'
+          ? `<p class="hint" style="color:#8a6d1f;margin-top:0;">⚠ 입력하신 리 단위로도 결과가 없어, <b>${admin.lidong} 전체 기준의 가장 가까운 배전선로 결과</b>로 대신 보여드립니다. 실제 위치와 차이가 클 수 있습니다.</p>`
+          : `<p class="hint" style="color:#8a6d1f;margin-top:0;">⚠ ${admin.lidong} 전체에도 결과가 없어, <b>같은 면(面) 안의 다른 리(${siblingLiUsed})</b>의 배전선로 결과를 참고로 보여드립니다. 실제 위치와 상당히 다를 수 있습니다.</p>`;
+
 
     resultEl.innerHTML = `
       <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;">
