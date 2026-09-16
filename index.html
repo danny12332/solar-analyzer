@@ -1003,10 +1003,16 @@ async function loadJorye(){
 
 function getJoryeEntry(admin){
   if(!JORYE_DATA) return null;
-  const provinceKey = admin.do; // 예: "경상남도"
+  const provinceKey = admin.do; // 예: "경상남도" 또는 "서울특별시"
   const table = JORYE_DATA[provinceKey];
   if(!table) return null;
-  return table[admin.si] || null;
+  // 일반 도(道): si(시/군) 키로 조회
+  if(admin.si && table[admin.si]) return table[admin.si];
+  // 광역시 내 개별 구/군에 별도 조례가 있는 경우 (예: 인천 강화군)
+  if(admin.gu && table[admin.gu]) return table[admin.gu];
+  // 광역시·세종·제주는 "본청" 단위로 통합 관리
+  if(table['본청']) return table['본청'];
+  return null;
 }
 
 async function checkKepcoCapacity(){
