@@ -153,6 +153,8 @@
         <div style="margin-top:12px;">
           <button class="run" id="eumBtn" style="width:100%;background:var(--forest);" onclick="openEumResult()">📄 이 주소의 토지이용계획(지목·용도지역·용도지구) 바로 조회</button>
           <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+          <button class="run" id="kepcoBtn" style="width:100%;background:var(--amber);margin-top:10px;" onclick="checkKepcoCapacity()">⚡ 이 주소의 배전선로 여유용량 조회 (한전ON)</button>
+          <div id="kepcoResult" style="margin-top:8px;"></div>
         </div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
@@ -294,13 +296,17 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleSatellite()">🛰 위성보기</button>
             <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleCadastral()">🗺 지적편집도</button>
+            <button type="button" class="run" id="rvRoadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadviewRoads()">🛣 로드뷰 가능 도로</button>
             <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadview()">🚶 로드뷰</button>
+            <button type="button" class="run" id="distanceBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleDistanceMode()">📏 거리재기</button>
+            <button type="button" class="run" id="areaBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleAreaMode()">📐 면적재기</button>
+            <button type="button" class="run" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--surface-2);color:var(--ink-soft);width:auto;" onclick="clearMeasurements()">🧹 측정 지우기</button>
           </div>
         </div>
         <div id="kakaoMap" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
         <div id="kakaoRoadview" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;display:none;"></div>
         <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-        <p class="footnote" style="margin-top:10px;">지적편집도는 참고용이며 현행 지적과 다를 수 있습니다. 로드뷰 보기 상태에서 지도 위 원하는 지점을 클릭하면 그 위치의 로드뷰를 바로 확인할 수 있습니다 (촬영 이력이 있는 곳만 지원).</p>
+        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적은 참고용이며 실제 값과 다를 수 있습니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. 로드뷰 보기 상태에서 지도를 클릭하면 그 위치의 로드뷰를 확인할 수 있습니다. 거리재기·면적재기는 지도를 클릭해 점을 찍고, 더블클릭하면 측정이 끝납니다.</p>
       </div>
       <div class="results" id="resultsWrap">
         <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
@@ -497,14 +503,23 @@ function lookupAddress(autoOpen){
 
   // 카카오맵 새 탭 자동 열기는 제거 — 이제 사이트 내 지도(showKakaoMap)만 표시합니다.
 }
-// ===================== 카카오맵: 위성뷰 + 지적편집도 (변수는 lookupAddress 호출보다 먼저 선언) =====================
+// ===================== 카카오맵: 위성뷰 + 지적편집도 + 로드뷰 + 거리/면적 재기 (변수는 lookupAddress 호출보다 먼저 선언) =====================
 let kakaoMapObj = null;
 let kakaoMarker = null;
 let satelliteOn = false;
 let cadastralOn = false;
+let roadviewRoadsOn = false;
 let roadviewObj = null;
 let roadviewOn = false;
-let lastPosition = null; // 마지막으로 지오코딩된 위치 (로드뷰용)
+let lastPosition = null; // 마지막으로 지오코딩(또는 클릭)된 위치 — 로드뷰 대상
+let mapMode = 'normal'; // 'normal' | 'distance' | 'area'
+let distancePoints = [];
+let distancePolyline = null;
+let distanceLabel = null;
+let areaPoints = [];
+let areaPolygon = null;
+let areaLabel = null;
+let measureShapes = []; // 지우기 대상(선·다각형·라벨) 전체 목록
 
 lookupAddress(false);
 
@@ -515,9 +530,10 @@ function ensureKakaoMap(){
     center: new kakao.maps.LatLng(36.5, 127.8), // 초기 기본 위치(대한민국 중앙 부근)
     level: 4
   });
-  // 지도를 클릭하면 그 지점으로 마커를 옮기고, 로드뷰 조회 대상 위치로 저장
   kakao.maps.event.addListener(kakaoMapObj, 'click', function(mouseEvent){
-    setMarkerPosition(mouseEvent.latLng);
+    if(mapMode === 'distance'){ addDistancePoint(mouseEvent.latLng); }
+    else if(mapMode === 'area'){ addAreaPoint(mouseEvent.latLng); }
+    else { setMarkerPosition(mouseEvent.latLng); }
   });
   return kakaoMapObj;
 }
@@ -527,6 +543,119 @@ function setMarkerPosition(pos){
   if(kakaoMarker){ kakaoMarker.setMap(null); }
   kakaoMarker = new kakao.maps.Marker({ position: pos, map: map });
   lastPosition = pos;
+}
+
+function setMode(mode){
+  mapMode = mode;
+  ['distanceBtn','areaBtn'].forEach(id => {
+    const btn = document.getElementById(id);
+    const on = (id === 'distanceBtn' && mode === 'distance') || (id === 'areaBtn' && mode === 'area');
+    btn.style.background = on ? 'var(--ink)' : 'var(--forest-dim)';
+    btn.style.color = on ? '#F6F7F3' : 'var(--forest)';
+  });
+}
+
+// ---- 거리재기 ----
+function addDistancePoint(latlng){
+  const map = ensureKakaoMap();
+  distancePoints.push(latlng);
+  if(!distancePolyline){
+    distancePolyline = new kakao.maps.Polyline({ map, path: distancePoints, strokeWeight:3, strokeColor:'#AE3B2E', strokeOpacity:0.9, strokeStyle:'solid' });
+    measureShapes.push(distancePolyline);
+  } else {
+    distancePolyline.setPath(distancePoints);
+  }
+  if(distancePoints.length >= 2){
+    const len = Math.round(distancePolyline.getLength());
+    const content = `<div style="background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${len.toLocaleString('ko-KR')} m</div>`;
+    const pos = distancePoints[distancePoints.length-1];
+    if(distanceLabel){ distanceLabel.setPosition(pos); distanceLabel.setContent(content); }
+    else { distanceLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); distanceLabel.setMap(map); measureShapes.push(distanceLabel); }
+  }
+  document.getElementById('roadviewStatus').textContent = `거리재기 중 — 점 ${distancePoints.length}개 찍음. 계속 클릭해 이어가고, 끝나면 "📏 거리재기" 버튼을 다시 눌러 종료하세요.`;
+  document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
+}
+
+function toggleDistanceMode(){
+  if(mapMode === 'distance'){
+    // 종료: 다음 측정을 위해 진행중 변수만 리셋(그려진 선·라벨은 지도에 남김)
+    const finalLen = distancePolyline ? Math.round(distancePolyline.getLength()) : 0;
+    document.getElementById('roadviewStatus').textContent = distancePoints.length >= 2
+      ? `✅ 거리재기 완료 — 총 ${finalLen.toLocaleString('ko-KR')} m`
+      : '';
+    distancePoints = []; distancePolyline = null; distanceLabel = null;
+    setMode('normal');
+  } else {
+    distancePoints = []; distancePolyline = null; distanceLabel = null;
+    setMode('distance');
+    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 점을 이어가며 거리를 재세요. 끝나면 버튼을 다시 누르세요.';
+    document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
+  }
+}
+
+// ---- 면적재기 ----
+function shoelaceArea(points){
+  // Polygon.getArea()가 없는 환경을 대비한 평면 근사(등장방형) 계산 — 작은 필지 규모에서는 오차가 미미함
+  const R = 6378137;
+  const lat0 = points.reduce((s,p)=>s+p.getLat(),0) / points.length * Math.PI/180;
+  const xy = points.map(p => [
+    R * (p.getLng()*Math.PI/180) * Math.cos(lat0),
+    R * (p.getLat()*Math.PI/180)
+  ]);
+  let sum = 0;
+  for(let i=0;i<xy.length;i++){
+    const [x1,y1] = xy[i];
+    const [x2,y2] = xy[(i+1)%xy.length];
+    sum += x1*y2 - x2*y1;
+  }
+  return Math.abs(sum)/2;
+}
+
+function addAreaPoint(latlng){
+  const map = ensureKakaoMap();
+  areaPoints.push(latlng);
+  if(!areaPolygon){
+    areaPolygon = new kakao.maps.Polygon({ map, path: areaPoints, strokeWeight:2, strokeColor:'#33604A', strokeOpacity:0.9, fillColor:'#33604A', fillOpacity:0.28 });
+    measureShapes.push(areaPolygon);
+  } else {
+    areaPolygon.setPath(areaPoints);
+  }
+  if(areaPoints.length >= 3){
+    const area = (typeof areaPolygon.getArea === 'function') ? areaPolygon.getArea() : shoelaceArea(areaPoints);
+    const pyeong = area / 3.305785;
+    const content = `<div style="background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평)</div>`;
+    const pos = areaPoints[areaPoints.length-1];
+    if(areaLabel){ areaLabel.setPosition(pos); areaLabel.setContent(content); }
+    else { areaLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); areaLabel.setMap(map); measureShapes.push(areaLabel); }
+  }
+  document.getElementById('roadviewStatus').textContent = `면적재기 중 — 점 ${areaPoints.length}개 찍음(3개 이상부터 면적 표시). 끝나면 "📐 면적재기" 버튼을 다시 눌러 종료하세요.`;
+  document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
+}
+
+function toggleAreaMode(){
+  if(mapMode === 'area'){
+    let finalMsg = '';
+    if(areaPoints.length >= 3){
+      const area = (typeof areaPolygon.getArea === 'function') ? areaPolygon.getArea() : shoelaceArea(areaPoints);
+      finalMsg = `✅ 면적재기 완료 — 약 ${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(area/3.305785).toLocaleString('ko-KR')}평)`;
+    }
+    document.getElementById('roadviewStatus').textContent = finalMsg;
+    areaPoints = []; areaPolygon = null; areaLabel = null;
+    setMode('normal');
+  } else {
+    areaPoints = []; areaPolygon = null; areaLabel = null;
+    setMode('area');
+    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 꼭짓점을 이어가며 면적을 재세요. 끝나면 버튼을 다시 누르세요.';
+    document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
+  }
+}
+
+function clearMeasurements(){
+  measureShapes.forEach(s => s.setMap(null));
+  measureShapes = [];
+  distancePoints = []; distancePolyline = null; distanceLabel = null;
+  areaPoints = []; areaPolygon = null; areaLabel = null;
+  document.getElementById('roadviewStatus').textContent = '측정 결과를 모두 지웠습니다.';
 }
 
 function showKakaoMap(address){
@@ -572,12 +701,22 @@ function toggleCadastral(){
   btn.style.color = cadastralOn ? '#F6F7F3' : 'var(--forest)';
 }
 
+function toggleRoadviewRoads(){
+  const map = ensureKakaoMap();
+  roadviewRoadsOn = !roadviewRoadsOn;
+  if(roadviewRoadsOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW); }
+  else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW); }
+  const btn = document.getElementById('rvRoadBtn');
+  btn.style.background = roadviewRoadsOn ? 'var(--ink)' : 'var(--forest-dim)';
+  btn.style.color = roadviewRoadsOn ? '#F6F7F3' : 'var(--forest)';
+}
+
 // 지도 ↔ 로드뷰, 같은 자리(같은 크기)에서 화면만 전환
 function showMapStage(){
   roadviewOn = false;
   document.getElementById('kakaoMap').style.display = 'block';
   document.getElementById('kakaoRoadview').style.display = 'none';
-  document.getElementById('roadviewStatus').textContent = '지도에서 보고 싶은 지점을 클릭한 뒤 "로드뷰"를 눌러주세요.';
+  document.getElementById('roadviewStatus').textContent = '지도에서 보고 싶은 지점을 클릭한 뒤 "로드뷰"를 눌러주세요. "로드뷰 가능 도로"를 켜면 파란 선으로 표시됩니다.';
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
   const btn = document.getElementById('roadviewBtn');
   btn.textContent = '🚶 로드뷰';
@@ -606,20 +745,29 @@ function showRoadviewStage(){
 
   const rvClient = new kakao.maps.RoadviewClient();
   const targetPos = lastPosition;
-  // 반경 50m 이내에서 가장 가까운 로드뷰 파노라마 검색
-  rvClient.getNearestPanoId(targetPos, 50, function(panoId){
-    if(panoId === null){
-      statusEl.textContent = '❌ 이 위치 근처(반경 50m)에는 로드뷰 촬영 이력이 없습니다. 지도로 돌아가 다른 지점을 클릭해보세요.';
-      statusEl.style.color = '#b3402a';
-      return;
-    }
-    if(!roadviewObj){
-      roadviewObj = new kakao.maps.Roadview(document.getElementById('kakaoRoadview'));
-    }
-    roadviewObj.setPanoId(panoId, targetPos);
-    statusEl.textContent = '✅ 로드뷰를 표시했습니다. 드래그하면 시점을 돌려볼 수 있습니다. 다른 지점을 보려면 "지도로 보기"를 눌러 지점을 다시 클릭하세요.';
-    setTimeout(() => { roadviewObj.relayout(); }, 50);
-  });
+
+  const trySearch = (radius, isRetry) => {
+    rvClient.getNearestPanoId(targetPos, radius, function(panoId){
+      if(panoId === null){
+        if(!isRetry){
+          statusEl.textContent = '주변을 더 넓게(약 1km) 찾는 중...';
+          trySearch(1000, true);
+          return;
+        }
+        statusEl.textContent = '❌ 이 지점 반경 1km 이내에는 로드뷰 촬영 이력이 없습니다. "로드뷰 가능 도로"를 켜서 파란 선이 표시된 지점을 다시 클릭해보세요.';
+        statusEl.style.color = '#b3402a';
+        return;
+      }
+      if(!roadviewObj){
+        roadviewObj = new kakao.maps.Roadview(document.getElementById('kakaoRoadview'));
+      }
+      roadviewObj.setPanoId(panoId, targetPos);
+      statusEl.textContent = '✅ 로드뷰를 표시했습니다. 드래그하면 시점을 돌려볼 수 있습니다. 다른 지점을 보려면 "지도로 보기"를 눌러 지점을 다시 클릭하세요.';
+      setTimeout(() => { roadviewObj.relayout(); }, 50);
+    });
+  };
+  // 300m 이내 우선 검색, 없으면 1km까지 확장
+  trySearch(300, false);
 }
 
 function toggleRoadview(){
@@ -754,6 +902,83 @@ async function openEumResult(){
     console.error(err);
     statusEl.textContent = '❌ 오류: ' + err.message;
     statusEl.style.color = '#b3402a';
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+// ===================== 한전ON 배전선로 여유용량 조회 =====================
+// 법정동명(예: "경기도 고양시 덕양구 원당동")을 한전ON 검색 폼의 필드(도/시/구/동리/리)로 분해
+function splitAdminName(fullName){
+  const t = fullName.split(' ');
+  const doTok = t[0];
+  const rest = t.slice(1);
+  const isProvince = /(특별자치도|도)$/.test(doTok) && !/(특별시|광역시|자치시)$/.test(doTok);
+  let si = '', gu = '', lidong = '', li = '';
+  let idx = 0;
+  if(isProvince){
+    si = rest[idx] || ''; idx++;
+  }
+  if(rest[idx] && (rest[idx].endsWith('구') || rest[idx].endsWith('군'))){ gu = rest[idx]; idx++; }
+  lidong = rest[idx] || ''; idx++;
+  li = rest[idx] || '';
+  return { do: doTok, si, gu, lidong, li };
+}
+
+async function checkKepcoCapacity(){
+  const resultEl = document.getElementById('kepcoResult');
+  const btn = document.getElementById('kepcoBtn');
+  const addr = document.getElementById('siteAddress').value.trim();
+  if(!addr){ resultEl.innerHTML = '<p class="hint" style="color:#b3402a;">주소를 먼저 입력해주세요.</p>'; return; }
+
+  btn.disabled = true;
+  resultEl.innerHTML = '<p class="hint">조회 중...</p>';
+  try{
+    await loadBjdong();
+    const parsed = parseAddressParts(addr);
+    if(!parsed){
+      resultEl.innerHTML = '<p class="hint" style="color:#b3402a;">❌ 주소 끝에서 지번을 찾지 못했습니다. "OO읍/OO리 123-4" 형식으로 입력해주세요.</p>';
+      return;
+    }
+    const { hit } = findBjdongCode(parsed.dongText);
+    if(!hit){
+      resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다.</p>`;
+      return;
+    }
+
+    const admin = splitAdminName(hit.name);
+    const jibun = (parsed.bubn && parsed.bubn !== '0') ? `${parsed.bobn}-${parsed.bubn}` : parsed.bobn;
+
+    const body = { dma_reqParam: { searchCondition: 'address', do: admin.do, si: admin.si, gu: admin.gu, lidong: admin.lidong, li: admin.li, jibun } };
+
+    const res = await fetch('https://online.kepco.co.kr/ew/cpct/retrieveMeshNo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+      body: JSON.stringify(body)
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const list = data.dlt_resultList;
+    if(!list || list.length === 0){
+      resultEl.innerHTML = '<p class="hint" style="color:#b3402a;">❌ 이 주소에 대한 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>';
+      return;
+    }
+    const r = list[0];
+    const ok = Number(r.SUBST_PWR) > 0 && Number(r.MTR_PWR) > 0 && Number(r.DL_PWR) > 0;
+    resultEl.innerHTML = `
+      <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;">
+        <b>${ok ? '✅ 변전소·주변압기·배전선로 모두 여유전력 있음 (참고용)' : '⚠ 일부 구간 여유전력 0 — 계통연계 지연 가능'}</b>
+        <table class="ref-table" style="margin-top:8px;">
+          <tr><th></th><th>명칭</th><th>총용량(kW)</th><th>여유전력(kW)</th></tr>
+          <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td></tr>
+          <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td></tr>
+          <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td></tr>
+        </table>
+        <p class="footnote">한전ON 배전망 여유용량 조회 결과를 그대로 옮긴 참고 자료이며, 접속 가능 여부를 최종 확정하는 것은 아닙니다. 세 값이 모두 0보다 커야 연계 가능성이 있고, 실제 신청 시점에 값이 달라질 수 있으니 반드시 한전ON에서 재확인하세요. (조회 주소: ${admin.do} ${admin.si} ${admin.gu} ${admin.lidong} ${admin.li} ${jibun})</p>
+      </div>`;
+  }catch(err){
+    console.error(err);
+    resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ 조회 실패: ${err.message}</p>`;
   }finally{
     btn.disabled = false;
   }
