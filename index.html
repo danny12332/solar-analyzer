@@ -1058,6 +1058,20 @@ const SIDO_ALIAS = {
 
 function normalizeSpace(s){ return s.replace(/\s+/g, ' ').trim(); }
 
+// 화성시 신설 일반구(2026.2.1 개청: 동탄구·병점구·만세구·효행구)는
+// 법정동코드(bjdong.txt)에도, 한전ON 주소체계에도 아직 반영되어 있지 않음(직접 확인됨).
+// 카카오맵 지오코딩 결과에 이 구 이름이 섞여 들어오면 매칭 전에 제거한다.
+// (포항시 남구, 수원시 팔달구 등 기존부터 있던 정상적인 구는 건드리지 않음)
+const HWASEONG_NEW_GU = ['동탄구', '병점구', '만세구', '효행구'];
+function stripHwaseongNewGu(dongText){
+  const parts = dongText.split(' ');
+  const idx = parts.indexOf('화성시');
+  if(idx >= 0 && HWASEONG_NEW_GU.includes(parts[idx+1])){
+    parts.splice(idx+1, 1);
+  }
+  return parts.join(' ');
+}
+
 function applySidoAlias(text){
   const parts = text.split(' ');
   if(parts.length && SIDO_ALIAS[parts[0]]){
@@ -1074,7 +1088,7 @@ function parseAddressParts(raw){
   // 맨 끝의 지번(산 포함) 패턴 추출: 예) "178-1", "산10-2", "178"
   const m = s.match(/^(.*?)(?:\s+)(산)?\s*(\d+)(?:-(\d+))?\s*$/);
   if(!m){ return null; }
-  const dongText = applySidoAlias(normalizeSpace(m[1]));
+  const dongText = stripHwaseongNewGu(applySidoAlias(normalizeSpace(m[1])));
   const isMountain = !!m[2];
   const bobn = m[3];
   const bubn = m[4] || '0';
