@@ -565,6 +565,7 @@ function ensureKakaoMap(){
 
 let addressOverlay = null; // 지도 위 지번/도로명 주소 라벨
 let lastJibunAddress = null; // 마지막으로 확인된 지번 주소 (도로명으로 검색해도 배전선로 조회는 항상 이 값을 사용)
+let lastLatLng = null; // 마지막으로 확인된 좌표 (카카오 실시간 법정동코드 조회용)
 
 function setMarkerPosition(pos, geocodeInfo){
   const map = ensureKakaoMap();
@@ -604,6 +605,7 @@ function fallbackCopy(text, cb){
 function renderAddressLabel(pos, jibun, road){
   const map = ensureKakaoMap();
   if(jibun){ lastJibunAddress = jibun; }
+  lastLatLng = pos;
   const esc = s => (s || '').replace(/'/g, "\\'");
   const content = `<div style="background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 10px;font-size:11.5px;line-height:1.7;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);">
     <div style="display:flex;align-items:center;gap:6px;"><b style="color:var(--forest);">지번</b> <span>${jibun || '지번 주소 정보 없음'}</span>${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:none;background:var(--surface-2);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--ink-soft);">복사</button>` : ''}</div>
@@ -1154,6 +1156,22 @@ function buildPnu(code, isMountain, bobn, bubn){
   return code + gubun + bobn.padStart(4,'0') + bubn.padStart(4,'0');
 }
 
+// 카카오 "좌표→행정구역" REST API(coord2regioncode)를 Cloudflare Worker 경유로 호출해
+// 실시간 법정동코드(B타입)를 가져온다. bjdong.txt(정적 파일)보다 최신이므로 우선 시도하고,
+// 실패하면(네트워크 오류·키 미설정 등) null을 반환해 bjdong.txt 폴백을 쓰도록 한다.
+async function fetchLiveBcode(lat, lng){
+  try{
+    const res = await fetch(`https://rough-moon-e02c.ruwk66.workers.dev/kakao-bcode?x=${lng}&y=${lat}`);
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(!data || !data.code || !data.name) return null;
+    return { code: data.code, name: data.name };
+  }catch(e){
+    console.warn('카카오 실시간 법정동코드 조회 실패, bjdong.txt로 대체합니다:', e);
+    return null;
+  }
+}
+
 async function openEumResult(){
   const statusEl = document.getElementById('eumStatus');
   const btn = document.getElementById('eumBtn');
@@ -1164,10 +1182,8 @@ async function openEumResult(){
 
   btn.disabled = true;
   statusEl.style.color = 'var(--ink-soft)';
-  statusEl.textContent = '법정동코드 데이터 불러오는 중...';
+  statusEl.textContent = '법정동코드 확인 중...';
   try{
-    await loadBjdong();
-
     const parsed = parseAddressParts(addr);
     if(!parsed){
       statusEl.textContent = '❌ 주소 끝에서 지번(예: 178-1)을 찾지 못했습니다. "OO읍/OO리 123-4" 형식으로 입력해주세요.';
@@ -1175,7 +1191,23 @@ async function openEumResult(){
       return;
     }
 
-    const { hit, ambiguous, count } = findBjdongCode(parsed.dongText);
+    // 1) 카카오 실시간 법정동코드(coord2regioncode)를 우선 시도 — 행정구역 개편(예: 화성시
+    //    일반구 신설) 직후에도 정확하며, bjdong.txt 갱신을 기다릴 필요가 없다.
+    let hit = null, ambiguous = false, count = 0, source = 'live';
+    if(lastLatLng){
+      const live = await fetchLiveBcode(lastLatLng.getLat(), lastLatLng.getLng());
+      if(live){ hit = live; }
+    }
+
+    // 2) 실시간 조회가 안 되면(오프라인·API 오류·좌표 없음 등) bjdong.txt로 대체
+    if(!hit){
+      source = 'bjdong';
+      statusEl.textContent = '법정동코드 데이터(bjdong.txt) 불러오는 중...';
+      await loadBjdong();
+      const found = findBjdongCode(parsed.dongText);
+      hit = found.hit; ambiguous = found.ambiguous; count = found.count;
+    }
+
     if(!hit){
       statusEl.textContent = `❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다. 시/도부터 정확히 입력해주세요 (예: 충남 천안시 동남구 광덕면 대평리).`;
       statusEl.style.color = '#b3402a';
@@ -1187,11 +1219,12 @@ async function openEumResult(){
 
     window.open(url, '_blank');
 
+    const srcNote = source === 'live' ? '' : ' (bjdong.txt 기준 — 카카오 실시간 조회 실패로 대체됨)';
     if(ambiguous){
-      statusEl.textContent = `⚠ 동일한 이름의 지역이 ${count}곳 있어 그중 하나로 열었습니다 (${hit.name}). 결과가 다르면 시/도·시/군/구를 더 정확히 입력해주세요.`;
+      statusEl.textContent = `⚠ 동일한 이름의 지역이 ${count}곳 있어 그중 하나로 열었습니다 (${hit.name})${srcNote}. 결과가 다르면 시/도·시/군/구를 더 정확히 입력해주세요.`;
       statusEl.style.color = '#8a6d1f';
     } else {
-      statusEl.textContent = `✅ ${hit.name} · PNU ${pnu} 로 토지이음 결과를 새 탭에 열었습니다.`;
+      statusEl.textContent = `✅ ${hit.name} · PNU ${pnu} 로 토지이음 결과를 새 탭에 열었습니다.${srcNote}`;
       statusEl.style.color = 'var(--ink-soft)';
     }
   }catch(err){
