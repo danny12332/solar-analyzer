@@ -119,6 +119,7 @@
   .ref-tab-btn.active{color:var(--forest);border-bottom-color:var(--forest);font-weight:700;}
   .ref-pane{display:none;}
   .ref-pane.active{display:block;}
+#kakaoMap.measuring, #kakaoMap.measuring * { cursor: crosshair !important; }
 </style>
   <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=de36da69d21e4e4b2fa5a454db03c557&libraries=services"></script>
 </head>
@@ -535,6 +536,17 @@ let previewLabel = null;
 let terrainOn = false;
 let trafficOn = false;
 let measureShapes = []; // 지우기 대상(선·다각형·원·라벨) 전체 목록
+let distanceVertexMarkers = []; // 거리재기 각 클릭 지점의 작은 점 마커
+let areaVertexMarkers = []; // 면적재기 각 클릭 지점의 작은 점 마커
+let radiusVertexMarkers = []; // 반경재기 중심점·반경점의 작은 점 마커
+
+// 실제 지도 측정 도구처럼, 클릭한 지점에 작은 색상 점(꼭짓점 마커)을 표시
+function createVertexMarker(map, latlng, color){
+  const html = `<div style="width:9px;height:9px;border-radius:50%;background:${color};border:1.5px solid #fff;box-shadow:0 0 0 1px ${color};"></div>`;
+  const marker = new kakao.maps.CustomOverlay({ position: latlng, content: html, yAnchor: 0.5, xAnchor: 0.5, zIndex: 45 });
+  marker.setMap(map);
+  return marker;
+}
 let measureGroupSeq = 0;
 const measureGroups = {}; // 개별 측정 결과(X 버튼으로 하나씩 삭제) 등록부: id -> {shapes:[...]}
 
@@ -676,6 +688,11 @@ function setMode(mode){
     btn.style.background = on ? 'var(--ink)' : 'var(--forest-dim)';
     btn.style.color = on ? '#F6F7F3' : 'var(--forest)';
   });
+  // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
+  const mapEl = document.getElementById('kakaoMap');
+  if(mapEl){
+    mapEl.classList.toggle('measuring', mode === 'distance' || mode === 'area' || mode === 'radius');
+  }
 }
 
 // 두 좌표 사이 거리(미터) — Haversine 공식
@@ -738,31 +755,35 @@ function updateDistancePreview(pos){
   }
 }
 
-function removeDistanceMeasurement(){
-  if(distancePolyline){ distancePolyline.setMap(null); }
-  if(distanceLabel){ distanceLabel.setMap(null); }
-  distancePoints = []; distancePolyline = null; distanceLabel = null;
-  document.getElementById('roadviewStatus').textContent = mapMode === 'distance'
-    ? '거리재기 결과를 지웠습니다. 지도를 클릭해 새로 측정하세요.'
-    : '거리재기 결과를 지웠습니다.';
-}
+let currentDistanceGroupId = null; // 현재 그리고 있는 거리재기 결과의 그룹 id (완료 후에도 X로 삭제 가능하도록 유지)
+let currentAreaGroupId = null; // 현재 그리고 있는 면적재기 결과의 그룹 id
 
 function addDistancePoint(latlng){
   const map = ensureKakaoMap();
   clearPreview();
   distancePoints.push(latlng);
+  const vMarker = createVertexMarker(map, latlng, '#AE3B2E');
+  distanceVertexMarkers.push(vMarker);
+  measureShapes.push(vMarker);
   if(!distancePolyline){
     distancePolyline = new kakao.maps.Polyline({ map, path: distancePoints, strokeWeight:3, strokeColor:'#AE3B2E', strokeOpacity:0.9, strokeStyle:'solid' });
     measureShapes.push(distancePolyline);
+    currentDistanceGroupId = registerMeasureGroup([distancePolyline, vMarker]);
   } else {
     distancePolyline.setPath(distancePoints);
+    measureGroups[currentDistanceGroupId].shapes.push(vMarker);
   }
   if(distancePoints.length >= 2){
     const len = Math.round(distancePolyline.getLength());
-    const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${len.toLocaleString('ko-KR')} m</span>${closeBtnHtml('removeDistanceMeasurement()')}</div>`;
+    const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${len.toLocaleString('ko-KR')} m</span>${closeBtnHtml(`removeMeasureGroup(${currentDistanceGroupId})`)}</div>`;
     const pos = distancePoints[distancePoints.length-1];
     if(distanceLabel){ distanceLabel.setPosition(pos); distanceLabel.setContent(content); }
-    else { distanceLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6, clickable: true }); distanceLabel.setMap(map); measureShapes.push(distanceLabel); }
+    else {
+      distanceLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6, clickable: true });
+      distanceLabel.setMap(map);
+      measureShapes.push(distanceLabel);
+      measureGroups[currentDistanceGroupId].shapes.push(distanceLabel);
+    }
   }
   document.getElementById('roadviewStatus').textContent = `거리재기 중 — 점 ${distancePoints.length}개 찍음. 계속 클릭해 이어가고, 끝나려면 지도를 오른쪽 클릭하거나 "📏 거리재기" 버튼을 다시 눌러 종료하세요.`;
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
@@ -771,15 +792,15 @@ function addDistancePoint(latlng){
 function toggleDistanceMode(){
   clearPreview();
   if(mapMode === 'distance'){
-    // 종료: 다음 측정을 위해 진행중 변수만 리셋(그려진 선·라벨은 지도에 남김)
+    // 종료: 다음 측정을 위해 진행중 변수만 리셋(그려진 선·점·라벨은 그룹으로 등록된 채 지도에 남아있고, X로 계속 삭제 가능)
     const finalLen = distancePolyline ? Math.round(distancePolyline.getLength()) : 0;
     document.getElementById('roadviewStatus').textContent = distancePoints.length >= 2
       ? `✅ 거리재기 완료 — 총 ${finalLen.toLocaleString('ko-KR')} m`
       : '';
-    distancePoints = []; distancePolyline = null; distanceLabel = null;
+    distancePoints = []; distancePolyline = null; distanceLabel = null; currentDistanceGroupId = null;
     setMode('normal');
   } else {
-    distancePoints = []; distancePolyline = null; distanceLabel = null;
+    distancePoints = []; distancePolyline = null; distanceLabel = null; currentDistanceGroupId = null;
     setMode('distance');
     document.getElementById('roadviewStatus').textContent = '지도를 클릭해 점을 이어가며 거리를 재세요. 끝나려면 오른쪽 클릭하거나 버튼을 다시 누르세요.';
     document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
@@ -804,31 +825,32 @@ function shoelaceArea(points){
   return Math.abs(sum)/2;
 }
 
-function removeAreaMeasurement(){
-  if(areaPolygon){ areaPolygon.setMap(null); }
-  if(areaLabel){ areaLabel.setMap(null); }
-  areaPoints = []; areaPolygon = null; areaLabel = null;
-  document.getElementById('roadviewStatus').textContent = mapMode === 'area'
-    ? '면적재기 결과를 지웠습니다. 지도를 클릭해 새로 측정하세요.'
-    : '면적재기 결과를 지웠습니다.';
-}
-
 function addAreaPoint(latlng){
   const map = ensureKakaoMap();
   areaPoints.push(latlng);
+  const vMarker = createVertexMarker(map, latlng, '#33604A');
+  areaVertexMarkers.push(vMarker);
+  measureShapes.push(vMarker);
   if(!areaPolygon){
     areaPolygon = new kakao.maps.Polygon({ map, path: areaPoints, strokeWeight:2, strokeColor:'#33604A', strokeOpacity:0.9, fillColor:'#33604A', fillOpacity:0.28 });
     measureShapes.push(areaPolygon);
+    currentAreaGroupId = registerMeasureGroup([areaPolygon, vMarker]);
   } else {
     areaPolygon.setPath(areaPoints);
+    measureGroups[currentAreaGroupId].shapes.push(vMarker);
   }
   if(areaPoints.length >= 3){
     const area = (typeof areaPolygon.getArea === 'function') ? areaPolygon.getArea() : shoelaceArea(areaPoints);
     const pyeong = area / 3.305785;
-    const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평)</span>${closeBtnHtml('removeAreaMeasurement()')}</div>`;
+    const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평)</span>${closeBtnHtml(`removeMeasureGroup(${currentAreaGroupId})`)}</div>`;
     const pos = areaPoints[areaPoints.length-1];
     if(areaLabel){ areaLabel.setPosition(pos); areaLabel.setContent(content); }
-    else { areaLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6, clickable: true }); areaLabel.setMap(map); measureShapes.push(areaLabel); }
+    else {
+      areaLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6, clickable: true });
+      areaLabel.setMap(map);
+      measureShapes.push(areaLabel);
+      measureGroups[currentAreaGroupId].shapes.push(areaLabel);
+    }
   }
   document.getElementById('roadviewStatus').textContent = `면적재기 중 — 점 ${areaPoints.length}개 찍음(3개 이상부터 면적 표시). 끝나려면 지도를 오른쪽 클릭하거나 "📐 면적재기" 버튼을 다시 눌러 종료하세요.`;
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
@@ -842,10 +864,10 @@ function toggleAreaMode(){
       finalMsg = `✅ 면적재기 완료 — 약 ${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(area/3.305785).toLocaleString('ko-KR')}평)`;
     }
     document.getElementById('roadviewStatus').textContent = finalMsg;
-    areaPoints = []; areaPolygon = null; areaLabel = null;
+    areaPoints = []; areaPolygon = null; areaLabel = null; currentAreaGroupId = null;
     setMode('normal');
   } else {
-    areaPoints = []; areaPolygon = null; areaLabel = null;
+    areaPoints = []; areaPolygon = null; areaLabel = null; currentAreaGroupId = null;
     setMode('area');
     document.getElementById('roadviewStatus').textContent = '지도를 클릭해 꼭짓점을 이어가며 면적을 재세요. 끝나려면 오른쪽 클릭하거나 버튼을 다시 누르세요.';
     document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
@@ -856,9 +878,13 @@ function clearMeasurements(){
   clearPreview();
   measureShapes.forEach(s => s.setMap(null));
   measureShapes = [];
-  distancePoints = []; distancePolyline = null; distanceLabel = null;
-  areaPoints = []; areaPolygon = null; areaLabel = null;
+  for(const id in measureGroups){ delete measureGroups[id]; }
+  distancePoints = []; distancePolyline = null; distanceLabel = null; currentDistanceGroupId = null;
+  distanceVertexMarkers = [];
+  areaPoints = []; areaPolygon = null; areaLabel = null; currentAreaGroupId = null;
+  areaVertexMarkers = [];
   radiusCenter = null; radiusCircle = null; radiusLabel = null;
+  radiusVertexMarkers = [];
   if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
   document.getElementById('roadviewStatus').textContent = '측정 결과를 모두 지웠습니다.';
 }
@@ -869,7 +895,7 @@ function addRadiusPoint(latlng){
   if(!radiusCenter){
     radiusCenter = latlng;
     if(radiusCenterMarker){ radiusCenterMarker.setMap(null); }
-    radiusCenterMarker = new kakao.maps.Marker({ position: latlng, map, image: undefined });
+    radiusCenterMarker = createVertexMarker(map, latlng, '#AE3B2E');
     document.getElementById('roadviewStatus').textContent = '중심점을 찍었습니다. 반경으로 삼을 지점을 한 번 더 클릭하세요.';
     return;
   }
@@ -882,10 +908,13 @@ function addRadiusPoint(latlng){
     fillColor: '#AE3B2E', fillOpacity: 0.15
   });
   measureShapes.push(radiusCircle);
+  const edgeMarker = createVertexMarker(map, latlng, '#AE3B2E');
+  radiusVertexMarkers.push(edgeMarker);
+  measureShapes.push(edgeMarker);
   if(radiusCenterMarker){ measureShapes.push(radiusCenterMarker); }
 
   const area = Math.PI * radius * radius;
-  const groupId = registerMeasureGroup([radiusCircle, radiusCenterMarker].filter(Boolean));
+  const groupId = registerMeasureGroup([radiusCircle, radiusCenterMarker, edgeMarker].filter(Boolean));
   const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>반경 ${Math.round(radius).toLocaleString('ko-KR')} m · 면적 ${Math.round(area).toLocaleString('ko-KR')} ㎡</span>${closeBtnHtml(`removeMeasureGroup(${groupId})`)}</div>`;
   if(radiusLabel){ radiusLabel.setMap(null); }
   radiusLabel = new kakao.maps.CustomOverlay({ position: latlng, content, yAnchor: 1.6, clickable: true });
