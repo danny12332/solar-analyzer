@@ -312,7 +312,7 @@
           <div id="kakaoRoadview" style="width:100%;height:420px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
         </div>
         <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적·반경은 참고용이며 실제 값과 다를 수 있습니다. 지도를 클릭하거나 주소를 검색하면 그 지점의 <b>지번 주소와 도로명 주소가 함께</b> 표시됩니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🚶 로드뷰" 버튼을 켠 뒤 지도를 클릭하면 그 위치의 로드뷰가 아래에 나타나고, 지도 위 카메라 아이콘이 위치·바라보는 방향을 함께 보여줍니다. 거리재기·면적재기·반경재기는 지도를 클릭해 점을 찍고, 버튼을 다시 누르면 측정이 끝납니다.</p>
+        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적·반경은 참고용이며 실제 값과 다를 수 있습니다. 지도를 클릭하거나 주소를 검색하면 그 지점의 <b>지번 주소와 도로명 주소가 함께</b> 표시됩니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🚶 로드뷰" 버튼을 켠 뒤 지도를 클릭하면 그 위치의 로드뷰가 아래에 나타나고, 지도 위 카메라 아이콘이 위치·바라보는 방향을 함께 보여줍니다. 거리재기·면적재기·반경재기는 지도를 클릭해 점을 찍고, 지도를 오른쪽 클릭하거나 버튼을 다시 누르면 측정이 끝납니다.</p>
       </div>
       <div class="results" id="resultsWrap">
         <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
@@ -556,6 +556,16 @@ function ensureKakaoMap(){
       if(roadviewOn){ showRoadviewStage(); }
     }
   });
+  // 오른쪽 클릭으로 거리재기·면적재기·반경재기 종료 (버튼을 다시 누르지 않아도 됨)
+  kakao.maps.event.addListener(kakaoMapObj, 'rightclick', function(){
+    if(mapMode === 'distance'){ toggleDistanceMode(); }
+    else if(mapMode === 'area'){ toggleAreaMode(); }
+    else if(mapMode === 'radius'){ toggleRadiusMode(); }
+  });
+  // 측정 중 오른쪽 클릭 시 브라우저 기본 우클릭 메뉴가 뜨지 않도록 차단
+  container.addEventListener('contextmenu', function(e){
+    if(mapMode === 'distance' || mapMode === 'area' || mapMode === 'radius'){ e.preventDefault(); }
+  });
   kakao.maps.event.addListener(kakaoMapObj, 'mousemove', function(mouseEvent){
     if(mapMode === 'radius' && radiusCenter){ updateRadiusPreview(mouseEvent.latLng); }
     else if(mapMode === 'distance' && distancePoints.length > 0){ updateDistancePreview(mouseEvent.latLng); }
@@ -718,7 +728,7 @@ function addDistancePoint(latlng){
     if(distanceLabel){ distanceLabel.setPosition(pos); distanceLabel.setContent(content); }
     else { distanceLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); distanceLabel.setMap(map); measureShapes.push(distanceLabel); }
   }
-  document.getElementById('roadviewStatus').textContent = `거리재기 중 — 점 ${distancePoints.length}개 찍음. 계속 클릭해 이어가고, 끝나면 "📏 거리재기" 버튼을 다시 눌러 종료하세요.`;
+  document.getElementById('roadviewStatus').textContent = `거리재기 중 — 점 ${distancePoints.length}개 찍음. 계속 클릭해 이어가고, 끝나려면 지도를 오른쪽 클릭하거나 "📏 거리재기" 버튼을 다시 눌러 종료하세요.`;
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
 }
 
@@ -735,7 +745,7 @@ function toggleDistanceMode(){
   } else {
     distancePoints = []; distancePolyline = null; distanceLabel = null;
     setMode('distance');
-    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 점을 이어가며 거리를 재세요. 끝나면 버튼을 다시 누르세요.';
+    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 점을 이어가며 거리를 재세요. 끝나려면 오른쪽 클릭하거나 버튼을 다시 누르세요.';
     document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
   }
 }
@@ -775,7 +785,7 @@ function addAreaPoint(latlng){
     if(areaLabel){ areaLabel.setPosition(pos); areaLabel.setContent(content); }
     else { areaLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); areaLabel.setMap(map); measureShapes.push(areaLabel); }
   }
-  document.getElementById('roadviewStatus').textContent = `면적재기 중 — 점 ${areaPoints.length}개 찍음(3개 이상부터 면적 표시). 끝나면 "📐 면적재기" 버튼을 다시 눌러 종료하세요.`;
+  document.getElementById('roadviewStatus').textContent = `면적재기 중 — 점 ${areaPoints.length}개 찍음(3개 이상부터 면적 표시). 끝나려면 지도를 오른쪽 클릭하거나 "📐 면적재기" 버튼을 다시 눌러 종료하세요.`;
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
 }
 
@@ -792,7 +802,7 @@ function toggleAreaMode(){
   } else {
     areaPoints = []; areaPolygon = null; areaLabel = null;
     setMode('area');
-    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 꼭짓점을 이어가며 면적을 재세요. 끝나면 버튼을 다시 누르세요.';
+    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 꼭짓점을 이어가며 면적을 재세요. 끝나려면 오른쪽 클릭하거나 버튼을 다시 누르세요.';
     document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
   }
 }
@@ -836,7 +846,7 @@ function addRadiusPoint(latlng){
   radiusLabel.setMap(map);
   measureShapes.push(radiusLabel);
 
-  document.getElementById('roadviewStatus').textContent = `✅ 반경 ${Math.round(radius).toLocaleString('ko-KR')} m 원을 그렸습니다. 다시 클릭하면 새 중심점으로 시작합니다.`;
+  document.getElementById('roadviewStatus').textContent = `✅ 반경 ${Math.round(radius).toLocaleString('ko-KR')} m 원을 그렸습니다. 다시 클릭하면 새 중심점으로 시작하고, 끝나려면 오른쪽 클릭하거나 버튼을 다시 누르세요.`;
   radiusCenter = null; // 다음 클릭은 새로운 원의 중심점
   radiusCenterMarker = null;
 }
@@ -852,7 +862,7 @@ function toggleRadiusMode(){
     radiusCenter = null;
     if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
     setMode('radius');
-    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 중심점을 찍고, 반경으로 삼을 지점을 한 번 더 클릭하세요.';
+    document.getElementById('roadviewStatus').textContent = '지도를 클릭해 중심점을 찍고, 반경으로 삼을 지점을 한 번 더 클릭하세요. 끝나려면 오른쪽 클릭하거나 버튼을 다시 누르세요.';
     document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
   }
 }
