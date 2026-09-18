@@ -655,10 +655,14 @@ function renderAddressLabel(pos, jibun, road){
   if(jibun){ lastJibunAddress = jibun; }
   lastLatLng = pos;
   const esc = s => (s || '').replace(/'/g, "\\'");
-  const content = `<div style="background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 10px;font-size:11.5px;line-height:1.7;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);">
-    <div style="display:flex;justify-content:flex-end;margin:-2px -2px 2px 0;">${closeBtnHtml('closeAddressOverlay()')}</div>
-    <div style="display:flex;align-items:center;gap:6px;"><b style="color:var(--forest);">지번</b> <span>${jibun || '지번 주소 정보 없음'}</span>${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:none;background:var(--surface-2);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--ink-soft);">복사</button>` : ''}</div>
-    <div style="display:flex;align-items:center;gap:6px;"><b style="color:var(--rust);">도로명</b> <span>${road || '(이 위치엔 도로명주소 없음)'}</span>${road ? `<button onclick="copyAddressText('${esc(road)}', this)" style="border:none;background:var(--surface-2);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--ink-soft);">복사</button>` : ''}</div>
+  const content = `<div onmousedown="kakao.maps.event.preventMap();" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 16px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;">
+    <div style="position:absolute;top:10px;right:10px;">${closeBtnHtml('closeAddressOverlay()')}</div>
+    <div style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.4;white-space:nowrap;">${jibun || '지번 주소 정보 없음'}</div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;">(도로명) ${road || '이 위치엔 도로명주소 없음'}</div>
+    <div style="display:flex;gap:6px;margin-top:9px;">
+      ${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--ink-soft);">지번 복사</button>` : ''}
+      ${road ? `<button onclick="copyAddressText('${esc(road)}', this)" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--ink-soft);">도로명 복사</button>` : ''}
+    </div>
   </div>`;
   if(!addressOverlay){
     addressOverlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.3, zIndex: 40, clickable: true });
