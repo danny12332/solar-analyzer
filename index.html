@@ -553,9 +553,9 @@ function removeMeasureGroup(id){
   delete measureGroups[id];
 }
 
-// 라벨 콘텐츠 오른쪽 위에 작게 붙이는 X 삭제 버튼 (공통 스타일)
+// 라벨 콘텐츠 안에 자연스러운 흐름으로 넣는 X 삭제 버튼 (박스 밖으로 튀어나오지 않게 — 오버레이 클릭 영역 밖으로 나가면 클릭이 지도로 전달되어 씹힘)
 function closeBtnHtml(onclickJs){
-  return `<span onclick="${onclickJs}" style="position:absolute;top:-7px;right:-7px;width:16px;height:16px;background:var(--ink);color:#fff;border-radius:50%;font-size:11px;line-height:16px;text-align:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.4);">✕</span>`;
+  return `<span onclick="${onclickJs}" style="cursor:pointer;opacity:.85;font-weight:bold;">✕</span>`;
 }
 
 lookupAddress(false);
@@ -643,8 +643,8 @@ function renderAddressLabel(pos, jibun, road){
   if(jibun){ lastJibunAddress = jibun; }
   lastLatLng = pos;
   const esc = s => (s || '').replace(/'/g, "\\'");
-  const content = `<div style="position:relative;background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 10px;font-size:11.5px;line-height:1.7;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);">
-    ${closeBtnHtml('closeAddressOverlay()')}
+  const content = `<div style="background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 10px;font-size:11.5px;line-height:1.7;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);">
+    <div style="display:flex;justify-content:flex-end;margin:-2px -2px 2px 0;">${closeBtnHtml('closeAddressOverlay()')}</div>
     <div style="display:flex;align-items:center;gap:6px;"><b style="color:var(--forest);">지번</b> <span>${jibun || '지번 주소 정보 없음'}</span>${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:none;background:var(--surface-2);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--ink-soft);">복사</button>` : ''}</div>
     <div style="display:flex;align-items:center;gap:6px;"><b style="color:var(--rust);">도로명</b> <span>${road || '(이 위치엔 도로명주소 없음)'}</span>${road ? `<button onclick="copyAddressText('${esc(road)}', this)" style="border:none;background:var(--surface-2);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--ink-soft);">복사</button>` : ''}</div>
   </div>`;
@@ -759,7 +759,7 @@ function addDistancePoint(latlng){
   }
   if(distancePoints.length >= 2){
     const len = Math.round(distancePolyline.getLength());
-    const content = `<div style="position:relative;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${closeBtnHtml('removeDistanceMeasurement()')}${len.toLocaleString('ko-KR')} m</div>`;
+    const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${len.toLocaleString('ko-KR')} m</span>${closeBtnHtml('removeDistanceMeasurement()')}</div>`;
     const pos = distancePoints[distancePoints.length-1];
     if(distanceLabel){ distanceLabel.setPosition(pos); distanceLabel.setContent(content); }
     else { distanceLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); distanceLabel.setMap(map); measureShapes.push(distanceLabel); }
@@ -825,7 +825,7 @@ function addAreaPoint(latlng){
   if(areaPoints.length >= 3){
     const area = (typeof areaPolygon.getArea === 'function') ? areaPolygon.getArea() : shoelaceArea(areaPoints);
     const pyeong = area / 3.305785;
-    const content = `<div style="position:relative;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${closeBtnHtml('removeAreaMeasurement()')}${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평)</div>`;
+    const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평)</span>${closeBtnHtml('removeAreaMeasurement()')}</div>`;
     const pos = areaPoints[areaPoints.length-1];
     if(areaLabel){ areaLabel.setPosition(pos); areaLabel.setContent(content); }
     else { areaLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); areaLabel.setMap(map); measureShapes.push(areaLabel); }
@@ -886,7 +886,7 @@ function addRadiusPoint(latlng){
 
   const area = Math.PI * radius * radius;
   const groupId = registerMeasureGroup([radiusCircle, radiusCenterMarker].filter(Boolean));
-  const content = `<div style="position:relative;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${closeBtnHtml(`removeMeasureGroup(${groupId})`)}반경 ${Math.round(radius).toLocaleString('ko-KR')} m · 면적 ${Math.round(area).toLocaleString('ko-KR')} ㎡</div>`;
+  const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>반경 ${Math.round(radius).toLocaleString('ko-KR')} m · 면적 ${Math.round(area).toLocaleString('ko-KR')} ㎡</span>${closeBtnHtml(`removeMeasureGroup(${groupId})`)}</div>`;
   if(radiusLabel){ radiusLabel.setMap(null); }
   radiusLabel = new kakao.maps.CustomOverlay({ position: latlng, content, yAnchor: 1.6 });
   radiusLabel.setMap(map);
