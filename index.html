@@ -555,7 +555,7 @@ function removeMeasureGroup(id){
 
 // 라벨 콘텐츠 안에 자연스러운 흐름으로 넣는 X 삭제 버튼 (박스 밖으로 튀어나오지 않게 — 오버레이 클릭 영역 밖으로 나가면 클릭이 지도로 전달되어 씹힘)
 function closeBtnHtml(onclickJs){
-  return `<span onclick="${onclickJs}" style="cursor:pointer;opacity:.85;font-weight:bold;">✕</span>`;
+  return `<span onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation(); ${onclickJs}" style="cursor:pointer;opacity:.85;font-weight:bold;">✕</span>`;
 }
 
 lookupAddress(false);
@@ -649,7 +649,7 @@ function renderAddressLabel(pos, jibun, road){
     <div style="display:flex;align-items:center;gap:6px;"><b style="color:var(--rust);">도로명</b> <span>${road || '(이 위치엔 도로명주소 없음)'}</span>${road ? `<button onclick="copyAddressText('${esc(road)}', this)" style="border:none;background:var(--surface-2);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--ink-soft);">복사</button>` : ''}</div>
   </div>`;
   if(!addressOverlay){
-    addressOverlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.3, zIndex: 40 });
+    addressOverlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.3, zIndex: 40, clickable: true });
     addressOverlay.setMap(map);
   } else {
     addressOverlay.setPosition(pos);
@@ -762,7 +762,7 @@ function addDistancePoint(latlng){
     const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${len.toLocaleString('ko-KR')} m</span>${closeBtnHtml('removeDistanceMeasurement()')}</div>`;
     const pos = distancePoints[distancePoints.length-1];
     if(distanceLabel){ distanceLabel.setPosition(pos); distanceLabel.setContent(content); }
-    else { distanceLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); distanceLabel.setMap(map); measureShapes.push(distanceLabel); }
+    else { distanceLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6, clickable: true }); distanceLabel.setMap(map); measureShapes.push(distanceLabel); }
   }
   document.getElementById('roadviewStatus').textContent = `거리재기 중 — 점 ${distancePoints.length}개 찍음. 계속 클릭해 이어가고, 끝나려면 지도를 오른쪽 클릭하거나 "📏 거리재기" 버튼을 다시 눌러 종료하세요.`;
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
@@ -828,7 +828,7 @@ function addAreaPoint(latlng){
     const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평)</span>${closeBtnHtml('removeAreaMeasurement()')}</div>`;
     const pos = areaPoints[areaPoints.length-1];
     if(areaLabel){ areaLabel.setPosition(pos); areaLabel.setContent(content); }
-    else { areaLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6 }); areaLabel.setMap(map); measureShapes.push(areaLabel); }
+    else { areaLabel = new kakao.maps.CustomOverlay({ position:pos, content, yAnchor:1.6, clickable: true }); areaLabel.setMap(map); measureShapes.push(areaLabel); }
   }
   document.getElementById('roadviewStatus').textContent = `면적재기 중 — 점 ${areaPoints.length}개 찍음(3개 이상부터 면적 표시). 끝나려면 지도를 오른쪽 클릭하거나 "📐 면적재기" 버튼을 다시 눌러 종료하세요.`;
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
@@ -888,7 +888,7 @@ function addRadiusPoint(latlng){
   const groupId = registerMeasureGroup([radiusCircle, radiusCenterMarker].filter(Boolean));
   const content = `<div style="display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>반경 ${Math.round(radius).toLocaleString('ko-KR')} m · 면적 ${Math.round(area).toLocaleString('ko-KR')} ㎡</span>${closeBtnHtml(`removeMeasureGroup(${groupId})`)}</div>`;
   if(radiusLabel){ radiusLabel.setMap(null); }
-  radiusLabel = new kakao.maps.CustomOverlay({ position: latlng, content, yAnchor: 1.6 });
+  radiusLabel = new kakao.maps.CustomOverlay({ position: latlng, content, yAnchor: 1.6, clickable: true });
   radiusLabel.setMap(map);
   measureShapes.push(radiusLabel);
   measureGroups[groupId].shapes.push(radiusLabel); // X 클릭 시 라벨도 함께 제거
