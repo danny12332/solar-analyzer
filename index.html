@@ -1526,9 +1526,8 @@ async function checkKepcoCapacity(){
 
     const list = result.dlt_resultList;
     const matched = result.matched;
-    const r = list[0];
-    // VOL_1/2/3 = 실제 여유용량(접속기준용량 - 접수기준 접속용량). SUBST_PWR/MTR_PWR/DL_PWR은 "이미 사용 중인 접수기준 접속용량"이며 여유가 아님 — 실제 응답 수치로 교차검증 완료.
-    const ok = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0;
+    // 배전선로 후보가 여러 개(예: 안진/산북처럼 변전소·주변압기·선로가 다른 경우)면 전부 보여줌 — 한전ON 원본도 "상세보기"를 눌러야 나오는 값이지만, 우리 API 응답엔 이미 다 들어있어 한 번에 표시 가능
+    const ok = list.some(r => Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0);
 
     const levelNote = matchLevel === 'exact'
       ? ''
@@ -1538,17 +1537,25 @@ async function checkKepcoCapacity(){
           ? `<p class="hint" style="color:#8a6d1f;margin-top:0;">⚠ ${admin.lidong}에는 등록된 지번이 없어, <b>같은 면(面) 안의 다른 리(${matched.li})에 실제 등록된 지번 중 가까운 것(${matched.jibun})</b>의 결과를 참고로 보여드립니다. 실제 위치와 상당히 다를 수 있습니다.</p>`
           : `<p class="hint" style="color:#8a6d1f;margin-top:0;">⚠ ${admin.lidong}에는 등록된 지번이 없어, <b>같은 구·시 안의 다른 동/읍/면(${matched.lidong})에 실제 등록된 지번 중 가까운 것(${matched.jibun})</b>의 결과를 참고로 보여드립니다. 실제 위치와 상당히 다를 수 있습니다.</p>`;
 
+    const lineBlocks = list.map((r, i) => {
+      const lineOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0;
+      return `
+        <div style="${i > 0 ? 'margin-top:14px;padding-top:14px;border-top:1px dashed var(--card-line);' : ''}">
+          <b>${list.length > 1 ? `배전선로 후보 ${i+1} — ` : ''}${lineOk ? '✅ 변전소·주변압기·배전선로 모두 여유용량 있음 (참고용)' : '⚠ 일부 구간 여유용량 0 — 계통연계 지연 가능'}</b>
+          <table class="ref-table" style="margin-top:8px;">
+            <tr><th></th><th>명칭</th><th>접속기준용량(kW)</th><th>접수기준 사용중(kW)</th><th>실제 여유용량(kW)</th></tr>
+            <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_1).toLocaleString('ko-KR')}</td></tr>
+            <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_2).toLocaleString('ko-KR')}</td></tr>
+            <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_3).toLocaleString('ko-KR')}</td></tr>
+          </table>
+        </div>`;
+    }).join('');
+
     resultEl.innerHTML = `
       <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;">
-        <b>${ok ? '✅ 변전소·주변압기·배전선로 모두 여유용량 있음 (참고용)' : '⚠ 일부 구간 여유용량 0 — 계통연계 지연 가능'}</b>
         ${levelNote}
-        <table class="ref-table" style="margin-top:8px;">
-          <tr><th></th><th>명칭</th><th>접속기준용량(kW)</th><th>접수기준 사용중(kW)</th><th>실제 여유용량(kW)</th></tr>
-          <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_1).toLocaleString('ko-KR')}</td></tr>
-          <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_2).toLocaleString('ko-KR')}</td></tr>
-          <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_3).toLocaleString('ko-KR')}</td></tr>
-        </table>
-        <p class="footnote">한전ON 배전망 여유용량 조회 결과를 그대로 옮긴 참고 자료이며, 접속 가능 여부를 최종 확정하는 것은 아닙니다. "실제 여유용량"이 세 항목 모두 0보다 커야 연계 가능성이 있고, 실제 신청 시점에 값이 달라질 수 있으니 반드시 한전ON에서 재확인하세요. (조회 지번: ${matched.jibun}, 소재지: ${admin.do} ${admin.siText} ${admin.guText} ${matched.lidong} ${matched.li})</p>
+        ${lineBlocks}
+        <p class="footnote">한전ON 배전망 여유용량 조회 결과를 그대로 옮긴 참고 자료이며, 접속 가능 여부를 최종 확정하는 것은 아닙니다. "실제 여유용량"이 세 항목 모두 0보다 커야 연계 가능성이 있고, 실제 신청 시점에 값이 달라질 수 있으니 반드시 한전ON에서 재확인하세요. (조회 지번: ${matched.jibun}, 소재지: ${admin.do} ${admin.siText} ${admin.guText} ${matched.lidong} ${matched.li}${list.length > 1 ? `, 배전선로 후보 ${list.length}개` : ''})</p>
       </div>
       ${contactHtml(admin)}`;
   }catch(err){
