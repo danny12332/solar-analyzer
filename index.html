@@ -307,6 +307,15 @@
             <button type="button" class="run" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--surface-2);color:var(--ink-soft);width:auto;" onclick="clearMeasurements()">🧹 측정 지우기</button>
           </div>
         </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border-radius:6px;">
+          <span style="font-size:12px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">☀️ 태양광 패널 배치</span>
+          <label style="font-size:11.5px;color:var(--ink-soft);">폭(m) <input id="panelW" type="number" value="1.134" step="0.001" style="width:60px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">길이(m) <input id="panelL" type="number" value="2.279" step="0.001" style="width:60px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="435" step="5" style="width:60px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
+          <button type="button" class="run" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="generateSolarLayout()">배치 생성</button>
+        </div>
         <div id="kakaoMap" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
         <div id="kakaoRoadviewWrap" style="margin-top:14px;display:none;">
           <p style="font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:0 0 8px;">🚶 로드뷰 — 지도 위 파란 카메라 아이콘이 현재 로드뷰 위치·방향입니다</p>
@@ -539,6 +548,8 @@ let measureShapes = []; // 지우기 대상(선·다각형·원·라벨) 전체 
 let distanceVertexMarkers = []; // 거리재기 각 클릭 지점의 작은 점 마커
 let areaVertexMarkers = []; // 면적재기 각 클릭 지점의 작은 점 마커
 let radiusVertexMarkers = []; // 반경재기 중심점·반경점의 작은 점 마커
+let lastAreaPolygonPath = null; // 마지막으로 완료한 면적재기 경계(☀️ 태양광 배치의 부지 경계로 사용)
+let solarGroupId = null; // 현재 그려진 태양광 패널 배치의 그룹 id
 
 // 실제 지도 측정 도구처럼, 클릭한 지점에 작은 색상 점(꼭짓점 마커)을 표시
 function createVertexMarker(map, latlng, color){
@@ -829,6 +840,110 @@ function shoelaceArea(points){
   return Math.abs(sum)/2;
 }
 
+// ---- ☀️ 태양광 패널 자동 배치 ----
+// 위경도 <-> 평면(m) 근사 변환 (부지 규모에서는 등장방형 근사 오차가 미미함, shoelaceArea와 동일한 방식)
+function solarToXY(latlng, lat0Rad){
+  const R = 6378137;
+  return { x: R * (latlng.getLng()*Math.PI/180) * Math.cos(lat0Rad), y: R * (latlng.getLat()*Math.PI/180) };
+}
+function solarToLatLng(x, y, lat0Rad){
+  const R = 6378137;
+  return new kakao.maps.LatLng((y/R)*180/Math.PI, (x/(R*Math.cos(lat0Rad)))*180/Math.PI);
+}
+function pointInPolygonXY(pt, poly){
+  let inside = false;
+  for(let i=0, j=poly.length-1; i<poly.length; j=i++){
+    const xi=poly[i].x, yi=poly[i].y, xj=poly[j].x, yj=poly[j].y;
+    const intersect = ((yi>pt.y) !== (yj>pt.y)) && (pt.x < (xj-xi)*(pt.y-yi)/(yj-yi)+xi);
+    if(intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// X 버튼으로 태양광 배치를 지울 때, 진행중 그룹 id 상태도 함께 정리
+function removeSolarLayout(id){
+  removeMeasureGroup(id);
+  if(solarGroupId === id){ solarGroupId = null; }
+}
+
+function generateSolarLayout(){
+  const statusEl = document.getElementById('roadviewStatus');
+  if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){
+    statusEl.textContent = '❌ 먼저 "📐 면적재기"로 태양광을 배치할 부지 경계를 그려서 완료해주세요.';
+    statusEl.style.color = '#b3402a';
+    return;
+  }
+  const panelW = parseFloat(document.getElementById('panelW').value) || 1.134;
+  const panelL = parseFloat(document.getElementById('panelL').value) || 2.279;
+  const tiltDeg = parseFloat(document.getElementById('panelTilt').value) || 30;
+  const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 435;
+  const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
+
+  const map = ensureKakaoMap();
+  // 이전 배치가 있으면 지우고 새로 생성
+  if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; }
+
+  const lat0Rad = lastAreaPolygonPath.reduce((s,p)=>s+p.getLat(),0) / lastAreaPolygonPath.length * Math.PI/180;
+  const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad));
+  const siteAreaM2 = shoelaceArea(lastAreaPolygonPath);
+
+  const tiltRad = tiltDeg * Math.PI/180;
+  // 동지(冬至) 남중 태양고도 근사로 앞뒤 열 자기그늘 방지 이격 계산 (표준 이격거리 공식)
+  const latAbsDeg = Math.abs(lat0Rad * 180/Math.PI);
+  const minSunAltDeg = Math.max(90 - latAbsDeg - 23.44, 5); // 5도 하한(과도한 간격 방지)
+  const minSunAltRad = minSunAltDeg * Math.PI/180;
+  const footprintNS = panelL * Math.cos(tiltRad); // 패널의 지면 투영 길이(남북 방향)
+  const shadowLen = (panelL * Math.sin(tiltRad)) / Math.tan(minSunAltRad);
+  const pitch = footprintNS + shadowLen; // 열간 간격(앞열 앞단 ~ 뒷열 앞단)
+  const footprintEW = panelW; // 패널 폭(동서 방향)
+
+  const xs = polyXY.map(p=>p.x), ys = polyXY.map(p=>p.y);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+
+  const panelShapes = [];
+  let panelCount = 0;
+  for(let y = ymin; y + footprintNS <= ymax; y += pitch){
+    for(let x = xmin; x + footprintEW <= xmax; x += (footprintEW + gap)){
+      const corners = [
+        {x, y}, {x: x+footprintEW, y}, {x: x+footprintEW, y: y+footprintNS}, {x, y: y+footprintNS}
+      ];
+      if(corners.every(c => pointInPolygonXY(c, polyXY))){
+        const path = corners.map(c => solarToLatLng(c.x, c.y, lat0Rad));
+        const poly = new kakao.maps.Polygon({
+          map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
+          fillColor: '#1B3A5C', fillOpacity: 0.62
+        });
+        measureShapes.push(poly);
+        panelShapes.push(poly);
+        panelCount++;
+      }
+    }
+  }
+
+  if(panelCount === 0){
+    statusEl.textContent = '❌ 이 경계 안에는 지정한 패널 크기·간격으로 한 장도 들어가지 않습니다. 부지를 더 크게 그리거나 패널 크기를 줄여보세요.';
+    statusEl.style.color = '#b3402a';
+    return;
+  }
+
+  const totalKw = (panelCount * wattPerPanel) / 1000;
+  const usedAreaM2 = panelCount * panelW * panelL;
+  const utilization = Math.round((usedAreaM2 / siteAreaM2) * 100);
+
+  solarGroupId = registerMeasureGroup(panelShapes);
+  const centerX = (xmin+xmax)/2, centerY = (ymin+ymax)/2;
+  const labelPos = solarToLatLng(centerX, ymax, lat0Rad);
+  const content = `<div style="display:flex;align-items:center;gap:8px;background:#0F2A44;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>☀️ ${panelCount.toLocaleString('ko-KR')}장 · 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW · 부지이용률 ${utilization}%</span>${closeBtnHtml(`removeSolarLayout(${solarGroupId})`)}</div>`;
+  const label = new kakao.maps.CustomOverlay({ position: labelPos, content, yAnchor: 1.6, clickable: true });
+  label.setMap(map);
+  measureShapes.push(label);
+  measureGroups[solarGroupId].shapes.push(label);
+
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW (열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.style.color = 'var(--ink-soft)';
+}
+
 function addAreaPoint(latlng){
   const map = ensureKakaoMap();
   areaPoints.push(latlng);
@@ -865,7 +980,8 @@ function toggleAreaMode(){
     let finalMsg = '';
     if(areaPoints.length >= 3){
       const area = (typeof areaPolygon.getArea === 'function') ? areaPolygon.getArea() : shoelaceArea(areaPoints);
-      finalMsg = `✅ 면적재기 완료 — 약 ${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(area/3.305785).toLocaleString('ko-KR')}평)`;
+      finalMsg = `✅ 면적재기 완료 — 약 ${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(area/3.305785).toLocaleString('ko-KR')}평). 이 경계로 "☀️ 태양광 배치"를 만들 수 있습니다.`;
+      lastAreaPolygonPath = areaPoints.slice(); // ☀️ 태양광 배치용으로 마지막 면적재기 경계를 기억해둠
     }
     document.getElementById('roadviewStatus').textContent = finalMsg;
     areaPoints = []; areaPolygon = null; areaLabel = null; currentAreaGroupId = null;
@@ -890,6 +1006,7 @@ function clearMeasurements(){
   radiusCenter = null; radiusCircle = null; radiusLabel = null;
   radiusVertexMarkers = [];
   if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
+  solarGroupId = null;
   document.getElementById('roadviewStatus').textContent = '측정 결과를 모두 지웠습니다.';
 }
 
