@@ -1035,9 +1035,40 @@ function buildSolarIllustrationSVG(stats){
       <line x1="${(x+bandW*0.15).toFixed(1)}" y1="${poleY.toFixed(1)}" x2="${(x+bandW*0.15).toFixed(1)}" y2="${(poleY+poleH).toFixed(1)}" stroke="#8A8A82" stroke-width="4"/>
       <line x1="${(x+bandW*0.85).toFixed(1)}" y1="${poleY.toFixed(1)}" x2="${(x+bandW*0.85).toFixed(1)}" y2="${(poleY+poleH).toFixed(1)}" stroke="#8A8A82" stroke-width="4"/>`;
   }
+
+  // 펜스(경계 울타리): 부지를 감싸는 형태로 상단부와 좌우를 따라 배치
+  const fencePath = 'M 15 340 C 40 250, 60 150, 110 60 C 160 15, 260 10, 340 20 C 430 10, 540 25, 600 55 C 640 80, 655 130, 660 180';
+  let fencePosts = '';
+  { // 펜스 라인을 따라가며 일정 간격으로 세로 기둥 표시(근사 샘플링)
+    const samplePts = [
+      [15,340],[25,300],[40,260],[55,220],[75,180],[95,140],[115,100],[140,70],[170,45],[205,25],[245,15],[290,13],[335,18],[380,15],[425,17],[470,25],[515,35],[555,45],[590,60],[615,85],[635,115],[650,150],[657,180]
+    ];
+    for(const [px,py] of samplePts){
+      fencePosts += `<line x1="${px}" y1="${py}" x2="${px}" y2="${py+14}" stroke="#2F5233" stroke-width="2"/>`;
+    }
+  }
+
+  // 조경(식재): 펜스 안쪽을 따라 작은 나무(원뿔형 침엽수 느낌) 배치
+  let planting = '';
+  const treeSpots = [[30,330],[50,285],[70,245],[90,205],[120,165],[150,125],[185,90],[225,55],[270,32],[315,22],[360,20],[405,22],[450,28],[495,40],[535,52],[570,68],[600,90],[625,120],[642,155]];
+  for(const [tx,ty] of treeSpots){
+    planting += `<circle cx="${tx}" cy="${ty}" r="5" fill="#3B6B34"/><circle cx="${tx-2}" cy="${ty-3}" r="3.5" fill="#4A7D40"/>`;
+  }
+
+  // 배수로: 패널 열 사이 통로를 따라가는 얕은 도랑(옅은 회색-청록 톤 이중선)
+  let drains = '';
+  for(let i=0; i<rowsToShow; i++){
+    const t = i / Math.max(rowsToShow-1, 1);
+    const y = 70 + t * 250 + (30 + t*22) + 6 + t*10 + (22+t*14) + 4; // 각 열의 지지대 아래쪽
+    const bandW = 260 + t * 220;
+    const x = (W - bandW) / 2 + (i % 2 === 0 ? -30 : 30) * (1-t) - 10;
+    drains += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x+bandW+20).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#9FB0AE" stroke-width="3" opacity="0.6"/>
+      <line x1="${x.toFixed(1)}" y1="${(y+3).toFixed(1)}" x2="${(x+bandW+20).toFixed(1)}" y2="${(y+3).toFixed(1)}" stroke="#7A8C89" stroke-width="1" opacity="0.5"/>`;
+  }
+
   return `<svg width="100%" viewBox="0 0 ${W} ${H}" role="img" style="display:block;">
     <title>태양광 패널 배치 일러스트</title>
-    <desc>계산된 배치를 바탕으로 들판 위에 기울어진 패널 ${rowsToShow}줄을 표현한 참고용 일러스트</desc>
+    <desc>펜스·조경수·배수로를 포함해 들판 위에 기울어진 패널 ${rowsToShow}줄을 표현한 참고용 일러스트</desc>
     <defs>
       <linearGradient id="illSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#DCEFD8"/><stop offset="100%" stop-color="#BFE0A8"/></linearGradient>
       <linearGradient id="panelFace" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3F6FA8"/><stop offset="100%" stop-color="#1F3E63"/></linearGradient>
@@ -1046,7 +1077,11 @@ function buildSolarIllustrationSVG(stats){
     <ellipse cx="120" cy="70" rx="220" ry="80" fill="#A9CE7E" opacity="0.55"/>
     <ellipse cx="560" cy="100" rx="200" ry="90" fill="#9BC46E" opacity="0.45"/>
     <path d="M -10 300 C 150 260, 220 330, 340 300 C 460 270, 520 350, 690 310 L 690 430 L -10 430 Z" fill="#C9BFA0"/>
+    ${drains}
     ${bands}
+    <path d="${fencePath}" fill="none" stroke="#2F5233" stroke-width="2.5"/>
+    ${fencePosts}
+    ${planting}
   </svg>`;
 }
 
