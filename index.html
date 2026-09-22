@@ -1374,6 +1374,21 @@ const SIDO_ALIAS = {
   '제주':'제주특별자치도','제주도':'제주특별자치도'
 };
 
+// 2026.7.1 광주광역시+전라남도 행정통합으로 신설된 "전남광주통합특별시"는
+// 한전ON·bjdong.txt(법정동코드) 어디에도 아직 반영되어 있지 않음(직접 확인됨).
+// 카카오맵 등 지오코딩 결과에 이 통합 명칭이 오면, 다음 토큰(시/군/구)을 보고
+// 옛 광주광역시 자치구(동구·서구·남구·북구·광산구)면 "광주광역시"로,
+// 그 외(나주시 등 옛 전남 지역 시/군)는 "전라남도"로 되돌려서 매칭한다.
+const GWANGJU_GU = ['동구','서구','남구','북구','광산구'];
+const GWANGJU_JEONNAM_MERGED_NAMES = ['전남광주통합특별시','광주전남특별시','전남광주특별시'];
+function normalizeGwangjuJeonnamMerger(text){
+  const parts = text.split(' ');
+  if(GWANGJU_JEONNAM_MERGED_NAMES.includes(parts[0])){
+    parts[0] = GWANGJU_GU.includes(parts[1]) ? '광주광역시' : '전라남도';
+  }
+  return parts.join(' ');
+}
+
 function normalizeSpace(s){ return s.replace(/\s+/g, ' ').trim(); }
 
 // 화성시 신설 일반구(2026.2.1 개청: 동탄구·병점구·만세구·효행구)는
@@ -1406,7 +1421,7 @@ function parseAddressParts(raw){
   // 맨 끝의 지번(산 포함) 패턴 추출: 예) "178-1", "산10-2", "178"
   const m = s.match(/^(.*?)(?:\s+)(산)?\s*(\d+)(?:-(\d+))?\s*$/);
   if(!m){ return null; }
-  const dongText = stripHwaseongNewGu(applySidoAlias(normalizeSpace(m[1])));
+  const dongText = stripHwaseongNewGu(applySidoAlias(normalizeGwangjuJeonnamMerger(normalizeSpace(m[1]))));
   const isMountain = !!m[2];
   const bobn = m[3];
   const bubn = m[4] || '0';
