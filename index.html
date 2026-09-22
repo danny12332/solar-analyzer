@@ -1656,15 +1656,18 @@ async function checkKepcoCapacity(){
 
     const lineBlocks = list.map((r, i) => {
       const lineOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0;
+      const gSubst = Number(r.G_SUBST_CAPA), gMtr = Number(r.G_MTR_CAPA), gDl = Number(r.G_DL_CAPA);
+      const volB1 = Number(r.SUBST_CAPA) - gSubst, volB2 = Number(r.MTR_CAPA) - gMtr, volB3 = Number(r.DL_CAPA) - gDl;
       return `
         <div style="${i > 0 ? 'margin-top:14px;padding-top:14px;border-top:1px dashed var(--card-line);' : ''}">
           <b>${list.length > 1 ? `배전선로 후보 ${i+1} — ` : ''}${lineOk ? '✅ 변전소·주변압기·배전선로 모두 여유용량 있음 (참고용)' : '⚠ 일부 구간 여유용량 0 — 계통연계 지연 가능'}</b>
           <table class="ref-table" style="margin-top:8px;">
-            <tr><th></th><th>명칭</th><th>접속기준용량(kW)</th><th>접수기준 사용중(kW)</th><th>실제 여유용량(kW)</th></tr>
-            <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_1).toLocaleString('ko-KR')}</td></tr>
-            <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_2).toLocaleString('ko-KR')}</td></tr>
-            <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_3).toLocaleString('ko-KR')}</td></tr>
+            <tr><th></th><th>명칭</th><th>접속기준용량(kW)</th><th>접수기준 사용중(kW)</th><th>접속계획 반영(kW)</th><th>여유용량(kW)<br><span style="font-weight:400;font-size:10.5px;">접수기준 / 계획반영기준</span></th></tr>
+            <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td><td class="num">${gSubst.toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_1).toLocaleString('ko-KR')} / ${volB1.toLocaleString('ko-KR')}</td></tr>
+            <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td><td class="num">${gMtr.toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_2).toLocaleString('ko-KR')} / ${volB2.toLocaleString('ko-KR')}</td></tr>
+            <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td><td class="num">${gDl.toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_3).toLocaleString('ko-KR')} / ${volB3.toLocaleString('ko-KR')}</td></tr>
           </table>
+          <p class="footnote" style="margin-top:6px;">여유용량의 앞 숫자는 접수기준(이미 접수된 모든 신청 반영) 대비, 뒷 숫자는 접속계획 반영기준(실제 확정된 접속계획만 반영, 통상 더 여유있게 나옴) 대비 값입니다. 한전ON 원문 표기 방식과 동일합니다. ⚠ 출력제어 조건부 접속기준용량은 별도 API에서 확인되어 이 표에는 아직 포함되어 있지 않습니다.</p>
         </div>`;
     }).join('');
 
