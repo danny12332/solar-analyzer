@@ -310,10 +310,12 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border-radius:6px;">
           <span style="font-size:12px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">☀️ 태양광 패널 배치</span>
           <label style="font-size:11.5px;color:var(--ink-soft);">폭(m) <input id="panelW" type="number" value="1.134" step="0.001" style="width:60px;padding:2px 4px;"></label>
-          <label style="font-size:11.5px;color:var(--ink-soft);">길이(m) <input id="panelL" type="number" value="2.279" step="0.001" style="width:60px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">길이(m) <input id="panelL" type="number" value="2.465" step="0.001" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;"></label>
-          <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="435" step="5" style="width:60px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="645" step="5" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="0" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
           <button type="button" class="run" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="generateSolarLayout()">배치 생성</button>
         </div>
         <div id="kakaoMap" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
@@ -860,6 +862,26 @@ function pointInPolygonXY(pt, poly){
   return inside;
 }
 
+// 점 pt와 선분 a-b 사이의 최단 거리 (경계 이격거리 판정용)
+function distPointToSegment(pt, a, b){
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const lenSq = dx*dx + dy*dy;
+  let t = lenSq === 0 ? 0 : ((pt.x-a.x)*dx + (pt.y-a.y)*dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = a.x + t*dx, cy = a.y + t*dy;
+  return Math.hypot(pt.x-cx, pt.y-cy);
+}
+function distToPolygonBoundary(pt, poly){
+  let minDist = Infinity;
+  for(let i=0, j=poly.length-1; i<poly.length; j=i++){
+    minDist = Math.min(minDist, distPointToSegment(pt, poly[j], poly[i]));
+  }
+  return minDist;
+}
+function rotateXY(x, y, angleRad){
+  return { x: x*Math.cos(angleRad) - y*Math.sin(angleRad), y: x*Math.sin(angleRad) + y*Math.cos(angleRad) };
+}
+
 // X 버튼으로 태양광 배치를 지울 때, 진행중 그룹 id 상태도 함께 정리
 function removeSolarLayout(id){
   removeMeasureGroup(id);
@@ -874,17 +896,20 @@ function generateSolarLayout(){
     return;
   }
   const panelW = parseFloat(document.getElementById('panelW').value) || 1.134;
-  const panelL = parseFloat(document.getElementById('panelL').value) || 2.279;
+  const panelL = parseFloat(document.getElementById('panelL').value) || 2.465;
   const tiltDeg = parseFloat(document.getElementById('panelTilt').value) || 30;
-  const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 435;
+  const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 645;
   const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
+  const setback = Math.max(parseFloat(document.getElementById('panelSetback').value) || 0, 0);
+  const azimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
+  const azimuthRad = azimuthDeg * Math.PI/180;
 
   const map = ensureKakaoMap();
   // 이전 배치가 있으면 지우고 새로 생성
   if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; }
 
   const lat0Rad = lastAreaPolygonPath.reduce((s,p)=>s+p.getLat(),0) / lastAreaPolygonPath.length * Math.PI/180;
-  const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad));
+  const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad)); // 실제 위치 기준(경계 이격 판정용)
   const siteAreaM2 = shoelaceArea(lastAreaPolygonPath);
 
   const tiltRad = tiltDeg * Math.PI/180;
@@ -892,12 +917,14 @@ function generateSolarLayout(){
   const latAbsDeg = Math.abs(lat0Rad * 180/Math.PI);
   const minSunAltDeg = Math.max(90 - latAbsDeg - 23.44, 5); // 5도 하한(과도한 간격 방지)
   const minSunAltRad = minSunAltDeg * Math.PI/180;
-  const footprintNS = panelL * Math.cos(tiltRad); // 패널의 지면 투영 길이(남북 방향)
+  const footprintNS = panelL * Math.cos(tiltRad); // 패널의 지면 투영 길이(줄 진행 방향)
   const shadowLen = (panelL * Math.sin(tiltRad)) / Math.tan(minSunAltRad);
   const pitch = footprintNS + shadowLen; // 열간 간격(앞열 앞단 ~ 뒷열 앞단)
-  const footprintEW = panelW; // 패널 폭(동서 방향)
+  const footprintEW = panelW; // 패널 폭(줄 방향에 수직)
 
-  const xs = polyXY.map(p=>p.x), ys = polyXY.map(p=>p.y);
+  // 방위각만큼 회전한 좌표계에서 격자를 생성(rows는 회전좌표계의 y축 방향) — 배치 방향을 부지 모양에 맞춰 돌릴 수 있게 함
+  const polyRot = polyXY.map(p => rotateXY(p.x, p.y, -azimuthRad));
+  const xs = polyRot.map(p=>p.x), ys = polyRot.map(p=>p.y);
   const xmin = Math.min(...xs), xmax = Math.max(...xs);
   const ymin = Math.min(...ys), ymax = Math.max(...ys);
 
@@ -905,11 +932,14 @@ function generateSolarLayout(){
   let panelCount = 0;
   for(let y = ymin; y + footprintNS <= ymax; y += pitch){
     for(let x = xmin; x + footprintEW <= xmax; x += (footprintEW + gap)){
-      const corners = [
+      const cornersRot = [
         {x, y}, {x: x+footprintEW, y}, {x: x+footprintEW, y: y+footprintNS}, {x, y: y+footprintNS}
       ];
-      if(corners.every(c => pointInPolygonXY(c, polyXY))){
-        const path = corners.map(c => solarToLatLng(c.x, c.y, lat0Rad));
+      // 회전 좌표계 → 실제 위치 좌표계로 되돌려서 경계·이격 판정(경계 자체는 회전하지 않으므로 실제 좌표에서 검사해야 함)
+      const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad));
+      const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
+      if(fits){
+        const path = cornersReal.map(c => solarToLatLng(c.x, c.y, lat0Rad));
         const poly = new kakao.maps.Polygon({
           map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
           fillColor: '#1B3A5C', fillOpacity: 0.62
@@ -922,7 +952,7 @@ function generateSolarLayout(){
   }
 
   if(panelCount === 0){
-    statusEl.textContent = '❌ 이 경계 안에는 지정한 패널 크기·간격으로 한 장도 들어가지 않습니다. 부지를 더 크게 그리거나 패널 크기를 줄여보세요.';
+    statusEl.textContent = '❌ 이 경계·이격거리·각도 조건으로는 패널이 한 장도 들어가지 않습니다. 부지를 더 크게 그리거나 이격거리를 줄여보세요.';
     statusEl.style.color = '#b3402a';
     return;
   }
@@ -932,15 +962,16 @@ function generateSolarLayout(){
   const utilization = Math.round((usedAreaM2 / siteAreaM2) * 100);
 
   solarGroupId = registerMeasureGroup(panelShapes);
-  const centerX = (xmin+xmax)/2, centerY = (ymin+ymax)/2;
-  const labelPos = solarToLatLng(centerX, ymax, lat0Rad);
+  const centerRot = { x:(xmin+xmax)/2, y: ymax };
+  const centerReal = rotateXY(centerRot.x, centerRot.y, azimuthRad);
+  const labelPos = solarToLatLng(centerReal.x, centerReal.y, lat0Rad);
   const content = `<div style="display:flex;align-items:center;gap:8px;background:#0F2A44;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>☀️ ${panelCount.toLocaleString('ko-KR')}장 · 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW · 부지이용률 ${utilization}%</span>${closeBtnHtml(`removeSolarLayout(${solarGroupId})`)}</div>`;
   const label = new kakao.maps.CustomOverlay({ position: labelPos, content, yAnchor: 1.6, clickable: true });
   label.setMap(map);
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
 
-  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW (열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW (열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
