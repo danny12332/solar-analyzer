@@ -309,14 +309,20 @@
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border-radius:6px;">
           <span style="font-size:12px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">☀️ 태양광 패널 배치</span>
+          <label style="font-size:11.5px;color:var(--ink-soft);">배치 대상
+            <select id="mountType" onchange="onMountTypeChange()" style="padding:2px 4px;">
+              <option value="ground">지상/슬라브(평지붕)</option>
+              <option value="gable">건물 박공(경사지붕)</option>
+            </select>
+          </label>
           <label style="font-size:11.5px;color:var(--ink-soft);">폭(m) <input id="panelW" type="number" value="1.134" step="0.001" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">길이(m) <input id="panelL" type="number" value="2.465" step="0.001" style="width:60px;padding:2px 4px;"></label>
-          <label style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;"></label>
+          <label id="tiltLabel" style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="645" step="5" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
-          <label style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="0" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
-          <label style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
-          <button type="button" class="run" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="generateSolarLayout()">배치 생성</button>
+          <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="0" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
+          <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
+          <button type="button" class="run" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="onGenerateLayoutClick()">배치 생성</button>
           <button type="button" class="run" id="solarIllustrationBtn" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--forest-dim);color:var(--forest);width:auto;display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
         </div>
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
@@ -894,6 +900,118 @@ function removeSolarLayout(id){
     document.getElementById('solarIllustrationBtn').style.display = 'none';
     document.getElementById('solarIllustrationWrap').style.display = 'none';
   }
+}
+
+function onMountTypeChange(){
+  const isGable = document.getElementById('mountType').value === 'gable';
+  document.getElementById('tiltLabel').innerHTML = isGable
+    ? '지붕 물매 경사각(°) <input id="panelTilt" type="number" value="20" step="1" style="width:48px;padding:2px 4px;">'
+    : '경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;">';
+  document.getElementById('azimuthLabel').innerHTML = isGable
+    ? '물매 방향(°, 경사 내려가는 쪽, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;">'
+    : '방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;">';
+  document.getElementById('setbackLabel').innerHTML = isGable
+    ? '처마/가장자리 이격(m) <input id="panelSetback" type="number" value="0.3" step="0.1" min="0" style="width:50px;padding:2px 4px;">'
+    : '경계 이격(m) <input id="panelSetback" type="number" value="0" step="0.5" min="0" style="width:50px;padding:2px 4px;">';
+}
+
+function onGenerateLayoutClick(){
+  const isGable = document.getElementById('mountType').value === 'gable';
+  if(isGable){ generateRoofLayout(); } else { generateSolarLayout(); }
+}
+
+// ---- 건물 박공(경사지붕) 배치: 지붕에 밀착 설치(같은 평면) 가정으로, 열 간 자기그늘 방지 간격은 필요 없음.
+// 대신 위성사진에서 보이는 경계(면적재기로 그린 것)는 실제 지붕의 "수평 투영"이라, 물매 방향으로는
+// cos(물매각)만큼 짧게 보이는 것을 보정해서 실제 지붕 경사면 위의 모듈 개수를 계산함.
+// ⚠ 주변 건물·나무 등 외부 장애물에 의한 음영(그림자) 분석은 3D 높이 데이터가 없어 포함하지 않음.
+function generateRoofLayout(){
+  const statusEl = document.getElementById('roadviewStatus');
+  if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){
+    statusEl.textContent = '❌ 먼저 "📐 면적재기"로 지붕(물매면 하나) 경계를 위성사진에서 따라 그려서 완료해주세요.';
+    statusEl.style.color = '#b3402a';
+    return;
+  }
+  const panelW = parseFloat(document.getElementById('panelW').value) || 1.134;
+  const panelL = parseFloat(document.getElementById('panelL').value) || 2.465;
+  const roofPitchDeg = parseFloat(document.getElementById('panelTilt').value) || 20;
+  const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 645;
+  const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
+  const setback = Math.max(parseFloat(document.getElementById('panelSetback').value) || 0, 0);
+  const slopeAzimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
+  const slopeAzimuthRad = slopeAzimuthDeg * Math.PI/180;
+  const roofPitchRad = roofPitchDeg * Math.PI/180;
+  const cosPitch = Math.cos(roofPitchRad);
+
+  const map = ensureKakaoMap();
+  if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; }
+
+  const lat0Rad = lastAreaPolygonPath.reduce((s,p)=>s+p.getLat(),0) / lastAreaPolygonPath.length * Math.PI/180;
+  const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad));
+  const projectedAreaM2 = shoelaceArea(lastAreaPolygonPath); // 위성사진(수평 투영) 기준 면적
+  const trueRoofAreaM2 = projectedAreaM2 / cosPitch; // 실제 경사면 면적(물매 보정)
+
+  // 모듈은 세로(긴 변이 물매 방향)로 설치한다고 가정: 물매 방향 치수는 cos(물매각)만큼 투영되어 짧게 보임
+  const footprintRidgeDir = panelW; // 마루선(용마루)과 나란한 방향 — 투영 왜곡 없음
+  const footprintSlopeDirProjected = panelL * cosPitch; // 물매 내려가는 방향 — 위성사진엔 이만큼만 보임
+  const rowPitchProjected = footprintSlopeDirProjected + gap * cosPitch; // 밀착설치라 자기그늘 방지 간격 불필요, 모듈 간 물리적 간격만 반영
+
+  const polyRot = polyXY.map(p => rotateXY(p.x, p.y, -slopeAzimuthRad));
+  const xs = polyRot.map(p=>p.x), ys = polyRot.map(p=>p.y);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+
+  const panelShapes = [];
+  let panelCount = 0, rowsUsed = 0, maxCols = 0;
+  for(let y = ymin; y + footprintSlopeDirProjected <= ymax; y += rowPitchProjected){
+    let colsInRow = 0;
+    for(let x = xmin; x + footprintRidgeDir <= xmax; x += (footprintRidgeDir + gap)){
+      const cornersRot = [
+        {x, y}, {x: x+footprintRidgeDir, y}, {x: x+footprintRidgeDir, y: y+footprintSlopeDirProjected}, {x, y: y+footprintSlopeDirProjected}
+      ];
+      const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, slopeAzimuthRad));
+      const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
+      if(fits){
+        const path = cornersReal.map(c => solarToLatLng(c.x, c.y, lat0Rad));
+        const poly = new kakao.maps.Polygon({
+          map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
+          fillColor: '#4A5A1B', fillOpacity: 0.62
+        });
+        measureShapes.push(poly);
+        panelShapes.push(poly);
+        panelCount++; colsInRow++;
+      }
+    }
+    if(colsInRow > 0){ rowsUsed++; maxCols = Math.max(maxCols, colsInRow); }
+  }
+
+  if(panelCount === 0){
+    statusEl.textContent = '❌ 이 지붕 경계·이격거리 조건으로는 패널이 한 장도 들어가지 않습니다. 경계를 다시 그리거나 이격거리를 줄여보세요.';
+    statusEl.style.color = '#b3402a';
+    return;
+  }
+
+  const totalKw = (panelCount * wattPerPanel) / 1000;
+  const usedAreaM2 = panelCount * panelW * panelL; // 실제 모듈 면적(경사면 기준, 투영 아님)
+  const utilization = Math.round((usedAreaM2 / trueRoofAreaM2) * 100);
+
+  lastSolarStats = { rows: rowsUsed, cols: maxCols, panelCount, totalKw, utilization };
+  const illBtn = document.getElementById('solarIllustrationBtn');
+  illBtn.style.display = 'inline-block';
+  document.getElementById('solarIllustrationWrap').style.display = 'none';
+  illBtn.textContent = '🎨 일러스트로 보기';
+
+  solarGroupId = registerMeasureGroup(panelShapes);
+  const centerRot = { x:(xmin+xmax)/2, y: ymax };
+  const centerReal = rotateXY(centerRot.x, centerRot.y, slopeAzimuthRad);
+  const labelPos = solarToLatLng(centerReal.x, centerReal.y, lat0Rad);
+  const content = `<div style="display:flex;align-items:center;gap:8px;background:#4A5A1B;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>🏠 ${panelCount.toLocaleString('ko-KR')}장 · 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW · 지붕이용률 ${utilization}%</span>${closeBtnHtml(`removeSolarLayout(${solarGroupId})`)}</div>`;
+  const label = new kakao.maps.CustomOverlay({ position: labelPos, content, yAnchor: 1.6, clickable: true });
+  label.setMap(map);
+  measureShapes.push(label);
+  measureGroups[solarGroupId].shapes.push(label);
+
+  statusEl.textContent = `✅ 박공지붕 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 실제 경사면 면적은 위성사진 투영 면적(${Math.round(projectedAreaM2).toLocaleString('ko-KR')}㎡)보다 큰 약 ${Math.round(trueRoofAreaM2).toLocaleString('ko-KR')}㎡로 보정해 계산했습니다(물매 ${roofPitchDeg}°). 지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
+  statusEl.style.color = 'var(--ink-soft)';
 }
 
 function generateSolarLayout(){
