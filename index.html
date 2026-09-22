@@ -1750,6 +1750,14 @@ function splitAdminName(fullName){
   return { do: doTok, si, siText, gu, guText, lidong, li };
 }
 
+// 2026.9.18 시행 「재생에너지 개발·이용·보급 촉진법 시행령」 개정 — 태양광 이격거리 국가 상한:
+// 도로 이격거리 규제 전면 폐지, 주거지역(주택 5호 이상 밀집, 부지경계 반경 200m 이내) 이격거리는
+// 지자체 조례로도 최대 200m까지만 규정 가능(그 이상은 상위법령 위반으로 효력 없음).
+// 반경 내 조례 기준호수 미만으로 주택이 있으면 규제 자체 미적용. 주민참여형·건물지붕형·자가소비용은 이격거리 규제 면제.
+// ⚠ jorye.json의 devScale 텍스트는 자유서술이라 특정 숫자를 자동으로 무효 판정하지 않고, 대신 이 안내문을 항상 함께 보여줌
+// (지자체가 조례를 아직 개정 안 했으면 실무상 예전 기준이 그대로 적용되는 경우가 있어 자동 판정은 위험함).
+const SETBACK_LAW_NOTICE = `<p class="hint" style="margin:8px 0 0;color:#8a6d1f;font-size:12.5px;">⚡ 2026.9.18 시행 개정 시행령: <b>도로 이격거리 규제 전면 폐지</b>, <b>주거지역 이격거리는 지자체 조례라도 최대 200m 상한</b>(반경 내 조례 기준호수—최소 5호 이상—미만이면 규제 자체 미적용)입니다. 주민참여형·건물지붕형·자가소비용 태양광은 이격거리 규제가 아예 면제됩니다. 아래 조례 내용 중 이 상한을 초과하는 수치는 상위법령에 따라 효력이 없을 가능성이 높지만, 해당 지자체가 조례를 아직 개정하지 않았다면 실무적으로는 예전 기준이 그대로 적용되는 경우가 있으니 반드시 담당자에게 최신 시행 여부를 확인하세요.</p>`;
+
 function contactHtml(admin){
   const localData = getJoryeEntry(admin);
 
@@ -1760,6 +1768,7 @@ function contactHtml(admin){
       <p style="margin:8px 0 4px;font-size:13px;"><b>개발행위허가 규모/기준:</b> ${localData.devScale}</p>
       <p style="margin:8px 0 4px;font-size:13px;"><b>한전선로용량 관련:</b> ${localData.kepco}</p>
       <p style="margin:8px 0 0;font-size:13px;"><b>지자체 담당자·특이사항:</b> ${localData.contact}</p>
+      ${SETBACK_LAW_NOTICE}
       <p class="footnote" style="margin-top:8px;">사용자가 직접 확인한 자료이며, 시점 경과로 담당자·기준이 바뀌었을 수 있어 최종 확인은 필요합니다.</p>
     </div>`;
   }
@@ -1767,6 +1776,7 @@ function contactHtml(admin){
   return `
     <div class="keyline" style="margin-top:10px;">
       <p style="margin:0;font-size:13px;">📋 <b>${admin.siText || admin.guText || admin.do}</b>의 실사 확인 자료가 아직 없습니다. 한전ON(online.kepco.co.kr) 또는 관할 지자체·한전지사에 직접 문의해주세요.</p>
+      ${SETBACK_LAW_NOTICE}
     </div>`;
 }
 
