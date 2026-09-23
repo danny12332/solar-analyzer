@@ -300,8 +300,6 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="toggleSatellite()">🛰 위성보기</button>
             <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleCadastral()">🗺 지적편집도</button>
-            <button type="button" class="run" id="terrainBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleTerrain()">⛰ 지형정보</button>
-            <button type="button" class="run" id="trafficBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleTraffic()">🚦 교통정보</button>
             <button type="button" class="run" id="rvRoadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadviewRoads()">🛣 로드뷰 가능 도로</button>
             <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadview()">🚶 로드뷰</button>
             <button type="button" class="run" id="distanceBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleDistanceMode()">📏 거리재기</button>
@@ -558,8 +556,6 @@ let radiusCenterMarker = null;
 let previewCircle = null; // 반경재기 실시간 미리보기
 let previewLine = null;   // 거리재기 실시간 미리보기
 let previewLabel = null;
-let terrainOn = false;
-let trafficOn = false;
 let measureShapes = []; // 지우기 대상(선·다각형·원·라벨) 전체 목록
 let distanceVertexMarkers = []; // 거리재기 각 클릭 지점의 작은 점 마커
 let areaVertexMarkers = []; // 면적재기 각 클릭 지점의 작은 점 마커
@@ -1564,26 +1560,6 @@ function toggleCadastral(){
   const btn = document.getElementById('cadBtn');
   btn.style.background = cadastralOn ? 'var(--ink)' : 'var(--forest-dim)';
   btn.style.color = cadastralOn ? '#F6F7F3' : 'var(--forest)';
-}
-
-function toggleTerrain(){
-  const map = ensureKakaoMap();
-  terrainOn = !terrainOn;
-  if(terrainOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN); }
-  else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN); }
-  const btn = document.getElementById('terrainBtn');
-  btn.style.background = terrainOn ? 'var(--ink)' : 'var(--forest-dim)';
-  btn.style.color = terrainOn ? '#F6F7F3' : 'var(--forest)';
-}
-
-function toggleTraffic(){
-  const map = ensureKakaoMap();
-  trafficOn = !trafficOn;
-  if(trafficOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC); }
-  else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC); }
-  const btn = document.getElementById('trafficBtn');
-  btn.style.background = trafficOn ? 'var(--ink)' : 'var(--forest-dim)';
-  btn.style.color = trafficOn ? '#F6F7F3' : 'var(--forest)';
 }
 
 function toggleRoadviewRoads(){
