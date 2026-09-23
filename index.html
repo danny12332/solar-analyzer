@@ -156,6 +156,8 @@
           <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
           <button class="run" id="kepcoBtn" style="width:100%;background:var(--amber);margin-top:10px;" onclick="checkKepcoCapacity()">⚡ 이 주소의 배전선로 여유용량 조회 (한전ON)</button>
           <div id="kepcoResult" style="margin-top:8px;"></div>
+          <button class="run" id="bldrgstBtn" style="width:100%;background:#3B5B7A;margin-top:10px;" onclick="checkBuildingRegister()">🏢 이 주소의 건축물대장 조회</button>
+          <div id="bldrgstResult" style="margin-top:8px;"></div>
         </div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
@@ -1749,7 +1751,100 @@ async function openEumResult(){
   }
 }
 
-// ===================== 한전ON 배전선로 여유용량 조회 =====================
+// ===================== 건축HUB 건축물대장(표제부) 조회 =====================
+function bldrgstField(label, value, unit){
+  if(value === undefined || value === null || value === '') return '';
+  return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--card-line);font-size:12.5px;"><span style="color:var(--ink-soft);">${label}</span><span style="font-weight:600;">${value}${unit||''}</span></div>`;
+}
+
+function bldrgstFormatDate(d){
+  if(!d || d.length !== 8) return d || '';
+  return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
+}
+
+async function checkBuildingRegister(){
+  const statusEl = document.getElementById('bldrgstResult');
+  const btn = document.getElementById('bldrgstBtn');
+  const typedAddr = document.getElementById('siteAddress').value.trim();
+  const addr = (lastJibunAddress && lastJibunAddress.trim()) || typedAddr;
+  if(!addr){ statusEl.innerHTML = '<p class="hint" style="color:#b3402a;">주소를 먼저 입력해주세요.</p>'; return; }
+
+  btn.disabled = true;
+  statusEl.innerHTML = '<p class="hint">법정동코드 확인 중...</p>';
+  try{
+    const parsed = parseAddressParts(addr);
+    if(!parsed){
+      statusEl.innerHTML = '<p class="hint" style="color:#b3402a;">❌ 주소 끝에서 지번(예: 178-1)을 찾지 못했습니다.</p>';
+      return;
+    }
+
+    let hit = null;
+    if(lastLatLng){
+      const live = await fetchLiveBcode(lastLatLng.getLat(), lastLatLng.getLng());
+      if(live){ hit = live; }
+    }
+    if(!hit){
+      statusEl.innerHTML = '<p class="hint">법정동코드 데이터(bjdong.txt) 불러오는 중...</p>';
+      await loadBjdong();
+      const found = findBjdongCode(parsed.dongText);
+      hit = found.hit;
+    }
+    if(!hit){
+      statusEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다.</p>`;
+      return;
+    }
+
+    statusEl.innerHTML = '<p class="hint">건축물대장 조회 중...</p>';
+    const res = await fetch(`https://rough-moon-e02c.ruwk66.workers.dev/bldrgst?code=${hit.code}&isMountain=${parsed.isMountain?1:0}&bobn=${parsed.bobn}&bubn=${parsed.bubn}`);
+    const data = await res.json();
+
+    if(!res.ok || data.error || !data.items || data.items.length === 0){
+      statusEl.innerHTML = `<p class="hint" style="color:#8a6d1f;">📋 이 필지에 등록된 건축물대장이 없습니다(나대지이거나 미등록 건물일 수 있습니다).${data && data.error ? ' ('+data.error+')' : ''} 정확한 확인은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 직접 조회해주세요.</p>`;
+      return;
+    }
+
+    const blocks = data.items.map((it, i) => {
+      const isMulti = data.items.length > 1;
+      return `
+        <div style="${i>0?'margin-top:12px;padding-top:12px;border-top:1px dashed var(--card-line);':''}">
+          ${isMulti ? `<b>동 ${i+1}${it.dongNm ? ' — '+it.dongNm : ''}</b>` : ''}
+          ${bldrgstField('대지위치', it.platPlc)}
+          ${bldrgstField('도로명주소', it.newPlatPlc)}
+          ${bldrgstField('건물명', it.bldNm)}
+          ${bldrgstField('대장구분', (it.regstrGbCdNm||'') + (it.regstrKindCdNm?' · '+it.regstrKindCdNm:''))}
+          ${bldrgstField('주용도', it.mainPurpsCdNm)}
+          ${bldrgstField('구조', it.strctCdNm)}
+          ${bldrgstField('지붕', it.roofCdNm)}
+          ${bldrgstField('대지면적', Number(it.platArea).toLocaleString('ko-KR'), ' ㎡')}
+          ${bldrgstField('건축면적', Number(it.archArea).toLocaleString('ko-KR'), ' ㎡')}
+          ${bldrgstField('연면적', Number(it.totArea).toLocaleString('ko-KR'), ' ㎡')}
+          ${bldrgstField('건폐율', it.bcRat, ' %')}
+          ${bldrgstField('용적률', it.vlRat, ' %')}
+          ${bldrgstField('높이', it.heit, ' m')}
+          ${bldrgstField('층수(지상/지하)', `${it.grndFlrCnt ?? '-'} / ${it.ugrndFlrCnt ?? '-'}`)}
+          ${bldrgstField('세대/가구/호수', `${it.hhldCnt ?? 0} / ${it.fmlyCnt ?? 0} / ${it.hoCnt ?? 0}`)}
+          ${bldrgstField('승강기(승용/비상용)', `${it.rideUseElvtCnt ?? 0} / ${it.emgenUseElvtCnt ?? 0}`)}
+          ${bldrgstField('허가일', bldrgstFormatDate(it.pmsDay))}
+          ${bldrgstField('착공일', bldrgstFormatDate(it.stcnsDay))}
+          ${bldrgstField('사용승인일', bldrgstFormatDate(it.useAprDay))}
+          ${bldrgstField('내진설계 적용여부', it.rserthqkDsgnApplyYn === '1' ? '적용' : (it.rserthqkDsgnApplyYn === '0' ? '미적용' : it.rserthqkDsgnApplyYn))}
+        </div>`;
+    }).join('');
+
+    statusEl.innerHTML = `
+      <div class="keyline" style="margin-top:0;">
+        <b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
+        <div style="margin-top:8px;">${blocks}</div>
+        <p class="footnote" style="margin-top:8px;">국토교통부 건축HUB(건축물대장정보 서비스) 실시간 조회 결과이며, 법적 효력이 있는 서류가 아닙니다. 정식 열람·발급은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 하세요.</p>
+      </div>`;
+  }catch(err){
+    console.error(err);
+    statusEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ 오류: ${err.message}</p>`;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
 // 법정동명(예: "경기도 고양시 덕양구 원당동")을 한전ON 검색 폼의 필드(도/시/구/동리/리)로 분해
 function splitAdminName(fullName){
   const t = fullName.split(' ');
