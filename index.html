@@ -156,8 +156,6 @@
           <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
           <button class="run" id="kepcoBtn" style="width:100%;background:var(--amber);margin-top:10px;" onclick="checkKepcoCapacity()">⚡ 이 주소의 배전선로 여유용량 조회 (한전ON)</button>
           <div id="kepcoResult" style="margin-top:8px;"></div>
-          <button class="run" id="parcelBtn" style="width:100%;background:#C2148A;margin-top:10px;" onclick="showParcelBoundary()">📍 이 필지의 정확한 경계선 표시 (지적도)</button>
-          <p id="parcelStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
         </div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
@@ -672,52 +670,6 @@ function fallbackCopy(text, cb){
 
 function closeAddressOverlay(){
   if(addressOverlay){ addressOverlay.setMap(null); addressOverlay = null; }
-}
-
-let parcelGroupId = null; // 현재 표시중인 필지 경계선의 그룹 id
-
-async function showParcelBoundary(){
-  const statusEl = document.getElementById('parcelStatus');
-  if(!lastLatLng){
-    statusEl.textContent = '❌ 먼저 지도를 클릭하거나 주소를 검색해서 위치를 확인해주세요.';
-    statusEl.style.color = '#b3402a';
-    return;
-  }
-  statusEl.textContent = '필지 경계 조회 중...';
-  statusEl.style.color = 'var(--ink-soft)';
-  if(parcelGroupId){ removeMeasureGroup(parcelGroupId); parcelGroupId = null; }
-
-  try{
-    const res = await fetch(`https://rough-moon-e02c.ruwk66.workers.dev/vworld-parcel?lat=${lastLatLng.getLat()}&lng=${lastLatLng.getLng()}`);
-    const data = await res.json();
-    if(!res.ok || data.error || !data.path || data.path.length < 3){
-      statusEl.textContent = `❌ 이 위치의 필지 경계를 찾지 못했습니다${data && data.error ? ' (' + data.error + (data.status?', HTTP '+data.status:'') + ')' : ''}. 브이월드 연속지적도에 등록되지 않은 지역일 수 있습니다.`;
-      statusEl.style.color = '#b3402a';
-      return;
-    }
-    const map = ensureKakaoMap();
-    const path = data.path.map(p => new kakao.maps.LatLng(p.lat, p.lng));
-    const poly = new kakao.maps.Polygon({
-      map, path, strokeWeight: 3, strokeColor: '#C2148A', strokeOpacity: 0.9, strokeStyle: 'solid',
-      fillColor: '#C2148A', fillOpacity: 0.08
-    });
-    measureShapes.push(poly);
-
-    const centerLat = data.path.reduce((s,p)=>s+p.lat,0) / data.path.length;
-    const centerLng = data.path.reduce((s,p)=>s+p.lng,0) / data.path.length;
-    parcelGroupId = registerMeasureGroup([poly]);
-    const content = `<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>📍 ${data.jibun || data.addr || '필지 경계'}</span>${closeBtnHtml(`removeMeasureGroup(${parcelGroupId}); parcelGroupId=null;`)}</div>`;
-    const label = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(centerLat, centerLng), content, yAnchor: -0.2, clickable: true });
-    label.setMap(map);
-    measureShapes.push(label);
-    measureGroups[parcelGroupId].shapes.push(label);
-
-    statusEl.textContent = `✅ ${data.addr || data.jibun || ''} 필지 경계를 표시했습니다 (국토교통부 연속지적도 기준, PNU ${data.pnu || '-'}).`;
-    statusEl.style.color = 'var(--ink-soft)';
-  }catch(err){
-    statusEl.textContent = '❌ 조회 중 오류가 발생했습니다: ' + err;
-    statusEl.style.color = '#b3402a';
-  }
 }
 
 function renderAddressLabel(pos, jibun, road){
@@ -1315,7 +1267,6 @@ function clearMeasurements(){
   if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
   solarGroupId = null;
   lastSolarStats = null;
-  parcelGroupId = null;
   document.getElementById('solarIllustrationBtn').style.display = 'none';
   document.getElementById('solarIllustrationWrap').style.display = 'none';
   document.getElementById('roadviewStatus').textContent = '측정 결과를 모두 지웠습니다.';
