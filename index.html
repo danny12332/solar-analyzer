@@ -158,6 +158,8 @@
           <div id="kepcoResult" style="margin-top:8px;"></div>
           <button class="run" id="bldrgstBtn" style="width:100%;background:#3B5B7A;margin-top:10px;" onclick="checkBuildingRegister()">🏢 이 주소의 건축물대장 조회</button>
           <div id="bldrgstResult" style="margin-top:8px;"></div>
+          <button class="run" id="parcelBtn" style="width:100%;background:#C2148A;margin-top:10px;" onclick="showParcelBoundary()">📍 이 필지의 정확한 경계선 표시 (지적도)</button>
+          <p id="parcelStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
         </div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
@@ -595,6 +597,143 @@ function removeMeasureGroup(id){
 // 라벨 콘텐츠 안에 자연스러운 흐름으로 넣는 X 삭제 버튼 (박스 밖으로 튀어나오지 않게 — 오버레이 클릭 영역 밖으로 나가면 클릭이 지도로 전달되어 씹힘)
 function closeBtnHtml(onclickJs){
   return `<span onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation(); ${onclickJs}" style="cursor:pointer;opacity:.85;font-weight:bold;">✕</span>`;
+}
+
+// ===================== 브이월드(VWorld) JSONP 호출 공통 함수 =====================
+// 브이월드가 CORS 헤더는 안 주지만 JSONP(callback 파라미터)는 지원하는 것을 확인함(직접 테스트로 검증됨).
+// 그래서 Cloudflare Worker(520 에러)도, fetch()(CORS 차단)도 아니라 <script> 태그로 직접 불러온다.
+const VWORLD_KEY = '7C378295-CDF2-435C-9750-4A1533B12E69';
+const VWORLD_DOMAIN = 'danny12332.github.io';
+let vworldJsonpSeq = 0;
+function vworldJsonp(paramsObj, timeoutMs){
+  timeoutMs = timeoutMs || 8000;
+  return new Promise((resolve, reject) => {
+    const cbName = `vworldCb${Date.now()}_${vworldJsonpSeq++}`;
+    let settled = false;
+    const script = document.createElement('script');
+    const timer = setTimeout(() => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('브이월드 응답 시간 초과'));
+    }, timeoutMs);
+    function cleanup(){
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+    window[cbName] = function(data){
+      if(settled) return;
+      settled = true;
+      cleanup();
+      resolve(data);
+    };
+    script.onerror = function(){
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('브이월드 스크립트 로드 실패'));
+    };
+    const qs = Object.entries(paramsObj).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+    script.src = `https://api.vworld.kr/req/data?${qs}&callback=${cbName}`;
+    document.head.appendChild(script);
+  });
+}
+
+// ag_geom을 위경도 좌표 배열로 변환 — 브이월드 JSON 응답이 GeoJSON 스타일(좌표 배열)로 오는지,
+// XML 때처럼 GML 문자열로 오는지 아직 실제 응답으로 100% 확인 전이라 두 가지 형태 모두 처리
+function parseVworldGeom(geomLike){
+  if(!geomLike) return null;
+  if(typeof geomLike === 'object' && Array.isArray(geomLike.coordinates)){
+    let ring;
+    if(geomLike.type === 'MultiPolygon'){ ring = geomLike.coordinates[0][0]; }
+    else if(geomLike.type === 'Polygon'){ ring = geomLike.coordinates[0]; }
+    else return null;
+    return ring.map(pair => ({ lat: pair[1], lng: pair[0] }));
+  }
+  if(typeof geomLike === 'string'){
+    const m = geomLike.match(/<gml:posList[^>]*>([\s\S]*?)<\/gml:posList>/);
+    if(!m) return null;
+    const nums = m[1].trim().split(/\s+/).map(Number);
+    const path = [];
+    for(let i=0; i<nums.length; i+=2){ path.push({ lat: nums[i+1], lng: nums[i] }); }
+    return path;
+  }
+  return null;
+}
+
+let parcelGroupId = null; // 현재 표시중인 필지 경계선의 그룹 id
+
+async function showParcelBoundary(){
+  const statusEl = document.getElementById('parcelStatus');
+  if(!lastLatLng){
+    statusEl.textContent = '❌ 먼저 지도를 클릭하거나 주소를 검색해서 위치를 확인해주세요.';
+    statusEl.style.color = '#b3402a';
+    return;
+  }
+  statusEl.textContent = '필지 경계 조회 중...';
+  statusEl.style.color = 'var(--ink-soft)';
+  if(parcelGroupId){ removeMeasureGroup(parcelGroupId); parcelGroupId = null; }
+
+  try{
+    const lat = lastLatLng.getLat(), lng = lastLatLng.getLng();
+    const data = await vworldJsonp({
+      service: 'data', version: '2.0', request: 'GetFeature',
+      format: 'json', errorformat: 'json', size: '1', page: '1',
+      data: 'LP_PA_CBND_BUBUN',
+      geomFilter: `POINT(${lng} ${lat})`,
+      columns: 'pnu,jibun,ag_geom,addr',
+      geometry: 'true', attribute: 'true', crs: 'EPSG:4326',
+      domain: VWORLD_DOMAIN, key: VWORLD_KEY
+    });
+
+    const resp = data && data.response;
+    if(!resp || resp.status !== 'OK'){
+      statusEl.textContent = `❌ 이 위치의 필지 경계를 찾지 못했습니다${resp && resp.status ? ' (status: '+resp.status+')' : ''}.`;
+      statusEl.style.color = '#b3402a';
+      return;
+    }
+    const fc = resp.result && resp.result.featureCollection;
+    const features = fc && fc.features;
+    if(!features || features.length === 0){
+      statusEl.textContent = '❌ 이 위치의 필지 경계를 찾지 못했습니다. 브이월드 연속지적도에 등록되지 않은 지역일 수 있습니다.';
+      statusEl.style.color = '#b3402a';
+      return;
+    }
+    const feat = features[0];
+    const props = feat.properties || {};
+    const path = parseVworldGeom(feat.geometry) || parseVworldGeom(props.ag_geom);
+    if(!path || path.length < 3){
+      statusEl.textContent = '❌ 경계 좌표(ag_geom) 형식을 해석하지 못했습니다. 개발자에게 이 메시지와 함께 문의해주세요.';
+      statusEl.style.color = '#b3402a';
+      console.warn('브이월드 응답(경계 파싱 실패):', feat);
+      return;
+    }
+
+    const map = ensureKakaoMap();
+    const kakaoPath = path.map(p => new kakao.maps.LatLng(p.lat, p.lng));
+    const poly = new kakao.maps.Polygon({
+      map, path: kakaoPath, strokeWeight: 3, strokeColor: '#C2148A', strokeOpacity: 0.9, strokeStyle: 'solid',
+      fillColor: '#C2148A', fillOpacity: 0.08
+    });
+    measureShapes.push(poly);
+
+    const centerLat = path.reduce((s,p)=>s+p.lat,0) / path.length;
+    const centerLng = path.reduce((s,p)=>s+p.lng,0) / path.length;
+    parcelGroupId = registerMeasureGroup([poly]);
+    const content = `<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>📍 ${props.jibun || props.addr || '필지 경계'}</span>${closeBtnHtml(`removeMeasureGroup(${parcelGroupId}); parcelGroupId=null;`)}</div>`;
+    const label = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(centerLat, centerLng), content, yAnchor: -0.2, clickable: true });
+    label.setMap(map);
+    measureShapes.push(label);
+    measureGroups[parcelGroupId].shapes.push(label);
+
+    statusEl.textContent = `✅ ${props.addr || props.jibun || ''} 필지 경계를 표시했습니다 (국토교통부 연속지적도 기준, PNU ${props.pnu || '-'}).`;
+    statusEl.style.color = 'var(--ink-soft)';
+  }catch(err){
+    console.error(err);
+    statusEl.textContent = '❌ 조회 중 오류가 발생했습니다: ' + err.message;
+    statusEl.style.color = '#b3402a';
+  }
 }
 
 lookupAddress(false);
@@ -1328,6 +1467,7 @@ function clearMeasurements(){
   if(radiusCenterMarker){ radiusCenterMarker.setMap(null); radiusCenterMarker = null; }
   solarGroupId = null;
   lastSolarStats = null;
+  parcelGroupId = null;
   document.getElementById('solarIllustrationBtn').style.display = 'none';
   document.getElementById('solarIllustrationWrap').style.display = 'none';
   document.getElementById('roadviewStatus').textContent = '측정 결과를 모두 지웠습니다.';
