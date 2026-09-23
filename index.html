@@ -1751,6 +1751,11 @@ async function openEumResult(){
   }
 }
 
+function closeResultPanel(elId){
+  const el = document.getElementById(elId);
+  if(el) el.innerHTML = '';
+}
+
 // ===================== 건축HUB 건축물대장(표제부) 조회 =====================
 function bldrgstField(label, value, unit){
   if(value === undefined || value === null || value === '') return '';
@@ -1832,7 +1837,8 @@ async function checkBuildingRegister(){
     }).join('');
 
     statusEl.innerHTML = `
-      <div class="keyline" style="margin-top:0;">
+      <div class="keyline" style="margin-top:0;position:relative;">
+        <span onclick="closeResultPanel('bldrgstResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
         <b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
         <div style="margin-top:8px;">${blocks}</div>
         <p class="footnote" style="margin-top:8px;">국토교통부 건축HUB(건축물대장정보 서비스) 실시간 조회 결과이며, 법적 효력이 있는 서류가 아닙니다. 정식 열람·발급은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 하세요.</p>
@@ -2107,7 +2113,8 @@ async function checkKepcoCapacity(){
       : '';
 
     resultEl.innerHTML = `
-      <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;">
+      <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;position:relative;">
+        <span onclick="closeResultPanel('kepcoResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
         ${regionNote}
         ${levelNote}
         ${lineBlocks}
