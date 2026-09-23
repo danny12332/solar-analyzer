@@ -1544,6 +1544,8 @@ function showKakaoMap(address){
       const jibun = result[0].address ? result[0].address.address_name : '';
       const road = result[0].road_address ? result[0].road_address.address_name : '';
       setMarkerPosition(pos, { jibun, road });
+      // 주소 검색 시 필지 경계선 자동 표시 (버튼을 누른 것과 동일한 동작)
+      showParcelBoundary();
       // 로드뷰가 열려있는 상태라면 새로 검색한 주소 위치로 바로 갱신
       if(roadviewOn){ showRoadviewStage(); }
     } else {
