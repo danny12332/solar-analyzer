@@ -824,7 +824,9 @@ function toggleDistanceMode(){
     if(distancePoints.length >= 3){
       // 점 3개 이상이면 마지막 점과 첫 점을 이어 닫힌 경계로 간주 — ☀️ 태양광 배치용 경계로도 사용 가능
       lastAreaPolygonPath = distancePoints.slice();
-      msg += ' — 이 경로를 닫힌 경계로 보고 "☀️ 태양광 배치"에도 쓸 수 있습니다.';
+      const suggestedAz = suggestAzimuthFromPath(lastAreaPolygonPath);
+      document.getElementById('panelAzimuth').value = suggestedAz;
+      msg += ` — 이 경로를 닫힌 경계로 보고 "☀️ 태양광 배치"에도 쓸 수 있습니다 (건물 방향에 맞춰 방위각을 ${suggestedAz}°로 자동 설정했습니다. 필요하면 직접 수정하세요).`;
     }
     document.getElementById('roadviewStatus').textContent = msg;
     distancePoints = []; distancePolyline = null; distanceLabel = null; currentDistanceGroupId = null;
@@ -893,6 +895,27 @@ function distToPolygonBoundary(pt, poly){
 }
 function rotateXY(x, y, angleRad){
   return { x: x*Math.cos(angleRad) - y*Math.sin(angleRad), y: x*Math.sin(angleRad) + y*Math.cos(angleRad) };
+}
+
+// 부지/지붕 경계의 "가장 긴 변" 방향을 계산해서, 배치 열(row)이 건물·경계 모양에 맞춰
+// 자동으로 정렬되도록 방위각 기본값을 제안한다. (rotateXY(-azimuthRad)로 회전했을 때
+// 이 변이 x축과 나란해지도록 역산: azimuthRad = atan2(dy, dx))
+function suggestAzimuthFromPath(path){
+  if(!path || path.length < 3) return 0;
+  const lat0Rad = path.reduce((s,p)=>s+p.getLat(),0) / path.length * Math.PI/180;
+  const xy = path.map(p => solarToXY(p, lat0Rad));
+  let bestLenSq = -1, bestDx = 1, bestDy = 0;
+  for(let i=0; i<xy.length; i++){
+    const a = xy[i], b = xy[(i+1) % xy.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const lenSq = dx*dx + dy*dy;
+    if(lenSq > bestLenSq){ bestLenSq = lenSq; bestDx = dx; bestDy = dy; }
+  }
+  let deg = Math.atan2(bestDy, bestDx) * 180/Math.PI;
+  // 변에는 "방향"이 없으므로(180도 돌려도 같은 정렬) -90~90 범위로 정규화
+  while(deg > 90) deg -= 180;
+  while(deg <= -90) deg += 180;
+  return Math.round(deg);
 }
 
 // X 버튼으로 태양광 배치를 지울 때, 진행중 그룹 id 상태도 함께 정리
@@ -1243,8 +1266,10 @@ function toggleAreaMode(){
     let finalMsg = '';
     if(areaPoints.length >= 3){
       const area = (typeof areaPolygon.getArea === 'function') ? areaPolygon.getArea() : shoelaceArea(areaPoints);
-      finalMsg = `✅ 면적재기 완료 — 약 ${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(area/3.305785).toLocaleString('ko-KR')}평). 이 경계로 "☀️ 태양광 배치"를 만들 수 있습니다.`;
       lastAreaPolygonPath = areaPoints.slice(); // ☀️ 태양광 배치용으로 마지막 면적재기 경계를 기억해둠
+      const suggestedAz = suggestAzimuthFromPath(lastAreaPolygonPath);
+      document.getElementById('panelAzimuth').value = suggestedAz;
+      finalMsg = `✅ 면적재기 완료 — 약 ${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(area/3.305785).toLocaleString('ko-KR')}평). 이 경계로 "☀️ 태양광 배치"를 만들 수 있습니다 (건물 방향에 맞춰 방위각을 ${suggestedAz}°로 자동 설정했습니다. 필요하면 직접 수정하세요).`;
     }
     document.getElementById('roadviewStatus').textContent = finalMsg;
     areaPoints = []; areaPolygon = null; areaLabel = null; currentAreaGroupId = null;
