@@ -820,9 +820,13 @@ function toggleDistanceMode(){
   if(mapMode === 'distance'){
     // 종료: 다음 측정을 위해 진행중 변수만 리셋(그려진 선·점·라벨은 그룹으로 등록된 채 지도에 남아있고, X로 계속 삭제 가능)
     const finalLen = distancePolyline ? Math.round(distancePolyline.getLength()) : 0;
-    document.getElementById('roadviewStatus').textContent = distancePoints.length >= 2
-      ? `✅ 거리재기 완료 — 총 ${finalLen.toLocaleString('ko-KR')} m`
-      : '';
+    let msg = distancePoints.length >= 2 ? `✅ 거리재기 완료 — 총 ${finalLen.toLocaleString('ko-KR')} m` : '';
+    if(distancePoints.length >= 3){
+      // 점 3개 이상이면 마지막 점과 첫 점을 이어 닫힌 경계로 간주 — ☀️ 태양광 배치용 경계로도 사용 가능
+      lastAreaPolygonPath = distancePoints.slice();
+      msg += ' — 이 경로를 닫힌 경계로 보고 "☀️ 태양광 배치"에도 쓸 수 있습니다.';
+    }
+    document.getElementById('roadviewStatus').textContent = msg;
     distancePoints = []; distancePolyline = null; distanceLabel = null; currentDistanceGroupId = null;
     setMode('normal');
   } else {
@@ -927,7 +931,7 @@ function onGenerateLayoutClick(){
 function generateRoofLayout(){
   const statusEl = document.getElementById('roadviewStatus');
   if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){
-    statusEl.textContent = '❌ 먼저 "📐 면적재기"로 지붕(물매면 하나) 경계를 위성사진에서 따라 그려서 완료해주세요.';
+    statusEl.textContent = '❌ 먼저 "📐 면적재기" 또는 "📏 거리재기"(점 3개 이상)로 지붕(물매면 하나) 경계를 위성사진에서 따라 그려서 완료해주세요.';
     statusEl.style.color = '#b3402a';
     return;
   }
@@ -1017,7 +1021,7 @@ function generateRoofLayout(){
 function generateSolarLayout(){
   const statusEl = document.getElementById('roadviewStatus');
   if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){
-    statusEl.textContent = '❌ 먼저 "📐 면적재기"로 태양광을 배치할 부지 경계를 그려서 완료해주세요.';
+    statusEl.textContent = '❌ 먼저 "📐 면적재기" 또는 "📏 거리재기"(점 3개 이상)로 태양광을 배치할 부지 경계를 그려서 완료해주세요.';
     statusEl.style.color = '#b3402a';
     return;
   }
