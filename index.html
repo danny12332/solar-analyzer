@@ -313,7 +313,8 @@
           <span style="font-size:12px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">☀️ 태양광 패널 배치</span>
           <label style="font-size:11.5px;color:var(--ink-soft);">배치 대상
             <select id="mountType" onchange="onMountTypeChange()" style="padding:2px 4px;">
-              <option value="ground">지상/슬라브(평지붕)</option>
+              <option value="ground">지상(개활지)</option>
+              <option value="slab">건물 슬라브(평지붕)</option>
               <option value="gable">건물 박공(경사지붕)</option>
             </select>
           </label>
@@ -934,33 +935,40 @@ function removeSolarLayout(id){
 }
 
 function onMountTypeChange(){
-  const isGable = document.getElementById('mountType').value === 'gable';
+  const mt = document.getElementById('mountType').value;
+  const isRoof = (mt === 'gable' || mt === 'slab'); // 지붕 계열(슬라브·박공) 공통: 밀착 설치, 낮은 각도
+  const isGable = mt === 'gable';
   const curAzimuth = document.getElementById('panelAzimuth').value; // 기존 값(자동 감지된 방위각 포함) 유지
   const curSetback = document.getElementById('panelSetback').value;
-  // 경사각은 지상 거치대 각도(30°)와 지붕 물매(10°)가 물리적으로 다른 값이라 모드 전환 시 항상 해당 모드의 기본값으로 재설정
+  // 경사각 기본값: 지상(개활지) 30°, 슬라브·박공은 거치대/물매 각도 5~10° 범위(실제 시공 사례 기준) → 8°
   document.getElementById('tiltLabel').innerHTML = isGable
-    ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="10" step="1" style="width:48px;padding:2px 4px;">`
-    : `경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;">`;
+    ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="8" step="1" style="width:48px;padding:2px 4px;">`
+    : isRoof
+      ? `거치대 설치각도(°, 보통 5~10°) <input id="panelTilt" type="number" value="8" step="1" style="width:48px;padding:2px 4px;">`
+      : `경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;">`;
   document.getElementById('azimuthLabel').innerHTML = isGable
     ? `물매 방향(°, 경사 내려가는 쪽, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`
     : `방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`;
-  document.getElementById('setbackLabel').innerHTML = isGable
+  document.getElementById('setbackLabel').innerHTML = isRoof
     ? `처마/가장자리 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0.3}" step="0.1" min="0" style="width:50px;padding:2px 4px;">`
     : `경계 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0}" step="0.5" min="0" style="width:50px;padding:2px 4px;">`;
+  // 처마/용마루 그늘 구간 구분은 실제로 "경사면"인 박공지붕에만 의미가 있음 — 평평한 슬라브에는 해당 없음
   document.getElementById('shadeGapLabel').style.display = isGable ? 'inline' : 'none';
   document.getElementById('flipShadeLabel').style.display = isGable ? 'inline' : 'none';
 }
 
 function onGenerateLayoutClick(){
-  const isGable = document.getElementById('mountType').value === 'gable';
-  if(isGable){ generateRoofLayout(); } else { generateSolarLayout(); }
+  const mt = document.getElementById('mountType').value;
+  if(mt === 'gable' || mt === 'slab'){ generateRoofLayout(mt); } else { generateSolarLayout(); }
 }
 
-// ---- 건물 박공(경사지붕) 배치: 지붕에 밀착 설치(같은 평면) 가정으로, 열 간 자기그늘 방지 간격은 필요 없음.
-// 대신 위성사진에서 보이는 경계(면적재기로 그린 것)는 실제 지붕의 "수평 투영"이라, 물매 방향으로는
+// ---- 건물 슬라브(평지붕)·박공(경사지붕) 배치: 지붕에 밀착 설치 가정으로, 열 간 자기그늘 방지 간격은 필요 없음.
+// 박공(경사지붕)의 경우, 위성사진에서 보이는 경계(면적재기로 그린 것)는 실제 지붕의 "수평 투영"이라, 물매 방향으로는
 // cos(물매각)만큼 짧게 보이는 것을 보정해서 실제 지붕 경사면 위의 모듈 개수를 계산함.
+// 슬라브(평지붕)는 지붕 자체가 평평해서 이 보정이 필요 없고(거치대만 낮은 각도로 기울어짐), 처마/용마루 구분도 없음.
 // ⚠ 주변 건물·나무 등 외부 장애물에 의한 음영(그림자) 분석은 3D 높이 데이터가 없어 포함하지 않음.
-function generateRoofLayout(){
+function generateRoofLayout(mountMode){
+  const isGable = mountMode === 'gable';
   const statusEl = document.getElementById('roadviewStatus');
   if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){
     statusEl.textContent = '❌ 먼저 "📐 면적재기" 또는 "📏 거리재기"(점 3개 이상)로 지붕(물매면 하나) 경계를 위성사진에서 따라 그려서 완료해주세요.';
@@ -986,13 +994,15 @@ function generateRoofLayout(){
   const lat0Rad = lastAreaPolygonPath.reduce((s,p)=>s+p.getLat(),0) / lastAreaPolygonPath.length * Math.PI/180;
   const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad));
   const projectedAreaM2 = shoelaceArea(lastAreaPolygonPath); // 위성사진(수평 투영) 기준 면적
-  const trueRoofAreaM2 = projectedAreaM2 / cosPitch; // 실제 경사면 면적(물매 보정)
+  // 박공(경사지붕): 지붕 자체가 기울어져 있어 위성사진엔 실제보다 짧게 보임 → cos(물매각)로 보정
+  // 슬라브(평지붕): 지붕 자체는 평평하고 거치대만 기울어진 것이라 보정 불필요(위성사진 면적 = 실제 지붕 면적)
+  const trueRoofAreaM2 = isGable ? (projectedAreaM2 / cosPitch) : projectedAreaM2;
 
-  // 모듈은 세로(긴 변이 물매 방향)로 설치한다고 가정: 물매 방향 치수는 cos(물매각)만큼 투영되어 짧게 보임
-  const footprintRidgeDir = panelW; // 마루선(용마루)과 나란한 방향 — 투영 왜곡 없음
-  const footprintSlopeDirProjected = panelL * cosPitch; // 물매 내려가는 방향 — 위성사진엔 이만큼만 보임
-  const tightPitch = footprintSlopeDirProjected + gap * cosPitch; // 처마 쪽(슬로프 앞쪽 절반): 촘촘하게
-  const shadePitch = footprintSlopeDirProjected + shadeGap * cosPitch; // 용마루 쪽(슬로프 뒤쪽 절반): 그늘 고려해 넓게
+  // 모듈은 세로(긴 변이 물매/거치대 기울기 방향)로 설치한다고 가정: 그 방향 치수는 cos(각도)만큼 투영되어 짧게 보임
+  const footprintRidgeDir = panelW; // 마루선과 나란한(또는 슬라브에서는 임의 기준) 방향 — 투영 왜곡 없음
+  const footprintSlopeDirProjected = panelL * cosPitch; // 기울어지는 방향 — 위성사진엔 이만큼만 보임
+  const tightPitch = footprintSlopeDirProjected + gap * cosPitch; // 처마 쪽(슬로프 앞쪽 절반, 박공만): 촘촘하게
+  const shadePitch = isGable ? (footprintSlopeDirProjected + shadeGap * cosPitch) : tightPitch; // 용마루 쪽(뒤쪽 절반, 박공만): 그늘 고려해 넓게 — 슬라브는 구분 없이 전부 촘촘하게
 
   const polyRot = polyXY.map(p => rotateXY(p.x, p.y, -slopeAzimuthRad));
   const xs = polyRot.map(p=>p.x), ys = polyRot.map(p=>p.y);
@@ -1052,7 +1062,14 @@ function generateRoofLayout(){
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
 
-  statusEl.textContent = `✅ 박공지붕 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 실제 경사면 면적은 위성사진 투영 면적(${Math.round(projectedAreaM2).toLocaleString('ko-KR')}㎡)보다 큰 약 ${Math.round(trueRoofAreaM2).toLocaleString('ko-KR')}㎡로 보정해 계산했습니다(물매 ${roofPitchDeg}°). ${flipShade ? '용마루쪽' : '처마쪽'} 절반은 간격 ${gap}m, ${flipShade ? '처마쪽' : '용마루쪽'} 절반은 그늘 고려 간격 ${shadeGap}m로 배치했습니다(반대로 나오면 "처마/용마루 반대로 뒤집기" 체크 후 다시 생성하세요). 지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
+  const roofTypeLabel = isGable ? '박공지붕' : '슬라브(평지붕)';
+  const areaNote = isGable
+    ? `실제 경사면 면적은 위성사진 투영 면적(${Math.round(projectedAreaM2).toLocaleString('ko-KR')}㎡)보다 큰 약 ${Math.round(trueRoofAreaM2).toLocaleString('ko-KR')}㎡로 보정해 계산했습니다(물매 ${roofPitchDeg}°). `
+    : `지붕 면적 약 ${Math.round(trueRoofAreaM2).toLocaleString('ko-KR')}㎡ 기준(거치대 설치각도 ${roofPitchDeg}°). `;
+  const gapNote = isGable
+    ? `${flipShade ? '용마루쪽' : '처마쪽'} 절반은 간격 ${gap}m, ${flipShade ? '처마쪽' : '용마루쪽'} 절반은 그늘 고려 간격 ${shadeGap}m로 배치했습니다(반대로 나오면 "처마/용마루 반대로 뒤집기" 체크 후 다시 생성하세요). `
+    : `모듈간격 ${gap}m로 지붕 전체에 촘촘하게 배치했습니다. `;
+  statusEl.textContent = `✅ ${roofTypeLabel} 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. ${areaNote}${gapNote}지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
