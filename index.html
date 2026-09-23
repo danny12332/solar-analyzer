@@ -721,7 +721,8 @@ async function showParcelBoundary(){
     const centerLat = path.reduce((s,p)=>s+p.lat,0) / path.length;
     const centerLng = path.reduce((s,p)=>s+p.lng,0) / path.length;
     parcelGroupId = registerMeasureGroup([poly]);
-    const content = `<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>📍 ${props.jibun || props.addr || '필지 경계'}</span>${closeBtnHtml(`removeMeasureGroup(${parcelGroupId}); parcelGroupId=null;`)}</div>`;
+    const labelText = props.addr || (props.jibun ? String(props.jibun).replace(/\s*[가-힣]+$/, '') : '') || '필지 경계';
+    const content = `<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>📍 ${labelText}</span>${closeBtnHtml(`removeMeasureGroup(${parcelGroupId}); parcelGroupId=null;`)}</div>`;
     const label = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(centerLat, centerLng), content, yAnchor: -0.2, clickable: true });
     label.setMap(map);
     measureShapes.push(label);
