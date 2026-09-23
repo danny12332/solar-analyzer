@@ -324,6 +324,8 @@
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
           <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="0" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
           <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
+          <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
+          <label id="flipShadeLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;"><input id="flipShadeHalf" type="checkbox" style="vertical-align:middle;"> 처마/용마루 반대로 뒤집기</label>
           <button type="button" class="run" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="onGenerateLayoutClick()">배치 생성</button>
           <button type="button" class="run" id="solarIllustrationBtn" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--forest-dim);color:var(--forest);width:auto;display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
         </div>
@@ -933,15 +935,20 @@ function removeSolarLayout(id){
 
 function onMountTypeChange(){
   const isGable = document.getElementById('mountType').value === 'gable';
+  const curTilt = document.getElementById('panelTilt').value;
+  const curAzimuth = document.getElementById('panelAzimuth').value; // 기존 값(자동 감지된 방위각 포함) 유지
+  const curSetback = document.getElementById('panelSetback').value;
   document.getElementById('tiltLabel').innerHTML = isGable
-    ? '지붕 물매 경사각(°) <input id="panelTilt" type="number" value="20" step="1" style="width:48px;padding:2px 4px;">'
-    : '경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;">';
+    ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="${curTilt || 20}" step="1" style="width:48px;padding:2px 4px;">`
+    : `경사각(°) <input id="panelTilt" type="number" value="${curTilt || 30}" step="1" style="width:48px;padding:2px 4px;">`;
   document.getElementById('azimuthLabel').innerHTML = isGable
-    ? '물매 방향(°, 경사 내려가는 쪽, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;">'
-    : '방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;">';
+    ? `물매 방향(°, 경사 내려가는 쪽, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`
+    : `방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`;
   document.getElementById('setbackLabel').innerHTML = isGable
-    ? '처마/가장자리 이격(m) <input id="panelSetback" type="number" value="0.3" step="0.1" min="0" style="width:50px;padding:2px 4px;">'
-    : '경계 이격(m) <input id="panelSetback" type="number" value="0" step="0.5" min="0" style="width:50px;padding:2px 4px;">';
+    ? `처마/가장자리 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0.3}" step="0.1" min="0" style="width:50px;padding:2px 4px;">`
+    : `경계 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0}" step="0.5" min="0" style="width:50px;padding:2px 4px;">`;
+  document.getElementById('shadeGapLabel').style.display = isGable ? 'inline' : 'none';
+  document.getElementById('flipShadeLabel').style.display = isGable ? 'inline' : 'none';
 }
 
 function onGenerateLayoutClick(){
@@ -965,6 +972,8 @@ function generateRoofLayout(){
   const roofPitchDeg = parseFloat(document.getElementById('panelTilt').value) || 20;
   const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 645;
   const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
+  const shadeGap = parseFloat(document.getElementById('panelShadeGap').value) || 0.1;
+  const flipShade = document.getElementById('flipShadeHalf').checked;
   const setback = Math.max(parseFloat(document.getElementById('panelSetback').value) || 0, 0);
   const slopeAzimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
   const slopeAzimuthRad = slopeAzimuthDeg * Math.PI/180;
@@ -982,16 +991,19 @@ function generateRoofLayout(){
   // 모듈은 세로(긴 변이 물매 방향)로 설치한다고 가정: 물매 방향 치수는 cos(물매각)만큼 투영되어 짧게 보임
   const footprintRidgeDir = panelW; // 마루선(용마루)과 나란한 방향 — 투영 왜곡 없음
   const footprintSlopeDirProjected = panelL * cosPitch; // 물매 내려가는 방향 — 위성사진엔 이만큼만 보임
-  const rowPitchProjected = footprintSlopeDirProjected + gap * cosPitch; // 밀착설치라 자기그늘 방지 간격 불필요, 모듈 간 물리적 간격만 반영
+  const tightPitch = footprintSlopeDirProjected + gap * cosPitch; // 처마 쪽(슬로프 앞쪽 절반): 촘촘하게
+  const shadePitch = footprintSlopeDirProjected + shadeGap * cosPitch; // 용마루 쪽(슬로프 뒤쪽 절반): 그늘 고려해 넓게
 
   const polyRot = polyXY.map(p => rotateXY(p.x, p.y, -slopeAzimuthRad));
   const xs = polyRot.map(p=>p.x), ys = polyRot.map(p=>p.y);
   const xmin = Math.min(...xs), xmax = Math.max(...xs);
   const ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const ymid = (ymin + ymax) / 2; // 슬로프의 물리적 절반 지점 — 방위각 0(정남)일 때 y가 작을수록 처마(남)쪽, 클수록 용마루(북)쪽
 
   const panelShapes = [];
   let panelCount = 0, rowsUsed = 0, maxCols = 0;
-  for(let y = ymin; y + footprintSlopeDirProjected <= ymax; y += rowPitchProjected){
+  let y = ymin;
+  while(y + footprintSlopeDirProjected <= ymax){
     let colsInRow = 0;
     for(let x = xmin; x + footprintRidgeDir <= xmax; x += (footprintRidgeDir + gap)){
       const cornersRot = [
@@ -1011,6 +1023,7 @@ function generateRoofLayout(){
       }
     }
     if(colsInRow > 0){ rowsUsed++; maxCols = Math.max(maxCols, colsInRow); }
+    y += ((y < ymid) !== flipShade) ? tightPitch : shadePitch;
   }
 
   if(panelCount === 0){
@@ -1039,7 +1052,7 @@ function generateRoofLayout(){
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
 
-  statusEl.textContent = `✅ 박공지붕 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 실제 경사면 면적은 위성사진 투영 면적(${Math.round(projectedAreaM2).toLocaleString('ko-KR')}㎡)보다 큰 약 ${Math.round(trueRoofAreaM2).toLocaleString('ko-KR')}㎡로 보정해 계산했습니다(물매 ${roofPitchDeg}°). 지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
+  statusEl.textContent = `✅ 박공지붕 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 실제 경사면 면적은 위성사진 투영 면적(${Math.round(projectedAreaM2).toLocaleString('ko-KR')}㎡)보다 큰 약 ${Math.round(trueRoofAreaM2).toLocaleString('ko-KR')}㎡로 보정해 계산했습니다(물매 ${roofPitchDeg}°). ${flipShade ? '용마루쪽' : '처마쪽'} 절반은 간격 ${gap}m, ${flipShade ? '처마쪽' : '용마루쪽'} 절반은 그늘 고려 간격 ${shadeGap}m로 배치했습니다(반대로 나오면 "처마/용마루 반대로 뒤집기" 체크 후 다시 생성하세요). 지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
