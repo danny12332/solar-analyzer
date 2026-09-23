@@ -676,6 +676,18 @@ function closeAddressOverlay(){
 
 let parcelGroupId = null; // 현재 표시중인 필지 경계선의 그룹 id
 
+// 브이월드 인증키 — vworld.kr에서 발급받은 값 (도메인 등록: danny12332.github.io)
+// ⚠ Cloudflare Worker를 거치면 "클라우드플레어가 자기 자신에게 보내는 요청"으로 오인되어
+// 520 오류가 나는 것을 확인했음 — 브이월드 자체가 도메인 파라미터 기반 브라우저 직접 호출을
+// 공식 지원하므로(문서에 명시), Worker를 거치지 않고 브라우저에서 직접 호출한다.
+const VWORLD_KEY = '7C378295-CDF2-435C-9750-4A1533B12E69';
+const VWORLD_DOMAIN = 'danny12332.github.io';
+
+function vworldPick(xml, tag){
+  const m = xml.match(new RegExp(`<${tag}>\\s*<!\\[CDATA\\[\\s*([\\s\\S]*?)\\s*\\]\\]>\\s*<\\/${tag}>`));
+  return m ? m[1].trim() : null;
+}
+
 async function showParcelBoundary(){
   const statusEl = document.getElementById('parcelStatus');
   if(!lastLatLng){
@@ -688,10 +700,25 @@ async function showParcelBoundary(){
   if(parcelGroupId){ removeMeasureGroup(parcelGroupId); parcelGroupId = null; }
 
   try{
-    const res = await fetch(`https://rough-moon-e02c.ruwk66.workers.dev/vworld-parcel?lat=${lastLatLng.getLat()}&lng=${lastLatLng.getLng()}`);
-    const data = await res.json();
-    if(!res.ok || data.error || !data.path || data.path.length < 3){
-      statusEl.textContent = `❌ 이 위치의 필지 경계를 찾지 못했습니다${data && data.error ? ' (' + data.error + ')' : ''}. 브이월드 연속지적도에 등록되지 않은 지역일 수 있습니다.`;
+    const lat = lastLatLng.getLat(), lng = lastLatLng.getLng();
+    const geomFilter = encodeURIComponent(`POINT(${lng} ${lat})`);
+    const vworldUrl = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&format=xml&errorformat=xml&size=1&page=1&data=LP_PA_CBND_BUBUN&geomFilter=${geomFilter}&columns=pnu,jibun,ag_geom,addr&geometry=true&attribute=true&crs=EPSG:4326&domain=${VWORLD_DOMAIN}&key=${VWORLD_KEY}`;
+    const res = await fetch(vworldUrl);
+    const xml = await res.text();
+
+    const isOk = /<status>\s*<!\[CDATA\[\s*OK\s*\]\]>\s*<\/status>/.test(xml) || xml.includes('<status>OK</status>');
+    const posListMatch = xml.match(/<gml:posList[^>]*>([\s\S]*?)<\/gml:posList>/);
+    if(!isOk || !posListMatch){
+      statusEl.textContent = `❌ 이 위치의 필지 경계를 찾지 못했습니다. 브이월드 연속지적도에 등록되지 않은 지역일 수 있습니다.`;
+      statusEl.style.color = '#b3402a';
+      return;
+    }
+    const nums = posListMatch[1].trim().split(/\s+/).map(Number);
+    const data = { pnu: vworldPick(xml,'pnu'), jibun: vworldPick(xml,'jibun'), addr: vworldPick(xml,'addr'), path: [] };
+    for(let i=0; i<nums.length; i+=2){ data.path.push({ lat: nums[i+1], lng: nums[i] }); } // posList는 "lng lat" 순서
+
+    if(data.path.length < 3){
+      statusEl.textContent = '❌ 경계 좌표를 해석하지 못했습니다.';
       statusEl.style.color = '#b3402a';
       return;
     }
