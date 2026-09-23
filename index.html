@@ -935,12 +935,12 @@ function removeSolarLayout(id){
 
 function onMountTypeChange(){
   const isGable = document.getElementById('mountType').value === 'gable';
-  const curTilt = document.getElementById('panelTilt').value;
   const curAzimuth = document.getElementById('panelAzimuth').value; // 기존 값(자동 감지된 방위각 포함) 유지
   const curSetback = document.getElementById('panelSetback').value;
+  // 경사각은 지상 거치대 각도(30°)와 지붕 물매(10°)가 물리적으로 다른 값이라 모드 전환 시 항상 해당 모드의 기본값으로 재설정
   document.getElementById('tiltLabel').innerHTML = isGable
-    ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="${curTilt || 20}" step="1" style="width:48px;padding:2px 4px;">`
-    : `경사각(°) <input id="panelTilt" type="number" value="${curTilt || 30}" step="1" style="width:48px;padding:2px 4px;">`;
+    ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="10" step="1" style="width:48px;padding:2px 4px;">`
+    : `경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;">`;
   document.getElementById('azimuthLabel').innerHTML = isGable
     ? `물매 방향(°, 경사 내려가는 쪽, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`
     : `방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`;
@@ -969,7 +969,7 @@ function generateRoofLayout(){
   }
   const panelW = parseFloat(document.getElementById('panelW').value) || 1.134;
   const panelL = parseFloat(document.getElementById('panelL').value) || 2.465;
-  const roofPitchDeg = parseFloat(document.getElementById('panelTilt').value) || 20;
+  const roofPitchDeg = parseFloat(document.getElementById('panelTilt').value) || 10;
   const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 645;
   const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
   const shadeGap = parseFloat(document.getElementById('panelShadeGap').value) || 0.1;
