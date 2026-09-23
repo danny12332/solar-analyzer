@@ -326,6 +326,7 @@
           <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
           <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
           <label id="flipShadeLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;"><input id="flipShadeHalf" type="checkbox" style="vertical-align:middle;"> 처마/용마루 반대로 뒤집기</label>
+          <label id="ewRackLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">동서지붕 남향 거치대 각도(°) <input id="panelRackTilt" type="number" value="10" step="1" min="0" style="width:48px;padding:2px 4px;"></label>
           <button type="button" class="run" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="onGenerateLayoutClick()">배치 생성</button>
           <button type="button" class="run" id="solarIllustrationBtn" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--forest-dim);color:var(--forest);width:auto;display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
         </div>
@@ -1082,6 +1083,7 @@ function onMountTypeChange(){
   // 처마/용마루 그늘 구간 구분은 실제로 "경사면"인 박공지붕에만 의미가 있음 — 평평한 슬라브에는 해당 없음
   document.getElementById('shadeGapLabel').style.display = isGable ? 'inline' : 'none';
   document.getElementById('flipShadeLabel').style.display = isGable ? 'inline' : 'none';
+  document.getElementById('ewRackLabel').style.display = isGable ? 'inline' : 'none';
 }
 
 function onGenerateLayoutClick(){
@@ -1114,6 +1116,12 @@ function generateRoofLayout(mountMode){
   const slopeAzimuthRad = slopeAzimuthDeg * Math.PI/180;
   const roofPitchRad = roofPitchDeg * Math.PI/180;
   const cosPitch = Math.cos(roofPitchRad);
+
+  // 박공지붕인데 물매 방향이 동/서쪽(|방위각| > 45°)이면 → 남향 거치대 열 배치(동서지붕 전용)
+  if(isGable && Math.abs(slopeAzimuthDeg) > 45){
+    generateEastWestRoofLayout();
+    return;
+  }
 
   const map = ensureKakaoMap();
   if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; }
@@ -1197,6 +1205,111 @@ function generateRoofLayout(mountMode){
     ? `${flipShade ? '용마루쪽' : '처마쪽'} 절반은 간격 ${gap}m, ${flipShade ? '처마쪽' : '용마루쪽'} 절반은 그늘 고려 간격 ${shadeGap}m로 배치했습니다(반대로 나오면 "처마/용마루 반대로 뒤집기" 체크 후 다시 생성하세요). `
     : `모듈간격 ${gap}m로 지붕 전체에 촘촘하게 배치했습니다. `;
   statusEl.textContent = `✅ ${roofTypeLabel} 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. ${areaNote}${gapNote}지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
+  statusEl.style.color = 'var(--ink-soft)';
+}
+
+// ---- 동서지붕(박공, 물매가 동/서쪽) 전용 배치 ----
+// 지붕 경사면을 따라 붙이지 않고, 용마루(마루선) 방향 중 남쪽에 가까운 쪽을 향하도록 거치대를 세워
+// 마루선에 수직인 열(row)을 마루선 방향으로 반복 배치함. 열 간격은 지상 배치와 같은 동지 남중고도 공식 사용.
+// 경계(면적재기)는 물매면 하나로 간주(용마루를 넘어가는 배치는 하지 않음).
+function generateEastWestRoofLayout(){
+  const statusEl = document.getElementById('roadviewStatus');
+  const panelW = parseFloat(document.getElementById('panelW').value) || 1.134;
+  const panelL = parseFloat(document.getElementById('panelL').value) || 2.465;
+  const roofPitchDeg = parseFloat(document.getElementById('panelTilt').value) || 10;
+  const rackTiltRaw = parseFloat(document.getElementById('panelRackTilt').value);
+  const rackTiltDeg = isNaN(rackTiltRaw) ? 10 : Math.max(rackTiltRaw, 0);
+  const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 645;
+  const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
+  const setback = Math.max(parseFloat(document.getElementById('panelSetback').value) || 0, 0);
+  const slopeAzimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
+
+  // 마루선 방향의 두 방위각(물매 방향 ±90°) 중 정남(0°)에 가까운 쪽 선택 → 항상 -90°~+90° 범위
+  let facingAzDeg = slopeAzimuthDeg - 90;
+  while(facingAzDeg > 180) facingAzDeg -= 360;
+  while(facingAzDeg <= -180) facingAzDeg += 360;
+  if(Math.abs(facingAzDeg) > 90){ facingAzDeg = facingAzDeg > 0 ? facingAzDeg - 180 : facingAzDeg + 180; }
+  const facingAzRad = facingAzDeg * Math.PI/180;
+
+  const cosPitch = Math.cos(roofPitchDeg * Math.PI/180);
+  const rackTiltRad = rackTiltDeg * Math.PI/180;
+
+  const map = ensureKakaoMap();
+  if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; }
+
+  const lat0Rad = lastAreaPolygonPath.reduce((s,p)=>s+p.getLat(),0) / lastAreaPolygonPath.length * Math.PI/180;
+  const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad));
+  const projectedAreaM2 = shoelaceArea(lastAreaPolygonPath);
+  const trueRoofAreaM2 = projectedAreaM2 / cosPitch;
+
+  // 열 진행 방향(y') = 마루선 방향(수평) → 동지 남중고도 기준 자기그늘 방지 간격 (지상 배치와 동일 공식)
+  const latAbsDeg = Math.abs(lat0Rad * 180/Math.PI);
+  const minSunAltDeg = Math.max(90 - latAbsDeg - 23.44, 5);
+  const minSunAltRad = minSunAltDeg * Math.PI/180;
+  const footprintRow = panelL * Math.cos(rackTiltRad);             // 모듈 길이 방향(거치대 기울기 방향) 투영
+  const shadowLen = (panelL * Math.sin(rackTiltRad)) / Math.tan(minSunAltRad);
+  const pitch = footprintRow + shadowLen;
+  // 열 길이 방향(x') = 지붕 물매 방향 → 위성사진에서는 cos(물매각)만큼 짧게 보임
+  const footprintAcross = panelW * cosPitch;
+  const gapAcross = gap * cosPitch;
+
+  const polyRot = polyXY.map(p => rotateXY(p.x, p.y, -facingAzRad));
+  const xs = polyRot.map(p=>p.x), ys = polyRot.map(p=>p.y);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+
+  const panelShapes = [];
+  let panelCount = 0, rowsUsed = 0, maxCols = 0;
+  for(let y = ymin; y + footprintRow <= ymax; y += pitch){
+    let colsInRow = 0;
+    for(let x = xmin; x + footprintAcross <= xmax; x += (footprintAcross + gapAcross)){
+      const cornersRot = [
+        {x, y}, {x: x+footprintAcross, y}, {x: x+footprintAcross, y: y+footprintRow}, {x, y: y+footprintRow}
+      ];
+      const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, facingAzRad));
+      const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
+      if(fits){
+        const path = cornersReal.map(c => solarToLatLng(c.x, c.y, lat0Rad));
+        const poly = new kakao.maps.Polygon({
+          map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
+          fillColor: '#4A5A1B', fillOpacity: 0.62
+        });
+        measureShapes.push(poly);
+        panelShapes.push(poly);
+        panelCount++; colsInRow++;
+      }
+    }
+    if(colsInRow > 0){ rowsUsed++; maxCols = Math.max(maxCols, colsInRow); }
+  }
+
+  if(panelCount === 0){
+    statusEl.textContent = '❌ 이 지붕 경계·이격거리 조건으로는 패널이 한 장도 들어가지 않습니다. 경계를 다시 그리거나 이격거리를 줄여보세요.';
+    statusEl.style.color = '#b3402a';
+    return;
+  }
+
+  const totalKw = (panelCount * wattPerPanel) / 1000;
+  const usedAreaM2 = panelCount * panelW * panelL;
+  const utilization = Math.round((usedAreaM2 / trueRoofAreaM2) * 100);
+
+  lastSolarStats = { rows: rowsUsed, cols: maxCols, panelCount, totalKw, utilization };
+  const illBtn = document.getElementById('solarIllustrationBtn');
+  illBtn.style.display = 'inline-block';
+  document.getElementById('solarIllustrationWrap').style.display = 'none';
+  illBtn.textContent = '🎨 일러스트로 보기';
+
+  solarGroupId = registerMeasureGroup(panelShapes);
+  const centerRot = { x:(xmin+xmax)/2, y: ymax };
+  const centerReal = rotateXY(centerRot.x, centerRot.y, facingAzRad);
+  const labelPos = solarToLatLng(centerReal.x, centerReal.y, lat0Rad);
+  const content = `<div style="display:flex;align-items:center;gap:8px;background:#4A5A1B;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;"><span>🏠 ${panelCount.toLocaleString('ko-KR')}장 · 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW · 지붕이용률 ${utilization}%</span>${closeBtnHtml(`removeSolarLayout(${solarGroupId})`)}</div>`;
+  const label = new kakao.maps.CustomOverlay({ position: labelPos, content, yAnchor: 1.6, clickable: true });
+  label.setMap(map);
+  measureShapes.push(label);
+  measureGroups[solarGroupId].shapes.push(label);
+
+  const dirText = facingAzDeg === 0 ? '정남' : (facingAzDeg > 0 ? `정남에서 동쪽으로 ${Math.abs(facingAzDeg)}°` : `정남에서 서쪽으로 ${Math.abs(facingAzDeg)}°`);
+  statusEl.textContent = `✅ 동서지붕(물매 방향 ${slopeAzimuthDeg}°) 남향 거치대 배치 ${panelCount.toLocaleString('ko-KR')}장 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈은 마루선 방향 중 남쪽에 가까운 방위각 ${facingAzDeg}°(${dirText})를 향하고, 거치대 각도 ${rackTiltDeg}°, 열간격 ${pitch.toFixed(2)}m(동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준)로 배치했습니다. 그린 경계를 물매면 하나로 보고 계산했으니 동·서 두 면은 각각 따로 그려서 배치하세요. 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
