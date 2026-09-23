@@ -158,7 +158,6 @@
           <div id="kepcoResult" style="margin-top:8px;"></div>
           <button class="run" id="bldrgstBtn" style="width:100%;background:#3B5B7A;margin-top:10px;" onclick="checkBuildingRegister()">🏢 이 주소의 건축물대장 조회</button>
           <div id="bldrgstResult" style="margin-top:8px;"></div>
-          <button class="run" id="parcelBtn" style="width:100%;background:#C2148A;margin-top:10px;" onclick="showParcelBoundary()">📍 이 필지의 정확한 경계선 표시 (지적도)</button>
           <p id="parcelStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
         </div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
@@ -718,15 +717,7 @@ async function showParcelBoundary(){
     });
     measureShapes.push(poly);
 
-    const centerLat = path.reduce((s,p)=>s+p.lat,0) / path.length;
-    const centerLng = path.reduce((s,p)=>s+p.lng,0) / path.length;
-    parcelGroupId = registerMeasureGroup([poly]);
-    const labelText = props.addr || (props.jibun ? String(props.jibun).replace(/\s*[가-힣]+$/, '') : '') || '필지 경계';
-    const content = `<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>📍 ${labelText}</span>${closeBtnHtml(`removeMeasureGroup(${parcelGroupId}); parcelGroupId=null;`)}</div>`;
-    const label = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(centerLat, centerLng), content, yAnchor: -0.2, clickable: true });
-    label.setMap(map);
-    measureShapes.push(label);
-    measureGroups[parcelGroupId].shapes.push(label);
+    parcelGroupId = registerMeasureGroup([poly]); // 경계선만 표시 (주소는 흰색 주소창에서 표시하므로 분홍 라벨은 표시하지 않음)
 
     statusEl.textContent = `✅ ${props.addr || props.jibun || ''} 필지 경계를 표시했습니다 (국토교통부 연속지적도 기준, PNU ${props.pnu || '-'}).`;
     statusEl.style.color = 'var(--ink-soft)';
