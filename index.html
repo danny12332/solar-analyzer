@@ -145,9 +145,10 @@
       <div class="toolbar-card">
         <h2>주소로 위치 확인</h2>
         <div class="row2" style="align-items:end;">
-          <div class="field" style="margin-bottom:0;">
+          <div class="field" style="margin-bottom:0;position:relative;">
             <label for="siteAddress">지번 주소 (예: 충남 천안시 동남구 광덕면 대평리 178-1)</label>
-            <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1">
+            <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1" autocomplete="off">
+            <div id="addrSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--card-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
           </div>
           <button class="run" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
         </div>
@@ -2617,6 +2618,78 @@ function renderResults(r){
   `;
 }
 
+// ===================== 주소 자동완성 (카카오 지오코더 addressSearch 결과 목록) =====================
+// 입력 중 카카오가 찾은 실제 주소 목록을 보여주고, 선택한 주소(지번 우선)로 입력칸을 채운 뒤 바로 위치 확인을 실행.
+(function initAddressAutocomplete(){
+  const setup = function(){
+    const input = document.getElementById('siteAddress');
+    const box = document.getElementById('addrSuggest');
+    if(!input || !box) return;
+    let timer = null, seq = 0, items = [], active = -1;
+    const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const hide = () => { box.style.display = 'none'; box.innerHTML = ''; items = []; active = -1; };
+    const highlight = () => {
+      Array.from(box.children).forEach((el, i) => { el.style.background = (i === active) ? 'var(--forest-dim)' : '#fff'; });
+      if(active >= 0 && box.children[active]) box.children[active].scrollIntoView({ block:'nearest' });
+    };
+    const choose = (i) => {
+      const it = items[i]; if(!it) return;
+      input.value = it.jibun || it.road;
+      hide();
+      lookupAddress(true);
+    };
+    const render = () => {
+      if(!items.length){ hide(); return; }
+      box.innerHTML = items.map((it, i) => `<div data-i="${i}" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--card-line);font-size:13px;line-height:1.4;">`
+        + `<div style="color:var(--ink);">${esc(it.jibun || it.road)}</div>`
+        + (it.jibun && it.road ? `<div style="font-size:11.5px;color:var(--ink-soft);">(도로명) ${esc(it.road)}</div>` : '')
+        + `</div>`).join('');
+      box.style.display = 'block';
+      Array.from(box.children).forEach(el => {
+        el.addEventListener('mousedown', e => { e.preventDefault(); choose(parseInt(el.dataset.i, 10)); });
+        el.addEventListener('mouseenter', () => { active = parseInt(el.dataset.i, 10); highlight(); });
+      });
+    };
+    const search = (q) => {
+      if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services){ return; }
+      const my = ++seq;
+      const geocoder = new kakao.maps.services.Geocoder();
+      geocoder.addressSearch(q, function(result, status){
+        if(my !== seq) return; // 늦게 도착한 이전 검색 결과는 무시
+        if(status !== kakao.maps.services.Status.OK || !result || !result.length){ items = []; render(); return; }
+        const seen = new Set();
+        items = [];
+        result.forEach(r => {
+          const jibun = r.address ? r.address.address_name : '';
+          const road = r.road_address ? r.road_address.address_name : '';
+          const key = jibun + '|' + road;
+          if(!(jibun || road) || seen.has(key)) return;
+          seen.add(key);
+          items.push({ jibun, road });
+        });
+        active = -1;
+        render();
+      }, { size: 10 });
+    };
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if(q.length < 2){ seq++; hide(); return; }
+      timer = setTimeout(() => search(q), 300);
+    });
+    input.addEventListener('keydown', e => {
+      if(box.style.display !== 'none' && items.length){
+        if(e.key === 'ArrowDown'){ e.preventDefault(); active = (active + 1) % items.length; highlight(); return; }
+        if(e.key === 'ArrowUp'){ e.preventDefault(); active = (active - 1 + items.length) % items.length; highlight(); return; }
+        if(e.key === 'Escape'){ hide(); return; }
+        if(e.key === 'Enter' && active >= 0){ e.preventDefault(); choose(active); return; }
+      }
+      if(e.key === 'Enter'){ e.preventDefault(); clearTimeout(timer); seq++; hide(); lookupAddress(true); }
+    });
+    input.addEventListener('blur', () => { setTimeout(hide, 150); });
+  };
+  if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', setup); } else { setup(); }
+})();
 </script>
 </body>
 </html>
