@@ -88,7 +88,8 @@
   .field label{display:block;font-size:12.5px;font-weight:500;color:var(--ink-soft);margin-bottom:5px;}
   .field select, .field input{width:100%;padding:10px 12px;border:1px solid #C4D3DF;border-radius:var(--r-sm);font-family:inherit;font-size:14px;background:var(--surface);color:var(--ink);transition:border-color .15s, box-shadow .15s;}
   .field select:focus, .field input:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px var(--sky-tint);}
-  .field .hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
+  .hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
+  .field .hint{margin-top:4px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0 4px;color:var(--ink-soft);}
   .checkrow input{width:auto;}
@@ -160,6 +161,23 @@
   .keyline{background:var(--sun-tint);border-left:3px solid var(--sun);padding:10px 14px;margin:10px 0;font-size:13px;border-radius:0 4px 4px 0;}
   .subhide{display:none;}
 
+  /* 부지 조건 입력: 단계형 폼 + 선택 버튼 */
+  .site-summary{background:var(--sky-tint);border:1px solid #BFD9EC;border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;line-height:1.6;margin-bottom:14px;color:var(--sky-deep);}
+  .site-summary b{color:var(--ink);}
+  .step{padding:12px 0 6px;border-top:1px solid var(--line);}
+  .step:first-of-type{border-top:none;padding-top:0;}
+  .step-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;margin:0 0 10px;color:var(--ink);}
+  .step-title .n{width:22px;height:22px;border-radius:50%;background:var(--sun);color:#2A1A00;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none;font-family:'IBM Plex Mono',monospace;}
+  .seg{display:flex;flex-wrap:wrap;gap:6px;}
+  .seg-group{width:100%;font-size:11px;color:var(--ink-faint);margin:4px 0 -2px;}
+  .seg button{border:1px solid #C4D3DF;background:var(--surface);color:var(--ink-soft);border-radius:999px;padding:7px 13px;font-family:inherit;font-size:12.5px;cursor:pointer;line-height:1.3;text-align:left;transition:background .12s,border-color .12s,color .12s;}
+  .seg button:hover{border-color:var(--sky);color:var(--sky-deep);}
+  .seg button[aria-pressed="true"]{background:var(--sky-deep);border-color:var(--sky-deep);color:#fff;font-weight:700;}
+  .seg button.danger[aria-pressed="true"]{background:var(--coral);border-color:var(--coral);}
+  .seg-src{display:none !important;}
+  .auto-note{font-size:11.5px;color:var(--leaf);margin:6px 0 0;min-height:16px;}
+  .auto-note.warn{color:var(--coral);}
+
   /* ---------- 참고자료 탭 ---------- */
   .ref-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:0;}
   .ref-tab-btn{background:none;border:none;padding:10px 16px;font-family:inherit;font-size:13.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s, border-color .15s;}
@@ -181,8 +199,8 @@
     </div>
   </div>
   <div class="meta">
-    기준일 2026.08 · 국가 법령·고시 + 실무자료 기준<br>
-    <b>이격거리: 도로 폐지 / 주거지 200m 상한 (2026.9.18 시행)</b>
+    기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
+    <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
 </header>
 
@@ -226,82 +244,96 @@
       <!-- INPUT -->
       <div class="card">
         <h2>부지 조건 입력</h2>
+        <div class="site-summary" id="siteSummary">주소를 검색하면 지목·필지 면적·용도지역이 자동으로 채워지고, 모두 읽히면 분석까지 자동으로 실행됩니다. 개별공시지가만 토지이음 값으로 고쳐주세요.</div>
 
+        <div class="step">
+          <p class="step-title"><span class="n">1</span>이 땅은 무엇인가요? (지목)</p>
+          <div class="seg" data-for="landCategory"></div>
+          <select id="landCategory" class="seg-src">
+            <option value="farm">전 · 답 · 과수원 (농지)</option>
+            <option value="forest">임야 (산지)</option>
+            <option value="misc">잡종지 · 대지 · 공장용지 등 (전용 절차 없음)</option>
+          </select>
+          <p class="auto-note" id="jimokNote"></p>
 
-      <div class="field">
-        <label for="landCategory">지목</label>
-        <select id="landCategory">
-          <option value="farm">전 · 답 · 과수원 (농지)</option>
-          <option value="forest">임야 (산지)</option>
-          <option value="misc">잡종지 · 대지 등 (전용 절차 없음)</option>
-        </select>
-      </div>
+          <div class="field" id="farmZoneField" style="margin-top:10px;">
+            <label>농지 구분</label>
+            <div class="seg" data-for="farmZone"></div>
+            <select id="farmZone" class="seg-src">
+              <option value="out">농업진흥지역 밖 (부과율 20%)</option>
+              <option value="protect">농업보호구역 — 1만㎡ 이하만 가능 (30%)</option>
+              <option value="core" data-danger="1">농업진흥구역(절대농지) — 원칙적 불허</option>
+            </select>
+          </div>
 
-      <div class="field" id="farmZoneField">
-        <label for="farmZone">농지 구분</label>
-        <select id="farmZone">
-          <option value="out">농업진흥지역 밖 (부과율 20%)</option>
-          <option value="protect">농업보호구역 — 진흥지역 내, 전용 1만㎡ 이하만 가능 (30%)</option>
-          <option value="core">농업진흥구역(절대농지) — 노지 태양광 원칙적 불허</option>
-        </select>
-      </div>
+          <div class="field" id="forestTypeField" style="display:none;margin-top:10px;">
+            <label>산지 구분</label>
+            <div class="seg" data-for="forestType"></div>
+            <select id="forestType" class="seg-src">
+              <option value="jun">준보전산지</option>
+              <option value="bo" data-danger="1">보전산지 — 원칙적 불허</option>
+              <option value="restrict" data-danger="1">산지전용·일시사용제한지역</option>
+            </select>
+          </div>
 
-      <div class="field" id="forestTypeField" style="display:none;">
-        <label for="forestType">산지 구분</label>
-        <select id="forestType">
-          <option value="jun">준보전산지</option>
-          <option value="bo">보전산지 — 발전시설 원칙적 불허</option>
-          <option value="restrict">산지전용·일시사용제한지역</option>
-        </select>
-      </div>
-
-      <div class="field" id="slopeField" style="display:none;">
-        <label for="slope">평균 경사도</label>
-        <select id="slope">
-          <option value="10">10° 미만</option>
-          <option value="20">10° ~ 20° 미만</option>
-          <option value="30">20° ~ 30° 미만</option>
-          <option value="99">30° 이상</option>
-        </select>
-        <p class="hint">산지 태양광은 통상 15° 초과 시 지자체 조례상 불허가 많음 (조례 없을 시 25° 참고)</p>
-      </div>
-
-      <div class="field">
-        <label for="useZone">용도지역</label>
-        <select id="useZone">
-          <optgroup label="도시지역">
-            <option value="urban_res">주거·상업지역</option>
-            <option value="urban_green">자연녹지·생산녹지지역</option>
-            <option value="urban_ind">공업지역</option>
-            <option value="urban_conserve">보전녹지지역 — 발전시설 원칙적 제한</option>
-          </optgroup>
-          <optgroup label="관리지역">
-            <option value="mgmt_plan">계획관리지역</option>
-            <option value="mgmt_prod">생산관리지역</option>
-            <option value="mgmt_conserve">보전관리지역</option>
-          </optgroup>
-          <option value="agri_forest">농림지역</option>
-          <option value="nature_conserve">자연환경보전지역</option>
-        </select>
-      </div>
-
-      <div class="row2">
-        <div class="field">
-          <label for="area">면적 (㎡)</label>
-          <input type="number" id="area" value="9900" min="1">
+          <div class="field" id="slopeField" style="display:none;margin-top:10px;">
+            <label>평균 경사도</label>
+            <div class="seg" data-for="slope"></div>
+            <select id="slope" class="seg-src">
+              <option value="10">10° 미만</option>
+              <option value="20">10~20°</option>
+              <option value="30">20~30°</option>
+              <option value="99">30° 이상</option>
+            </select>
+            <p class="hint">산지 태양광은 통상 15° 초과 시 지자체 조례상 불허가 많음 (조례 없을 시 25° 참고)</p>
+          </div>
         </div>
-        <div class="field">
-          <label for="price">개별공시지가 (원/㎡)</label>
-          <input type="number" id="price" value="35000" min="0">
-        </div>
-      </div>
 
-      <label class="checkrow"><input type="checkbox" id="useLocalOrdinance"> 이 지역 개발행위허가 규모가 국가 기본치보다 조례로 축소되어 있음</label>
-      <div class="field subhide" id="localLimitField">
-        <label for="localLimit">조례상 허가 면적 상한 (㎡)</label>
-        <input type="number" id="localLimit" value="10000">
-        <p class="hint">예: 거제시 도시계획조례 제17조 — 생산관리 1만㎡ / 보전관리 5천㎡ / 농림 1만㎡ 미만</p>
-      </div>
+        <div class="step">
+          <p class="step-title"><span class="n">2</span>용도지역</p>
+          <div class="seg" data-for="useZone"></div>
+          <select id="useZone" class="seg-src">
+            <optgroup label="도시지역">
+              <option value="urban_res">주거·상업</option>
+              <option value="urban_green">자연녹지·생산녹지</option>
+              <option value="urban_ind">공업</option>
+              <option value="urban_conserve" data-danger="1">보전녹지 — 원칙적 제한</option>
+            </optgroup>
+            <optgroup label="관리지역">
+              <option value="mgmt_plan">계획관리</option>
+              <option value="mgmt_prod">생산관리</option>
+              <option value="mgmt_conserve">보전관리</option>
+            </optgroup>
+            <optgroup label="기타">
+              <option value="agri_forest">농림지역</option>
+              <option value="nature_conserve">자연환경보전지역</option>
+            </optgroup>
+          </select>
+          <p class="auto-note" id="zoneNote"></p>
+          <p class="hint" style="margin-top:6px;">주소 검색 시 브이월드 용도지역도로 자동 판독합니다. 최종 확인은 "토지이용계획 바로 조회"(토지이음)에서 하세요.</p>
+        </div>
+
+        <div class="step">
+          <p class="step-title"><span class="n">3</span>면적과 공시지가</p>
+          <div class="row2">
+            <div class="field">
+              <label for="area">면적 (㎡)</label>
+              <input type="number" id="area" value="9900" min="1">
+              <p class="auto-note" id="areaNote"></p>
+            </div>
+            <div class="field">
+              <label for="price">개별공시지가 (원/㎡)</label>
+              <input type="number" id="price" value="35000" min="0">
+              <p class="hint">토지이음 화면의 개별공시지가를 입력</p>
+            </div>
+          </div>
+          <label class="checkrow"><input type="checkbox" id="useLocalOrdinance"> 이 지역 개발행위허가 규모가 국가 기본치보다 조례로 축소되어 있음</label>
+          <div class="field subhide" id="localLimitField">
+            <label for="localLimit">조례상 허가 면적 상한 (㎡)</label>
+            <input type="number" id="localLimit" value="10000">
+            <p class="hint">예: 거제시 도시계획조례 제17조 — 생산관리 1만㎡ / 보전관리 5천㎡ / 농림 1만㎡ 미만</p>
+          </div>
+        </div>
 
       <details style="margin-top:10px;">
         <summary style="font-size:12.5px;color:var(--forest);font-weight:700;">+ 토목공사비 · 개발부담금 계산 (선택 입력, 펼치기)</summary>
@@ -434,7 +466,7 @@
     <div class="ref-pane" id="tab-ordinance">
     <p class="footnote" style="margin-top:0;">이격거리·개발행위허가 규모 축소는 <b>지자체 조례 사항</b>으로 전국 기준이 통일되어 있지 않습니다. 대상 지역이 정해지면 해당 조례를 추가해 데이터베이스를 넓혀갈 수 있습니다.</p>
     <div class="keyline" style="margin-bottom:14px;">
-      <b>2026.8.11 국무회의 의결 — 「신에너지 및 재생에너지 개발·이용·보급 촉진법 시행령」 개정 (2026.9.18 시행)</b><br>
+      <b>「재생에너지 개발·이용·보급 촉진법」(2026.3 개정) 및 시행령(2026.8.11 국무회의 의결) — 2026.9.18부터 시행 중</b><br>
       전국 지자체 조례에 <b>국가 상한선</b>이 도입되었습니다.
       ① <b>도로 이격거리는 지자체가 아예 정할 수 없음 (사실상 전국 폐지)</b><br>
       ② <b>주거지역(5호 이상 주택 밀집지) 이격거리는 최대 200m 이내에서만</b> 지자체 조례로 정할 수 있음 — 기존 200m 초과 조례(300m·500m·1,000m 등)는 200m 이내로 축소 의무, 기존 100~200m 조례는 유지 가능<br>
@@ -446,7 +478,7 @@
       <tr><td>거제시 (조사자료 기준)</td><td>도시계획조례 제17조: 보전관리 5,000㎡ 미만 / 생산관리 10,000㎡ 미만 / 농림지역 10,000㎡ 미만 / 계획관리 30,000㎡ 미만</td><td>도로 이격거리 폐지, 주거지역(5호 이상) 200m 이내로 조례 정비 예정</td><td>국가 기본 상한(3만㎡)보다 개발행위 규모는 축소 적용 — 조례 확인의 중요성을 보여주는 사례</td></tr>
       <tr><td colspan="4" style="color:#9AA69B;">추가할 지자체 데이터를 알려주시면 이 표에 반영해 나가겠습니다</td></tr>
     </table>
-    <p class="footnote">근거: 기후에너지환경부 2026.8.11 보도자료(「신에너지 및 재생에너지법 시행령」 개정안 국무회의 의결). 개정 시행령은 2026.9.18부터 시행되며, 그 이전까지는 각 지자체의 기존 조례가 그대로 적용됩니다. 실제 적용 여부·개정 완료 시점은 관할 지자체에 반드시 재확인하세요.</p>
+    <p class="footnote">근거: 기후에너지환경부 2026.8.11 보도자료(「신에너지 및 재생에너지법 시행령」 개정안 국무회의 의결). 개정 법·시행령은 2026.9.18부터 시행 중입니다. 시행령 기준보다 강한 조례를 둔 지자체는 조례를 상한 이내로 정비해야 하나, 지자체별 개정 완료 여부는 다를 수 있으므로 관할 지자체에 반드시 재확인하세요. 예외: 역사문화환경 보존지역·보호구역·생태경관보전지역·관광지·관광단지·자연취락지구 등은 이격거리 적용의 예외가 인정됩니다(2026.8.11 보도 기준).</p>
     </div><!-- /tab-ordinance -->
 
     <div class="ref-pane" id="tab-lawdata">
@@ -488,7 +520,7 @@
       <table class="ref-table">
         <tr><th>부담금</th><th>산정식</th><th>확인</th></tr>
         <tr><td>농지보전부담금</td><td>면적 × MIN(개별공시지가 × 20%(진흥지역 밖)/30%(진흥지역 안), 50,000원/㎡)</td><td><span class="verified-badge v-true">법령 확인</span></td></tr>
-        <tr><td>대체산림자원조성비</td><td>면적 × [기준금액 + MIN(개별공시지가×0.1%, 기준금액)] — 2026년 기준금액: 준보전 8,340원/㎡ · 보전 10,840원/㎡ · 산지전용제한지역 16,680원/㎡</td><td><span class="verified-badge v-true">업로드 자료(2026 기준) — 산림청 최신 고시 재확인 권장</span></td></tr>
+        <tr><td>대체산림자원조성비</td><td>면적 × [기준금액 + MIN(개별공시지가×0.1%, 기준금액)] — 2026년 기준금액: 준보전 8,340원/㎡ · 보전 10,840원/㎡ · 산지전용제한지역 16,680원/㎡</td><td><span class="verified-badge v-true">2026년도 부과기준 고시(산림청고시 제2026-16호, 2026.1.30 시행) 존재 확인 · 금액은 업로드 자료 기준 — 산림청 최신 고시 재확인 권장</span></td></tr>
         <tr><td>산지복구비 예치금</td><td>면적÷10,000 × 평균경사도별 단가(만㎡당) — 10° 미만 8,528만4천원 · 10~20° 2억5,454만6천원 · 20~30° 3억3,695만3천원 · 30° 이상 4억3,868만1천원</td><td><span class="verified-badge v-true">업로드 자료 확인</span></td></tr>
         <tr><td>개발부담금 (지목변경 등 발생 시)</td><td>(종료시점지가 － 개시시점지가 － 정상지가상승분) × 면적 － 개발비용, 그 결과 × <b>25%</b>(일반 개발행위·대부분의 태양광 해당) 또는 20%(택지·산단 등 대규모 계획입지 사업, 개발제한구역 원소유자) — 개발이익환수법 제13조. 대상면적: 수도권 도시지역 660㎡ / 비수도권 도시지역 990㎡ / 비도시지역 1,650㎡ 이상</td><td><span class="verified-badge v-true">법령(제13조) 확인</span></td></tr>
       </table>
@@ -563,6 +595,172 @@ function toggleFields(){
   document.getElementById('slopeField').style.display = cat === 'forest' ? 'block' : 'none';
 }
 toggleFields();
+
+// ===== 선택 버튼(세그먼트) — 숨긴 <select>의 값을 그대로 쓰므로 기존 분석 로직은 변경 없음 =====
+function buildSegments(){
+  document.querySelectorAll('.seg[data-for]').forEach(seg => {
+    const sel = document.getElementById(seg.dataset.for);
+    if(!sel) return;
+    const addBtn = (o) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = o.textContent;
+      if(o.dataset.danger) b.classList.add('danger');
+      b.setAttribute('aria-pressed', sel.value === o.value ? 'true' : 'false');
+      b.addEventListener('click', () => { sel.value = o.value; sel.dispatchEvent(new Event('change')); });
+      seg.appendChild(b);
+    };
+    const render = () => {
+      seg.innerHTML = '';
+      Array.from(sel.children).forEach(child => {
+        if(child.tagName === 'OPTGROUP'){
+          const g = document.createElement('div'); g.className = 'seg-group'; g.textContent = child.label; seg.appendChild(g);
+          Array.from(child.children).forEach(o => addBtn(o));
+        } else addBtn(child);
+      });
+    };
+    sel.addEventListener('change', () => { render(); updateSiteSummary(); });
+    render();
+  });
+}
+function selText(id){ const s = document.getElementById(id); return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.split(' — ')[0].split(' (')[0] : ''; }
+function updateSiteSummary(){
+  const cat = document.getElementById('landCategory').value;
+  const parts = [selText('landCategory')];
+  if(cat === 'farm') parts.push(selText('farmZone'));
+  if(cat === 'forest'){ parts.push(selText('forestType')); parts.push('경사 ' + selText('slope')); }
+  parts.push(selText('useZone'));
+  const area = parseFloat(document.getElementById('area').value) || 0;
+  const price = parseFloat(document.getElementById('price').value) || 0;
+  parts.push(area.toLocaleString('ko-KR') + '㎡');
+  if(price) parts.push('공시지가 ' + price.toLocaleString('ko-KR') + '원/㎡');
+  document.getElementById('siteSummary').innerHTML = '현재 선택: <b>' + parts.filter(Boolean).join('</b> · <b>') + '</b>';
+}
+['area','price'].forEach(id => document.getElementById(id).addEventListener('input', updateSiteSummary));
+buildSegments();
+updateSiteSummary();
+
+// ===== 지적도 조회 결과로 지목·면적 자동 채움 =====
+// 지목 부호: 공간정보의 구축 및 관리 등에 관한 법률 시행규칙 별표(지목의 부호). 브이월드 jibun 끝 글자에서 읽음.
+const JIMOK_ABBR = { '전':'전','답':'답','과':'과수원','목':'목장용지','임':'임야','광':'광천지','염':'염전','대':'대','장':'공장용지','학':'학교용지','차':'주차장','주':'주유소용지','창':'창고용지','도':'도로','철':'철도용지','제':'제방','천':'하천','구':'구거','유':'유지','양':'양어장','수':'수도용지','공':'공원','체':'체육용지','원':'유원지','종':'종교용지','사':'사적지','묘':'묘지','잡':'잡종지' };
+const JIMOK_TO_CAT = { '전':'farm','답':'farm','과':'farm','목':'farm','임':'forest','대':'misc','장':'misc','창':'misc','차':'misc','주':'misc','학':'misc','잡':'misc' };
+const JIMOK_NOT_DEV = ['도','철','제','천','구','유','양','수','공','체','원','종','사','묘'];
+function applyParcelToForm(props, kakaoPath){
+  const note = document.getElementById('jimokNote');
+  const areaNote = document.getElementById('areaNote');
+  const jibun = String(props.jibun || '').trim();
+  const m = jibun.match(/([가-힣])$/);
+  note.className = 'auto-note'; note.textContent = '';
+  if(m && JIMOK_ABBR[m[1]]){
+    const ab = m[1], name = JIMOK_ABBR[ab];
+    if(JIMOK_TO_CAT[ab]){
+      const sel = document.getElementById('landCategory');
+      sel.value = JIMOK_TO_CAT[ab]; sel.dispatchEvent(new Event('change'));
+      note.textContent = `✅ 지적도상 지목 "${name}" → 1번 항목을 자동으로 골랐습니다. 토지이음에서 최종 확인하세요.`;
+    } else if(JIMOK_NOT_DEV.includes(ab)){
+      note.className = 'auto-note warn';
+      note.textContent = `⚠ 지적도상 지목이 "${name}"입니다. 도로·구거·하천 등은 개발행위 대상이 아니므로 1번 항목을 자동으로 고르지 않았습니다.`;
+    } else {
+      note.textContent = `지적도상 지목 "${name}" — 해당하는 항목을 직접 골라주세요.`;
+    }
+  }
+  if(kakaoPath && kakaoPath.length >= 3){
+    const a = Math.round(shoelaceArea(kakaoPath));
+    if(a > 0){
+      document.getElementById('area').value = a;
+      areaNote.textContent = `✅ 지적도 필지 면적 약 ${a.toLocaleString('ko-KR')}㎡ 자동 입력 (지도 좌표로 계산한 근사값 — 토지대장 면적과 다를 수 있음)`;
+      updateSiteSummary();
+    }
+  }
+  autoAnalyzeFromParcel();
+}
+
+// ===== 용도지역 자동 판독 → 자동 분석 =====
+// 브이월드 2D 데이터 API의 용도지역 레이어 4종(도시지역 LT_C_UQ111 / 관리지역 LT_C_UQ112 / 농림지역 LT_C_UQ113 / 자연환경보전지역 LT_C_UQ114)에
+// 검색 지점(POINT)이 어느 용도지역 폴리곤 안에 있는지 조회. 필지 경계와 같은 JSONP 방식.
+// 용도지역 이름 필드는 문서상 uname 으로 확인됨(속성 조건검색 예시). 응답에서 uname이 없으면 문자열 속성 중 '지역'이 들어간 값을 씀.
+const USEZONE_LAYERS = [
+  { id: 'LT_C_UQ111', label: '도시지역' },
+  { id: 'LT_C_UQ112', label: '관리지역' },
+  { id: 'LT_C_UQ113', label: '농림지역' },
+  { id: 'LT_C_UQ114', label: '자연환경보전지역' }
+];
+function useZoneKeyFromName(name){
+  const n = String(name || '');
+  if(!n) return null;
+  if(/주거|상업/.test(n)) return 'urban_res';
+  if(/자연녹지|생산녹지/.test(n)) return 'urban_green';
+  if(/공업/.test(n)) return 'urban_ind';
+  if(/보전녹지/.test(n)) return 'urban_conserve';
+  if(/계획관리/.test(n)) return 'mgmt_plan';
+  if(/생산관리/.test(n)) return 'mgmt_prod';
+  if(/보전관리/.test(n)) return 'mgmt_conserve';
+  if(/농림/.test(n)) return 'agri_forest';
+  if(/자연환경보전/.test(n)) return 'nature_conserve';
+  return null;
+}
+function pickZoneName(props){
+  if(!props) return '';
+  if(props.uname) return String(props.uname);
+  for(const [k,v] of Object.entries(props)){
+    if(typeof v === 'string' && /지역/.test(v) && !/^ag_geom$/i.test(k)) return v;
+  }
+  return '';
+}
+async function detectUseZone(lat, lng){
+  const found = [];
+  for(const layer of USEZONE_LAYERS){
+    try{
+      const data = await vworldJsonp({
+        service: 'data', version: '2.0', request: 'GetFeature',
+        format: 'json', errorformat: 'json', size: '5', page: '1',
+        data: layer.id,
+        geomFilter: `POINT(${lng} ${lat})`,
+        geometry: 'false', attribute: 'true', crs: 'EPSG:4326',
+        domain: VWORLD_DOMAIN, key: VWORLD_KEY
+      }, 8000);
+      const resp = data && data.response;
+      if(!resp || resp.status !== 'OK') continue;
+      const feats = (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
+      feats.forEach(f => {
+        const nm = pickZoneName(f.properties);
+        if(nm && !found.some(x => x.name === nm)) found.push({ name: nm, layer: layer.label, props: f.properties });
+      });
+    }catch(e){ /* 한 레이어 실패는 무시하고 다음 레이어 조회 */ }
+  }
+  return found;
+}
+let autoAnalyzeSeq = 0;
+async function autoAnalyzeFromParcel(){
+  const zoneNote = document.getElementById('zoneNote');
+  if(!lastLatLng || !zoneNote) return;
+  const my = ++autoAnalyzeSeq;
+  zoneNote.className = 'auto-note'; zoneNote.textContent = '용도지역 조회 중 (브이월드 용도지역도)...';
+  const lat = lastLatLng.getLat(), lng = lastLatLng.getLng();
+  const found = await detectUseZone(lat, lng);
+  if(my !== autoAnalyzeSeq) return; // 그 사이 다른 주소를 검색했으면 무시
+  if(!found.length){
+    zoneNote.className = 'auto-note warn';
+    zoneNote.textContent = '⚠ 용도지역을 자동으로 읽지 못했습니다. 토지이음에서 확인해 2번 항목을 직접 골라주세요.';
+    return;
+  }
+  const names = found.map(f => f.name);
+  const keys = names.map(useZoneKeyFromName).filter(Boolean);
+  const uniqKeys = [...new Set(keys)];
+  if(uniqKeys.length === 1){
+    const sel = document.getElementById('useZone');
+    sel.value = uniqKeys[0]; sel.dispatchEvent(new Event('change'));
+    zoneNote.textContent = `✅ 용도지역도상 "${names.join(', ')}" → 2번 항목을 자동으로 골랐습니다. 토지이음의 "다른 법령" 칸(농업진흥구역·보전산지 등)은 별도 확인이 필요합니다.`;
+    // 지목·용도지역이 모두 자동으로 채워졌으면 분석 자동 실행
+    runAnalysis();
+    const rs = document.getElementById('resultsWrap');
+    if(rs){ const n = document.createElement('p'); n.className = 'hint'; n.style.margin = '0 0 4px'; n.textContent = '자동 분석 결과입니다 — 개별공시지가는 기본값(또는 이전 입력값)이므로 토지이음 값으로 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.'; rs.prepend(n); }
+  } else if(uniqKeys.length > 1){
+    zoneNote.className = 'auto-note warn';
+    zoneNote.textContent = `⚠ 이 지점에 용도지역 ${names.join(', ')}이(가) 함께 조회됩니다(경계에 걸침). 2번 항목을 직접 골라주세요.`;
+  } else {
+    zoneNote.className = 'auto-note warn';
+    zoneNote.textContent = `⚠ 용도지역도상 "${names.join(', ')}" — 분석기 항목과 자동으로 맞추지 못했습니다. 2번 항목을 직접 골라주세요.`;
+  }
+}
 
 function switchRefTab(tabId){
   document.querySelectorAll('.ref-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
@@ -774,6 +972,7 @@ async function showParcelBoundary(){
     measureShapes.push(poly);
 
     parcelGroupId = registerMeasureGroup([poly]); // 경계선만 표시 (주소는 흰색 주소창에서 표시하므로 분홍 라벨은 표시하지 않음)
+    try { applyParcelToForm(props, kakaoPath); } catch(e){ console.warn('form autofill', e); }
 
     statusEl.textContent = `✅ ${props.addr || props.jibun || ''} 필지 경계를 표시했습니다 (국토교통부 연속지적도 기준, PNU ${props.pnu || '-'}).`;
     statusEl.style.color = 'var(--ink-soft)';
@@ -2650,7 +2849,7 @@ function runAnalysis(){
   if(eiaTarget) reco.push('소규모환경영향평가 협의 절차(통상 3~6개월)를 사업 일정에 반영하고, 인접 필지 합산 여부도 함께 확인하세요.');
   if(cat === 'forest' && forestType === 'jun') reco.push('준보전산지는 산지일시사용허가(최대 20년) 대상이며, 만료 후 원상복구 의무와 지목변경 불가 조건을 지주에게 미리 설명하는 것이 좋습니다.');
   if(cat === 'farm' && farmZone !== 'out') reco.push('농업진흥지역 관련 농지는 예외 요건(영농형 태양광 등)이나 진흥구역 해제 가능성을 함께 확인하세요.');
-  reco.push('2026.9.18부터 이격거리 상한(주거지 200m, 도로 폐지)이 전국 적용되므로, 인허가 신청 시점이 시행일 전후 어디인지에 따라 적용 조례가 달라질 수 있습니다. 관할 지자체에 조례 개정 완료 여부를 확인하세요.');
+  reco.push('2026.9.18부터 이격거리 상한(주거지 200m, 도로 폐지)이 시행 중입니다. 다만 지자체 조례 개정 완료 시점은 지역마다 다를 수 있으니, 관할 지자체에 현재 적용 중인 조례 값을 확인하세요.');
   reco.push('본 결과는 국가 법령과 업로드 자료 기준의 일반 분석이며, 세부 조례 요건과 최신 고시 단가는 관할 지자체·산림청·농지 관련 기관에 재확인이 필요합니다.');
 
   // ===== 토목공사비 =====
