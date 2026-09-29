@@ -52,6 +52,11 @@
   header.top .eyebrow{font-size:12px;color:#BFD6E8;margin:3px 0 0;}
   header.top .meta{font-size:12px;color:#CFE0EE;text-align:right;line-height:1.7;}
   header.top .meta b{color:#FFD27A;font-weight:500;}
+  header.top .ticker{display:flex;width:fit-content;margin-left:auto;gap:14px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:6px;padding:5px 12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:999px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#EAF2F8;}
+  header.top .ticker a{color:inherit;text-decoration:none;}
+  header.top .ticker .v{color:#FFD27A;font-weight:500;}
+  header.top .ticker .d{color:#BFD6E8;font-size:11px;}
+  @media (max-width:700px){header.top .ticker{justify-content:flex-start;margin-left:0;}}
   @media (max-width:700px){header.top .meta{text-align:left;}}
 
   /* ---------- 본문 틀 ---------- */
@@ -199,6 +204,9 @@
     </div>
   </div>
   <div class="meta">
+    <div class="ticker" id="marketTicker" title="전력거래소 메인 '오늘의 전력정보' 기준">
+      <a href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener" id="marketTickerLink">SMP · REC 시세 불러오는 중…</a>
+    </div>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
@@ -769,9 +777,24 @@ function findItemsWithKey(obj, key, depth){
 async function fetchLandInfo(pnu){
   const common = { key: VWORLD_KEY, domain: VWORLD_DOMAIN, pnu, format: 'json', numOfRows: '100', pageNo: '1' };
   const j = { ladfrl: null, landPrice: null, landUse: null, errors: {} };
+  // 개별공시지가: 올해 → 작년 → 전체 연도 순으로 시도 (연도 지정 조회가 응답이 작고 확실함)
+  const thisYear = new Date().getFullYear();
+  const fetchPrice = async () => {
+    const tried = [];
+    for(const yr of [String(thisYear), String(thisYear - 1), null]){
+      try{
+        const params = yr ? { ...common, numOfRows: '10', stdrYear: yr } : common;
+        const d = await nedJsonp('getIndvdLandPriceAttr', params);
+        const items = findItemsWithKey(d, 'pblntfPclnd');
+        if(items && items.length){ j.landPrice = d; return; }
+        tried.push((yr || '전체') + ':결과없음');
+      }catch(e){ tried.push((yr || '전체') + ':' + e.message); }
+    }
+    j.errors.landPrice = tried.join(' / ');
+  };
   await Promise.all([
     nedJsonp('ladfrlList', common).then(d => { j.ladfrl = d; }).catch(e => { j.errors.ladfrl = e.message; }),
-    nedJsonp('getIndvdLandPriceAttr', common).then(d => { j.landPrice = d; }).catch(e => { j.errors.landPrice = e.message; }),
+    fetchPrice(),
     nedJsonp('getLandUseAttr', common).then(d => { j.landUse = d; }).catch(e => { j.errors.landUse = e.message; })
   ]);
   if(!j.ladfrl && !j.landPrice && !j.landUse) throw new Error('브이월드 국가중점데이터 응답 없음: ' + JSON.stringify(j.errors));
@@ -845,13 +868,18 @@ function applyLandInfoToForm(info){
   if(info.price && info.price.price > 0){
     priceEl.value = info.price.price;
     if(priceNote) priceNote.textContent = `✅ 개별공시지가 ${info.price.price.toLocaleString('ko-KR')}원/㎡ (${info.price.year}년) 자동 입력`;
-  } else if(priceNote){ priceNote.className = 'auto-note warn'; priceNote.textContent = '⚠ 개별공시지가가 조회되지 않았습니다. 토지이음 값을 입력하세요.'; allSet = false; }
+  } else if(priceNote){ priceNote.className = 'auto-note warn'; priceNote.textContent = '⚠ 개별공시지가가 조회되지 않았습니다' + (info.errors && info.errors.landPrice ? ' (' + info.errors.landPrice + ')' : '') + '. 토지이음 값을 입력하세요.'; allSet = false; }
   // 용도지역 (토지이용계획 항목 중 분석기 용도지역과 맞는 것)
-  const zoneKeys = [...new Set(info.uses.map(u => useZoneKeyFromName(u.name)).filter(Boolean))];
-  const zoneNames = info.uses.filter(u => useZoneKeyFromName(u.name)).map(u => u.name + (u.rel ? '(' + u.rel + ')' : ''));
+  // 저촉여부: "포함"(필지 전체가 그 용도지역) → 채택, "저촉"(일부 걸침) → 포함이 없을 때만 채택, "접함"(경계만 닿음) → 제외
+  const zoneItems = info.uses.filter(u => useZoneKeyFromName(u.name) && !/접함/.test(u.rel));
+  const incl = zoneItems.filter(u => /포함/.test(u.rel));
+  const pick = incl.length ? incl : zoneItems;
+  const zoneKeys = [...new Set(pick.map(u => useZoneKeyFromName(u.name)))];
+  const zoneNames = pick.map(u => u.name + (u.rel ? '(' + u.rel + ')' : ''));
+  const touching = info.uses.filter(u => useZoneKeyFromName(u.name) && /접함/.test(u.rel)).map(u => u.name);
   if(zoneKeys.length === 1){
     const sel = document.getElementById('useZone'); sel.value = zoneKeys[0]; sel.dispatchEvent(new Event('change'));
-    zoneNote.className = 'auto-note'; zoneNote.textContent = `✅ 토지이용계획 "${zoneNames.join(', ')}" → 2번 항목 자동 선택`;
+    zoneNote.className = 'auto-note'; zoneNote.textContent = `✅ 토지이용계획 "${zoneNames.join(', ')}" → 2번 항목 자동 선택` + (touching.length ? ` (경계에 접한 ${touching.join(', ')}은 제외)` : '');
   } else if(zoneKeys.length > 1){
     zoneNote.className = 'auto-note warn'; zoneNote.textContent = `⚠ 용도지역이 둘 이상 조회됩니다: ${zoneNames.join(', ')} — 2번 항목을 직접 골라주세요.`; allSet = false;
   } else {
@@ -3242,6 +3270,21 @@ function renderResults(r){
     input.addEventListener('blur', () => { setTimeout(hide, 150); });
   };
   if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', setup); } else { setup(); }
+})();
+
+// ===== 상단 SMP·REC 시세 (Worker /market → 전력거래소 메인 "오늘의 전력정보") =====
+(function loadMarketTicker(){
+  const el = document.getElementById('marketTickerLink');
+  if(!el) return;
+  const fmt = n => Number(n).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  const md = d => d ? d.replace(/^\d{4}\./, '') : '';
+  fetch('https://rough-moon-e02c.ruwk66.workers.dev/market').then(r => r.json()).then(j => {
+    if(!j || !j.ok || (!j.smpLand && !j.rec)){ el.textContent = 'SMP · REC 시세 조회 실패 — 전력거래소에서 확인'; return; }
+    const parts = [];
+    if(j.smpLand) parts.push(`SMP(육지) <span class="v">${fmt(j.smpLand.avg)}</span> 원/kWh <span class="d">${md(j.smpLand.date)} 평균 · ${fmt(j.smpLand.min)}~${fmt(j.smpLand.max)}</span>`);
+    if(j.rec) parts.push(`REC <span class="v">${fmt(j.rec.avg)}</span> 원/REC <span class="d">${md(j.rec.date)} 평균 · 종가 ${fmt(j.rec.close)}</span>`);
+    el.innerHTML = parts.join(' <span class="d">|</span> ');
+  }).catch(() => { el.textContent = 'SMP · REC 시세 조회 실패 — 전력거래소에서 확인'; });
 })();
 </script>
 </body>
