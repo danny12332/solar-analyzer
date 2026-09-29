@@ -200,6 +200,29 @@
   .auto-note{font-size:11.5px;color:var(--leaf);margin:6px 0 0;min-height:16px;}
   .auto-note.warn{color:var(--coral);}
 
+  /* 토지 공부정보 패널 */
+  .land-info{margin-top:8px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);}
+  .li-head{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .li-head b{font-size:13.5px;}
+  .li-close{border:none;background:transparent;color:var(--ink-soft);font-size:15px;line-height:1;padding:2px 4px;cursor:pointer;border-radius:4px;}
+  .li-close:hover{background:var(--line);color:var(--ink);}
+  .li-sub{font-size:11px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;margin:2px 0 8px;word-break:break-all;}
+  .li-stats{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:0;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);font-size:12.5px;}
+  .li-stats dt{color:var(--ink-soft);margin:0;}
+  .li-stats dd{margin:0;font-weight:700;text-align:right;}
+  .li-stats dd small{font-weight:400;color:var(--ink-faint);}
+  .li-title{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;font-weight:700;margin:10px 0 4px;}
+  .li-title span{font-weight:400;font-size:11px;color:var(--ink-faint);}
+  .li-list{list-style:none;margin:0;padding:0;max-height:200px;overflow:auto;border-top:1px solid var(--line);}
+  .li-row{display:flex;align-items:center;gap:6px;padding:5px 2px;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .li-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .li-badge{flex:none;font-size:10px;padding:1px 6px;border-radius:999px;font-family:'IBM Plex Mono',monospace;}
+  .li-badge.need{background:var(--coral-tint);color:var(--coral);}
+  .li-badge.clear{background:var(--leaf-tint);color:var(--leaf);}
+  .li-rel{flex:none;width:34px;text-align:right;font-size:11px;color:var(--ink-faint);}
+  .li-rel.incl{color:var(--ink);font-weight:700;}
+  .li-rel.part{color:var(--sun-deep);font-weight:700;}
+
   /* ---------- 참고자료 탭 ---------- */
   .ref-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:0;}
   .ref-tab-btn{background:none;border:none;padding:10px 16px;font-family:inherit;font-size:13.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s, border-color .15s;}
@@ -873,23 +896,25 @@ function renderLandInfoPanel(info, pnu){
   const rows = info.uses.map(u => {
     const isBlock = LANDUSE_BLOCKERS.some(b => u.name.includes(b));
     const isZone = !!useZoneKeyFromName(u.name);
-    const badge = isBlock ? `<span class="tag need" style="width:auto;padding:2px 6px;">주의</span>` : (isZone ? `<span class="tag clear" style="width:auto;padding:2px 6px;">용도지역</span>` : '');
-    return `<li style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px;"><span style="flex:1;">${escLand(u.name)}</span><span style="color:var(--ink-faint);font-size:11.5px;">${escLand(u.rel)}</span>${badge}</li>`;
+    const badge = isBlock ? `<span class="li-badge need">주의</span>` : (isZone ? `<span class="li-badge clear">용도지역</span>` : '');
+    const relCls = /포함/.test(u.rel) ? 'incl' : (/저촉/.test(u.rel) ? 'part' : 'touch');
+    return `<li class="li-row"><span class="li-name" title="${escLand(u.name)}">${escLand(u.name)}</span>${badge}<span class="li-rel ${relCls}">${escLand(u.rel || '-')}</span></li>`;
   }).join('');
-  const priceText = info.price ? `${info.price.price.toLocaleString('ko-KR')}원/㎡ (${info.price.year}년 기준)` : '조회 안 됨';
+  const priceText = info.price ? `${info.price.price.toLocaleString('ko-KR')}원/㎡ <small>(${info.price.year}년)</small>` : '조회 안 됨';
   wrap.innerHTML = `
-    <div style="margin-top:8px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-        <b style="font-size:13px;">📄 토지 공부정보 (국가중점데이터 · PNU ${escLand(pnu)})</b>
-        <span onclick="document.getElementById('landInfoPanel').innerHTML=''" style="cursor:pointer;color:var(--ink-soft);font-weight:bold;padding:0 6px;">✕</span>
+    <div class="land-info">
+      <div class="li-head">
+        <b>📄 토지 공부정보</b>
+        <button type="button" class="li-close" onclick="document.getElementById('landInfoPanel').innerHTML=''" aria-label="닫기">✕</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,auto);gap:6px 18px;margin:8px 0 6px;font-size:12.5px;">
-        <span>지목 <b>${escLand(info.jimok || '-')}</b></span>
-        <span>공부면적 <b>${info.area ? info.area.toLocaleString('ko-KR') + '㎡' : '-'}</b></span>
-        <span>개별공시지가 <b>${escLand(priceText)}</b></span>
-      </div>
-      ${rows ? `<ul style="list-style:none;margin:6px 0 0;padding:0;max-height:220px;overflow:auto;">${rows}</ul>` : `<p class="hint">토지이용계획 항목이 조회되지 않았습니다.</p>`}
-      <p class="hint" style="margin-top:6px;">브이월드 국가중점데이터(토지임야·개별공시지가·토지이용계획) 기준입니다. 토지이음 열람과 기준일이 다를 수 있으니 인허가 신청 전 토지이음에서 최종 확인하세요.</p>
+      <div class="li-sub">국가중점데이터 · PNU ${escLand(pnu)}</div>
+      <dl class="li-stats">
+        <dt>지목</dt><dd>${escLand(info.jimok || '-')}</dd>
+        <dt>공부면적</dt><dd>${info.area ? info.area.toLocaleString('ko-KR') + '㎡' : '-'}</dd>
+        <dt>개별공시지가</dt><dd>${priceText}</dd>
+      </dl>
+      ${rows ? `<div class="li-title">토지이용계획 <span>${info.uses.length}건 · 포함/저촉/접함</span></div><ul class="li-list">${rows}</ul>` : `<p class="hint">토지이용계획 항목이 조회되지 않았습니다.</p>`}
+      <p class="hint" style="margin-top:8px;">토지이음 열람과 기준일이 다를 수 있으니 인허가 신청 전 토지이음에서 최종 확인하세요.</p>
     </div>`;
 }
 function applyLandInfoToForm(info){
