@@ -133,7 +133,13 @@
   .panel-bar input, .panel-bar select{padding:3px 5px;border:1px solid #E2CFA3;border-radius:4px;background:#fff;font-family:inherit;font-size:12px;color:var(--ink);}
   .panel-bar button.run{width:auto;margin:0;padding:6px 12px;font-size:12px;border-radius:var(--r-sm);}
   #kakaoMap{width:100%;height:560px;border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
-  #kakaoRoadview{width:100%;height:420px;border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
+  .map-stage{position:relative;}
+  #kakaoRoadviewWrap{display:none;position:absolute;inset:0;z-index:5;border-radius:var(--r-md);overflow:hidden;background:#111;}
+  #kakaoRoadview{width:100%;height:100%;}
+  .rv-bar{position:absolute;top:10px;left:10px;right:10px;display:flex;align-items:center;gap:10px;pointer-events:none;}
+  .rv-btn{pointer-events:auto;border:none;border-radius:999px;padding:8px 14px;background:var(--sun);color:#2A1A00;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);}
+  .rv-btn:hover{filter:brightness(1.05);}
+  .rv-tip{font-size:11.5px;color:#fff;background:rgba(0,0,0,.55);padding:5px 10px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
 
   /* 결과 */
   .results{display:flex;flex-direction:column;gap:18px;}
@@ -495,13 +501,18 @@
           <button type="button" class="run" id="solarIllustrationBtn" style="background:var(--forest-dim);color:var(--forest);display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
         </div>
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
-        <div id="kakaoMap"></div>
-        <div id="kakaoRoadviewWrap" style="margin-top:14px;display:none;">
-          <p style="font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:0 0 8px;">🚶 로드뷰 — 지도 위 파란 카메라 아이콘이 현재 로드뷰 위치·방향입니다</p>
-          <div id="kakaoRoadview"></div>
+        <div class="map-stage" id="mapStage">
+          <div id="kakaoMap"></div>
+          <div id="kakaoRoadviewWrap">
+            <div id="kakaoRoadview"></div>
+            <div class="rv-bar">
+              <button type="button" class="rv-btn" onclick="showMapStage()">🗺 지도로 돌아가기</button>
+              <span class="rv-tip">로드뷰를 드래그해 둘러보세요 · 지도로 돌아가 다른 지점을 클릭한 뒤 다시 "로드뷰"를 누르면 그 위치로 전환됩니다</span>
+            </div>
+          </div>
         </div>
         <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적·반경은 참고용이며 실제 값과 다를 수 있습니다. 지도를 클릭하거나 주소를 검색하면 그 지점의 <b>지번 주소와 도로명 주소가 함께</b> 표시됩니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🚶 로드뷰" 버튼을 켠 뒤 지도를 클릭하면 그 위치의 로드뷰가 아래에 나타나고, 지도 위 카메라 아이콘이 위치·바라보는 방향을 함께 보여줍니다. 거리재기·면적재기·반경재기는 지도를 클릭해 점을 찍고, 지도를 오른쪽 클릭하거나 버튼을 다시 누르면 측정이 끝납니다.</p>
+        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적·반경은 참고용이며 실제 값과 다를 수 있습니다. 지도를 클릭하거나 주소를 검색하면 그 지점의 <b>지번 주소와 도로명 주소가 함께</b> 표시됩니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🚶 로드뷰" 버튼을 누르면 지도 자리에 로드뷰가 나타나고, "지도로 돌아가기"로 다시 지도로 전환됩니다. 지도 위 카메라 아이콘이 로드뷰 위치·바라보는 방향을 보여줍니다. 거리재기·면적재기·반경재기는 지도를 클릭해 점을 찍고, 지도를 오른쪽 클릭하거나 버튼을 다시 누르면 측정이 끝납니다.</p>
       </div>
       <div class="results" id="resultsWrap">
         <div class="card"><div class="placeholder">왼쪽에서 부지 조건을 고른 뒤 ‘부지 분석 실행’을 누르면<br>여기에 인허가 체크리스트와 예상 부담금이 나옵니다</div></div>
@@ -2461,7 +2472,7 @@ function showRoadviewStage(){
         kakao.maps.event.addListener(roadviewObj, 'position_changed', updateWalkerOverlay);
       }
       roadviewObj.setPanoId(panoId, targetPos);
-      statusEl.textContent = '✅ 로드뷰를 아래에 표시했습니다. 드래그하면 시점을 돌려볼 수 있고, 지도 위 파란 아이콘이 카메라 위치·방향을 함께 보여줍니다. 다른 지점을 보려면 지도를 다시 클릭한 뒤 "로드뷰"를 눌러주세요.';
+      statusEl.textContent = '✅ 지도 자리에 로드뷰를 표시했습니다. 드래그하면 시점을 돌려볼 수 있습니다. "지도로 돌아가기"를 누르면 지도로 전환되고, 지도 위 파란 아이콘이 카메라 위치·방향을 보여줍니다.';
       setTimeout(() => { roadviewObj.relayout(); updateWalkerOverlay(); }, 50);
     });
   };
