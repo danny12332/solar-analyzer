@@ -735,7 +735,23 @@ async function detectUseZone(lat, lng){
 // 토지임야정보(지목·공부면적) + 개별공시지가(최신 연도) + 토지이용계획(용도지역지구 목록, 저촉여부)
 // 응답 필드명 근거(실제 호출로 검증된 공개 저장소 기준): ladfrlList → lndcgrCodeNm(지목)·lndpclAr(면적),
 // getIndvdLandPriceAttr → pblntfPclnd(원/㎡)·stdrYear, getLandUseAttr → prposAreaDstrcCodeNm·cnflcAtNm
-const LAND_WORKER_URL = 'https://rough-moon-e02c.ruwk66.workers.dev/land';
+// Worker(해외 IP)는 브이월드에 HTTP 520으로 차단됨(2026.09.29 확인) → 브라우저에서 JSONP로 직접 호출 (callback 파라미터 동작 확인됨)
+// 주의: 개별공시지가는 연도별 다건(totalCount 40 확인)이고 기본 numOfRows=10이라 1990년대만 오므로 numOfRows를 크게 지정
+function nedJsonp(endpoint, params, timeoutMs){
+  timeoutMs = timeoutMs || 10000;
+  return new Promise((resolve, reject) => {
+    const cbName = `nedCb${Date.now()}_${vworldJsonpSeq++}`;
+    let settled = false;
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { if(settled) return; settled = true; cleanup(); reject(new Error('브이월드 응답 시간 초과')); }, timeoutMs);
+    function cleanup(){ delete window[cbName]; if(script.parentNode) script.parentNode.removeChild(script); clearTimeout(timer); }
+    window[cbName] = function(data){ if(settled) return; settled = true; cleanup(); resolve(data); };
+    script.onerror = function(){ if(settled) return; settled = true; cleanup(); reject(new Error('브이월드 스크립트 로드 실패')); };
+    const qs = Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+    script.src = `https://api.vworld.kr/ned/data/${endpoint}?${qs}&callback=${cbName}`;
+    document.head.appendChild(script);
+  });
+}
 function findItemsWithKey(obj, key, depth){
   depth = depth || 0;
   if(!obj || depth > 8) return null;
@@ -751,10 +767,14 @@ function findItemsWithKey(obj, key, depth){
   return null;
 }
 async function fetchLandInfo(pnu){
-  const res = await fetch(`${LAND_WORKER_URL}?pnu=${encodeURIComponent(pnu)}`);
-  if(!res.ok) throw new Error('Worker 응답 ' + res.status);
-  const j = await res.json();
-  if(!j.ok) throw new Error(j.error || 'Worker 오류');
+  const common = { key: VWORLD_KEY, domain: VWORLD_DOMAIN, pnu, format: 'json', numOfRows: '100', pageNo: '1' };
+  const j = { ladfrl: null, landPrice: null, landUse: null, errors: {} };
+  await Promise.all([
+    nedJsonp('ladfrlList', common).then(d => { j.ladfrl = d; }).catch(e => { j.errors.ladfrl = e.message; }),
+    nedJsonp('getIndvdLandPriceAttr', common).then(d => { j.landPrice = d; }).catch(e => { j.errors.landPrice = e.message; }),
+    nedJsonp('getLandUseAttr', common).then(d => { j.landUse = d; }).catch(e => { j.errors.landUse = e.message; })
+  ]);
+  if(!j.ladfrl && !j.landPrice && !j.landUse) throw new Error('브이월드 국가중점데이터 응답 없음: ' + JSON.stringify(j.errors));
   const ladfrl = findItemsWithKey(j.ladfrl, 'lndcgrCodeNm') || [];
   const prices = findItemsWithKey(j.landPrice, 'pblntfPclnd') || [];
   const uses = findItemsWithKey(j.landUse, 'prposAreaDstrcCodeNm') || [];
