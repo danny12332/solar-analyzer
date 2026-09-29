@@ -195,6 +195,8 @@
   .seg button[aria-pressed="true"]{background:var(--sky-deep);border-color:var(--sky-deep);color:#fff;font-weight:700;}
   .seg button.danger[aria-pressed="true"]{background:var(--coral);border-color:var(--coral);}
   .seg-src{display:none !important;}
+  .seg button.seg-change{border:1px dashed #C4D3DF;background:transparent;color:var(--sky);font-size:12px;padding:6px 10px;}
+  .seg button.seg-change:hover{background:var(--sky-tint);}
   .auto-note{font-size:11.5px;color:var(--leaf);margin:6px 0 0;min-height:16px;}
   .auto-note.warn{color:var(--coral);}
 
@@ -350,7 +352,7 @@
             </optgroup>
           </select>
           <p class="auto-note" id="zoneNote"></p>
-          <p class="hint" style="margin-top:6px;">주소 검색 시 브이월드 용도지역도로 자동 판독합니다. 최종 확인은 "토지이용계획 바로 조회"(토지이음)에서 하세요.</p>
+          <p class="hint" style="margin-top:6px;">주소 검색 시 자동 판독됩니다. 다른 항목으로 바꾸려면 "변경"을 누르세요.</p>
         </div>
 
         <div class="step">
@@ -650,6 +652,15 @@ function buildSegments(){
     };
     const render = () => {
       seg.innerHTML = '';
+      if(seg.dataset.collapsed === '1'){
+        // 자동 판독된 항목만 표시하고, 나머지 선택지는 "변경"을 눌렀을 때만 펼침
+        const o = sel.options[sel.selectedIndex];
+        if(o) addBtn(o);
+        const chg = document.createElement('button'); chg.type = 'button'; chg.className = 'seg-change'; chg.textContent = '변경 ▾';
+        chg.addEventListener('click', () => { seg.dataset.collapsed = '0'; render(); });
+        seg.appendChild(chg);
+        return;
+      }
       Array.from(sel.children).forEach(child => {
         if(child.tagName === 'OPTGROUP'){
           const g = document.createElement('div'); g.className = 'seg-group'; g.textContent = child.label; seg.appendChild(g);
@@ -657,9 +668,16 @@ function buildSegments(){
         } else addBtn(child);
       });
     };
+    seg._render = render;
     sel.addEventListener('change', () => { render(); updateSiteSummary(); });
     render();
   });
+}
+function collapseSeg(selId, collapsed){
+  const seg = document.querySelector(`.seg[data-for="${selId}"]`);
+  if(!seg) return;
+  seg.dataset.collapsed = collapsed ? '1' : '0';
+  if(seg._render) seg._render();
 }
 function selText(id){ const s = document.getElementById(id); return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].textContent.split(' — ')[0].split(' (')[0] : ''; }
 function updateSiteSummary(){
@@ -686,6 +704,7 @@ const JIMOK_NOT_DEV = ['도','철','제','천','구','유','양','수','공','�
 function applyParcelToForm(props, kakaoPath){
   lastParcelPnu = String(props.pnu || '').trim();
   lastParcelPath = kakaoPath || null;
+  ['landCategory','farmZone','forestType','useZone'].forEach(id => collapseSeg(id, false));
   const note = document.getElementById('jimokNote');
   const areaNote = document.getElementById('areaNote');
   const jibun = String(props.jibun || '').trim();
@@ -696,7 +715,8 @@ function applyParcelToForm(props, kakaoPath){
     if(JIMOK_TO_CAT[ab]){
       const sel = document.getElementById('landCategory');
       sel.value = JIMOK_TO_CAT[ab]; sel.dispatchEvent(new Event('change'));
-      note.textContent = `✅ 지적도상 지목 "${name}" → 1번 항목을 자동으로 골랐습니다. 토지이음에서 최종 확인하세요.`;
+      collapseSeg('landCategory', true);
+      note.textContent = `✅ 지적도상 지목 "${name}" 기준 자동 선택. 토지이음에서 최종 확인하세요.`;
     } else if(JIMOK_NOT_DEV.includes(ab)){
       note.className = 'auto-note warn';
       note.textContent = `⚠ 지적도상 지목이 "${name}"입니다. 도로·구거·하천 등은 개발행위 대상이 아니므로 1번 항목을 자동으로 고르지 않았습니다.`;
@@ -883,7 +903,8 @@ function applyLandInfoToForm(info){
     const cat = JIMOK_NAME_TO_CAT[info.jimok];
     if(cat){
       const sel = document.getElementById('landCategory'); sel.value = cat; sel.dispatchEvent(new Event('change'));
-      jimokNote.className = 'auto-note'; jimokNote.textContent = `✅ 토지대장 지목 "${info.jimok}" → 1번 항목 자동 선택`;
+      collapseSeg('landCategory', true);
+      jimokNote.className = 'auto-note'; jimokNote.textContent = `✅ 토지대장 지목 "${info.jimok}" 기준 자동 선택`;
     } else if(JIMOK_NAME_NOT_DEV.includes(info.jimok)){
       jimokNote.className = 'auto-note warn'; jimokNote.textContent = `⚠ 토지대장 지목이 "${info.jimok}"입니다. 개발행위 대상이 아닌 지목이라 자동 선택하지 않았습니다.`; allSet = false;
     } else {
@@ -911,7 +932,8 @@ function applyLandInfoToForm(info){
   const touching = info.uses.filter(u => useZoneKeyFromName(u.name) && /접함/.test(u.rel)).map(u => u.name);
   if(zoneKeys.length === 1){
     const sel = document.getElementById('useZone'); sel.value = zoneKeys[0]; sel.dispatchEvent(new Event('change'));
-    zoneNote.className = 'auto-note'; zoneNote.textContent = `✅ 토지이용계획 "${zoneNames.join(', ')}" → 2번 항목 자동 선택` + (touching.length ? ` (경계에 접한 ${touching.join(', ')}은 제외)` : '');
+    collapseSeg('useZone', true);
+    zoneNote.className = 'auto-note'; zoneNote.textContent = `✅ 토지이용계획 "${zoneNames.join(', ')}" 기준 자동 선택` + (touching.length ? ` (경계에 접한 ${touching.join(', ')}은 제외)` : '');
   } else if(zoneKeys.length > 1){
     zoneNote.className = 'auto-note warn'; zoneNote.textContent = `⚠ 용도지역이 둘 이상 조회됩니다: ${zoneNames.join(', ')} — 2번 항목을 직접 골라주세요.`; allSet = false;
   } else {
@@ -922,9 +944,10 @@ function applyLandInfoToForm(info){
   if(/농업진흥구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'core'; s.dispatchEvent(new Event('change')); }
   else if(/농업보호구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'protect'; s.dispatchEvent(new Event('change')); }
   else { const s = document.getElementById('farmZone'); s.value = 'out'; s.dispatchEvent(new Event('change')); }
-  if(/산지전용.?일시사용제한지역/.test(names)){ const s = document.getElementById('forestType'); s.value = 'restrict'; s.dispatchEvent(new Event('change')); }
-  else if(/보전산지|공익용산지|임업용산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'bo'; s.dispatchEvent(new Event('change')); }
-  else if(/준보전산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'jun'; s.dispatchEvent(new Event('change')); }
+  collapseSeg('farmZone', true);
+  if(/산지전용.?일시사용제한지역/.test(names)){ const s = document.getElementById('forestType'); s.value = 'restrict'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
+  else if(/보전산지|공익용산지|임업용산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'bo'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
+  else if(/준보전산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'jun'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
   updateSiteSummary();
   return allSet;
 }
@@ -1079,7 +1102,8 @@ async function autoAnalyzeFromParcel(){
   if(uniqKeys.length === 1){
     const sel = document.getElementById('useZone');
     sel.value = uniqKeys[0]; sel.dispatchEvent(new Event('change'));
-    zoneNote.textContent = `✅ 용도지역도상 "${names.join(', ')}" → 2번 항목을 자동으로 골랐습니다. 토지이음의 "다른 법령" 칸(농업진흥구역·보전산지 등)은 별도 확인이 필요합니다.`;
+    collapseSeg('useZone', true);
+    zoneNote.textContent = `✅ 용도지역도상 "${names.join(', ')}" 기준 자동 선택. 토지이음의 "다른 법령" 칸(농업진흥구역·보전산지 등)은 별도 확인이 필요합니다.`;
     // 지목·용도지역이 모두 자동으로 채워졌으면 분석 자동 실행
     runAnalysis();
     showAutoResultNote('자동 분석 결과입니다 — 개별공시지가는 기본값(또는 이전 입력값)이므로 토지이음 값으로 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.');
