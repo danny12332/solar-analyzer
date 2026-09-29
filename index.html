@@ -93,14 +93,13 @@
   .card h2{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line);}
 
   /* 주소 검색 띠 (헤더 바로 아래, 전체 폭) */
-  .toolbar-card{padding:20px 24px 18px;margin-bottom:22px;
+  .toolbar-card{padding:20px 22px 18px;margin-bottom:0;
     background:linear-gradient(180deg,#FFFFFF 0%,#FFFDF7 100%);border-color:#EAD9B3;}
   .toolbar-card h2{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin:0 0 12px;}
-  .toolbar-card .row2{grid-template-columns:1fr auto;align-items:end;}
+  .toolbar-card .row2{grid-template-columns:1fr auto;align-items:end;gap:8px;}
   .toolbar-card .row2 button.run{margin-top:0;padding:12px 22px;white-space:nowrap;}
   @media (max-width:700px){.toolbar-card .row2{grid-template-columns:1fr;}}
-  .toolbar-card .lookups{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;align-items:start;}
-  @media (max-width:980px){.toolbar-card .lookups{grid-template-columns:1fr;}}
+  .toolbar-card .lookups{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px;align-items:start;}
   .toolbar-card .lookups button.run{margin-top:0;}
   .toolbar-card #siteAddress{font-size:15px;padding:12px 14px;}
 
@@ -247,12 +246,16 @@
     <a class="mk-link" id="mkLink" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener">전력거래소<br>오늘의 전력정보 ↗</a>
   </section>
 
-  <!-- 주소 검색 (전체 폭) -->
+  <div class="app-grid">
+
+    <!-- LEFT: sticky rail -->
+    <div class="rail">
+      <!-- 주소 검색 -->
       <div class="toolbar-card">
         <h2>주소로 위치 확인</h2>
         <div class="row2" style="align-items:end;">
           <div class="field" style="margin-bottom:0;position:relative;">
-            <label for="siteAddress">지번 주소 또는 아파트·공장 등 장소명 (예: 충남 천안시 동남구 광덕면 대평리 178-1)</label>
+            <label for="siteAddress">지번 주소 또는 아파트·공장 등 장소명</label>
             <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1" autocomplete="off">
             <div id="addrSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--card-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
           </div>
@@ -277,11 +280,6 @@
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
       </div>
-
-  <div class="app-grid">
-
-    <!-- LEFT: sticky rail -->
-    <div class="rail">
 
       <!-- INPUT -->
       <div class="card">
