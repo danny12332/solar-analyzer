@@ -221,6 +221,7 @@
           <div>
             <button class="run" id="eumBtn" style="background:var(--sky);" onclick="openEumResult()">📄 토지이용계획 바로 조회</button>
             <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+            <div id="landInfoPanel"></div>
           </div>
           <div>
             <button class="run sun" id="kepcoBtn" onclick="checkKepcoCapacity()">⚡ 배전선로 여유용량 (한전ON)</button>
@@ -324,7 +325,7 @@
             <div class="field">
               <label for="price">개별공시지가 (원/㎡)</label>
               <input type="number" id="price" value="35000" min="0">
-              <p class="hint">토지이음 화면의 개별공시지가를 입력</p>
+              <p class="auto-note" id="priceNote"></p>
             </div>
           </div>
           <label class="checkrow"><input type="checkbox" id="useLocalOrdinance"> 이 지역 개발행위허가 규모가 국가 기본치보다 조례로 축소되어 있음</label>
@@ -644,6 +645,7 @@ const JIMOK_ABBR = { '전':'전','답':'답','과':'과수원','목':'목장용�
 const JIMOK_TO_CAT = { '전':'farm','답':'farm','과':'farm','목':'farm','임':'forest','대':'misc','장':'misc','창':'misc','차':'misc','주':'misc','학':'misc','잡':'misc' };
 const JIMOK_NOT_DEV = ['도','철','제','천','구','유','양','수','공','체','원','종','사','묘'];
 function applyParcelToForm(props, kakaoPath){
+  lastParcelPnu = String(props.pnu || '').trim();
   const note = document.getElementById('jimokNote');
   const areaNote = document.getElementById('areaNote');
   const jibun = String(props.jibun || '').trim();
@@ -728,11 +730,155 @@ async function detectUseZone(lat, lng){
   }
   return found;
 }
+
+// ===== 토지 공부정보 자동 조회 (Worker /land → 브이월드 국가중점데이터 NED) =====
+// 토지임야정보(지목·공부면적) + 개별공시지가(최신 연도) + 토지이용계획(용도지역지구 목록, 저촉여부)
+// 응답 필드명 근거(실제 호출로 검증된 공개 저장소 기준): ladfrlList → lndcgrCodeNm(지목)·lndpclAr(면적),
+// getIndvdLandPriceAttr → pblntfPclnd(원/㎡)·stdrYear, getLandUseAttr → prposAreaDstrcCodeNm·cnflcAtNm
+const LAND_WORKER_URL = 'https://rough-moon-e02c.ruwk66.workers.dev/land';
+function findItemsWithKey(obj, key, depth){
+  depth = depth || 0;
+  if(!obj || depth > 8) return null;
+  if(Array.isArray(obj)){
+    if(obj.length && obj[0] && typeof obj[0] === 'object' && key in obj[0]) return obj;
+    for(const it of obj){ const r = findItemsWithKey(it, key, depth+1); if(r) return r; }
+    return null;
+  }
+  if(typeof obj === 'object'){
+    if(key in obj && !Array.isArray(obj[key])) return [obj];
+    for(const v of Object.values(obj)){ const r = findItemsWithKey(v, key, depth+1); if(r) return r; }
+  }
+  return null;
+}
+async function fetchLandInfo(pnu){
+  const res = await fetch(`${LAND_WORKER_URL}?pnu=${encodeURIComponent(pnu)}`);
+  if(!res.ok) throw new Error('Worker 응답 ' + res.status);
+  const j = await res.json();
+  if(!j.ok) throw new Error(j.error || 'Worker 오류');
+  const ladfrl = findItemsWithKey(j.ladfrl, 'lndcgrCodeNm') || [];
+  const prices = findItemsWithKey(j.landPrice, 'pblntfPclnd') || [];
+  const uses = findItemsWithKey(j.landUse, 'prposAreaDstrcCodeNm') || [];
+  let latest = null;
+  prices.forEach(p => { const y = parseInt(p.stdrYear, 10) || 0; if(!latest || y > latest.year) latest = { year: y, price: parseFloat(String(p.pblntfPclnd).replace(/,/g,'')) || 0 }; });
+  return {
+    jimok: ladfrl.length ? String(ladfrl[0].lndcgrCodeNm || '') : '',
+    area: ladfrl.length ? (parseFloat(String(ladfrl[0].lndpclAr).replace(/,/g,'')) || 0) : 0,
+    price: latest,
+    uses: uses.map(u => ({ name: String(u.prposAreaDstrcCodeNm || ''), rel: String(u.cnflcAtNm || ''), code: String(u.prposAreaDstrcCode || '') })),
+    errors: j.errors || {}
+  };
+}
+const JIMOK_NAME_TO_CAT = { '전':'farm','답':'farm','과수원':'farm','목장용지':'farm','임야':'forest','대':'misc','공장용지':'misc','창고용지':'misc','잡종지':'misc','주차장':'misc','주유소용지':'misc','학교용지':'misc' };
+const JIMOK_NAME_NOT_DEV = ['도로','철도용지','제방','하천','구거','유지','양어장','수도용지','공원','체육용지','유원지','종교용지','사적지','묘지'];
+const LANDUSE_BLOCKERS = ['농업진흥구역','보전산지','공익용산지','임업용산지','산지전용·일시사용제한지역','개발제한구역','자연공원','국립공원','도립공원','군립공원','상수원보호구역','백두대간보호지역','문화재보호구역','생태·경관보전지역','생태경관보전지역','습지보호지역','수변구역','군사기지 및 군사시설 보호구역','군사시설보호구역'];
+function escLand(t){ return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderLandInfoPanel(info, pnu){
+  const wrap = document.getElementById('landInfoPanel');
+  if(!wrap) return;
+  const rows = info.uses.map(u => {
+    const isBlock = LANDUSE_BLOCKERS.some(b => u.name.includes(b));
+    const isZone = !!useZoneKeyFromName(u.name);
+    const badge = isBlock ? `<span class="tag need" style="width:auto;padding:2px 6px;">주의</span>` : (isZone ? `<span class="tag clear" style="width:auto;padding:2px 6px;">용도지역</span>` : '');
+    return `<li style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px;"><span style="flex:1;">${escLand(u.name)}</span><span style="color:var(--ink-faint);font-size:11.5px;">${escLand(u.rel)}</span>${badge}</li>`;
+  }).join('');
+  const priceText = info.price ? `${info.price.price.toLocaleString('ko-KR')}원/㎡ (${info.price.year}년 기준)` : '조회 안 됨';
+  wrap.innerHTML = `
+    <div style="margin-top:8px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <b style="font-size:13px;">📄 토지 공부정보 (국가중점데이터 · PNU ${escLand(pnu)})</b>
+        <span onclick="document.getElementById('landInfoPanel').innerHTML=''" style="cursor:pointer;color:var(--ink-soft);font-weight:bold;padding:0 6px;">✕</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,auto);gap:6px 18px;margin:8px 0 6px;font-size:12.5px;">
+        <span>지목 <b>${escLand(info.jimok || '-')}</b></span>
+        <span>공부면적 <b>${info.area ? info.area.toLocaleString('ko-KR') + '㎡' : '-'}</b></span>
+        <span>개별공시지가 <b>${escLand(priceText)}</b></span>
+      </div>
+      ${rows ? `<ul style="list-style:none;margin:6px 0 0;padding:0;max-height:220px;overflow:auto;">${rows}</ul>` : `<p class="hint">토지이용계획 항목이 조회되지 않았습니다.</p>`}
+      <p class="hint" style="margin-top:6px;">브이월드 국가중점데이터(토지임야·개별공시지가·토지이용계획) 기준입니다. 토지이음 열람과 기준일이 다를 수 있으니 인허가 신청 전 토지이음에서 최종 확인하세요.</p>
+    </div>`;
+}
+function applyLandInfoToForm(info){
+  const jimokNote = document.getElementById('jimokNote');
+  const areaNote = document.getElementById('areaNote');
+  const zoneNote = document.getElementById('zoneNote');
+  const priceEl = document.getElementById('price');
+  let allSet = true;
+  // 지목
+  if(info.jimok){
+    const cat = JIMOK_NAME_TO_CAT[info.jimok];
+    if(cat){
+      const sel = document.getElementById('landCategory'); sel.value = cat; sel.dispatchEvent(new Event('change'));
+      jimokNote.className = 'auto-note'; jimokNote.textContent = `✅ 토지대장 지목 "${info.jimok}" → 1번 항목 자동 선택`;
+    } else if(JIMOK_NAME_NOT_DEV.includes(info.jimok)){
+      jimokNote.className = 'auto-note warn'; jimokNote.textContent = `⚠ 토지대장 지목이 "${info.jimok}"입니다. 개발행위 대상이 아닌 지목이라 자동 선택하지 않았습니다.`; allSet = false;
+    } else {
+      jimokNote.className = 'auto-note'; jimokNote.textContent = `토지대장 지목 "${info.jimok}" — 해당하는 항목을 직접 골라주세요.`; allSet = false;
+    }
+  }
+  // 공부면적
+  if(info.area > 0){
+    document.getElementById('area').value = info.area;
+    areaNote.textContent = `✅ 토지대장 공부면적 ${info.area.toLocaleString('ko-KR')}㎡ 자동 입력`;
+  }
+  // 개별공시지가
+  const priceNote = document.getElementById('priceNote');
+  if(info.price && info.price.price > 0){
+    priceEl.value = info.price.price;
+    if(priceNote) priceNote.textContent = `✅ 개별공시지가 ${info.price.price.toLocaleString('ko-KR')}원/㎡ (${info.price.year}년) 자동 입력`;
+  } else if(priceNote){ priceNote.className = 'auto-note warn'; priceNote.textContent = '⚠ 개별공시지가가 조회되지 않았습니다. 토지이음 값을 입력하세요.'; allSet = false; }
+  // 용도지역 (토지이용계획 항목 중 분석기 용도지역과 맞는 것)
+  const zoneKeys = [...new Set(info.uses.map(u => useZoneKeyFromName(u.name)).filter(Boolean))];
+  const zoneNames = info.uses.filter(u => useZoneKeyFromName(u.name)).map(u => u.name + (u.rel ? '(' + u.rel + ')' : ''));
+  if(zoneKeys.length === 1){
+    const sel = document.getElementById('useZone'); sel.value = zoneKeys[0]; sel.dispatchEvent(new Event('change'));
+    zoneNote.className = 'auto-note'; zoneNote.textContent = `✅ 토지이용계획 "${zoneNames.join(', ')}" → 2번 항목 자동 선택`;
+  } else if(zoneKeys.length > 1){
+    zoneNote.className = 'auto-note warn'; zoneNote.textContent = `⚠ 용도지역이 둘 이상 조회됩니다: ${zoneNames.join(', ')} — 2번 항목을 직접 골라주세요.`; allSet = false;
+  } else {
+    zoneNote.className = 'auto-note warn'; zoneNote.textContent = '⚠ 토지이용계획에서 용도지역을 찾지 못했습니다. 2번 항목을 직접 골라주세요.'; allSet = false;
+  }
+  // 농지 구분 / 산지 구분 (토지이용계획 항목명 기준)
+  const names = info.uses.map(u => u.name).join(' | ');
+  if(/농업진흥구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'core'; s.dispatchEvent(new Event('change')); }
+  else if(/농업보호구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'protect'; s.dispatchEvent(new Event('change')); }
+  else { const s = document.getElementById('farmZone'); s.value = 'out'; s.dispatchEvent(new Event('change')); }
+  if(/산지전용.?일시사용제한지역/.test(names)){ const s = document.getElementById('forestType'); s.value = 'restrict'; s.dispatchEvent(new Event('change')); }
+  else if(/보전산지|공익용산지|임업용산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'bo'; s.dispatchEvent(new Event('change')); }
+  else if(/준보전산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'jun'; s.dispatchEvent(new Event('change')); }
+  updateSiteSummary();
+  return allSet;
+}
+
 let autoAnalyzeSeq = 0;
+let lastParcelPnu = '';
+function showAutoResultNote(text){
+  const rs = document.getElementById('resultsWrap');
+  if(rs){ const n = document.createElement('p'); n.className = 'hint'; n.style.margin = '0 0 4px'; n.textContent = text; rs.prepend(n); }
+}
 async function autoAnalyzeFromParcel(){
   const zoneNote = document.getElementById('zoneNote');
   if(!lastLatLng || !zoneNote) return;
   const my = ++autoAnalyzeSeq;
+  // 1순위: Worker /land 로 토지대장·개별공시지가·토지이용계획을 정식 값으로 조회
+  if(lastParcelPnu){
+    zoneNote.className = 'auto-note'; zoneNote.textContent = '토지대장·개별공시지가·토지이용계획 조회 중...';
+    try{
+      const info = await fetchLandInfo(lastParcelPnu);
+      if(my !== autoAnalyzeSeq) return;
+      renderLandInfoPanel(info, lastParcelPnu);
+      const allSet = applyLandInfoToForm(info);
+      if(allSet){
+        runAnalysis();
+        showAutoResultNote('자동 분석 결과입니다 — 지목·공부면적·개별공시지가·용도지역을 국가중점데이터(브이월드)에서 읽어 계산했습니다. 토지이음과 기준일이 다를 수 있으니 최종 확인하세요.');
+      }
+      return;
+    }catch(e){
+      console.warn('land info', e);
+      const p = document.getElementById('priceNote');
+      if(p){ p.className = 'auto-note warn'; p.textContent = '⚠ 공부정보 자동 조회 실패(' + (e && e.message ? e.message : e) + ') — 면적·공시지가를 토지이음 값으로 입력하세요.'; }
+    }
+  }
+  // 2순위: 브이월드 용도지역도(JSONP)로 용도지역만 판독
   zoneNote.className = 'auto-note'; zoneNote.textContent = '용도지역 조회 중 (브이월드 용도지역도)...';
   const lat = lastLatLng.getLat(), lng = lastLatLng.getLng();
   const found = await detectUseZone(lat, lng);
@@ -751,8 +897,7 @@ async function autoAnalyzeFromParcel(){
     zoneNote.textContent = `✅ 용도지역도상 "${names.join(', ')}" → 2번 항목을 자동으로 골랐습니다. 토지이음의 "다른 법령" 칸(농업진흥구역·보전산지 등)은 별도 확인이 필요합니다.`;
     // 지목·용도지역이 모두 자동으로 채워졌으면 분석 자동 실행
     runAnalysis();
-    const rs = document.getElementById('resultsWrap');
-    if(rs){ const n = document.createElement('p'); n.className = 'hint'; n.style.margin = '0 0 4px'; n.textContent = '자동 분석 결과입니다 — 개별공시지가는 기본값(또는 이전 입력값)이므로 토지이음 값으로 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.'; rs.prepend(n); }
+    showAutoResultNote('자동 분석 결과입니다 — 개별공시지가는 기본값(또는 이전 입력값)이므로 토지이음 값으로 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.');
   } else if(uniqKeys.length > 1){
     zoneNote.className = 'auto-note warn';
     zoneNote.textContent = `⚠ 이 지점에 용도지역 ${names.join(', ')}이(가) 함께 조회됩니다(경계에 걸침). 2번 항목을 직접 골라주세요.`;
