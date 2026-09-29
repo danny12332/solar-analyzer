@@ -2712,11 +2712,15 @@ function splitAdminName(fullName){
     // 이 경우 "군"은 idx를 소비하지 않고 아래 구/군 처리로 넘어가 guRaw에 배정됨.
     si = '-기타지역';
   }
+  // 세종특별자치시: 한전ON 폼이 시/도=세종특별자치시, 시=세종특별자치시, 구/군=-기타지역 을 요구함
+  // (2026.09.29 한전ON 화면 "연서면 월하리 1098-3" 조회 성공 사례로 확인). 다른 광역시(-기타지역)와 다름.
+  let sejongSi = false;
+  if(doTok === '세종특별자치시'){ si = '세종특별자치시'; sejongSi = true; }
   if(rest[idx] && (rest[idx].endsWith('구') || rest[idx].endsWith('군'))){ guRaw = rest[idx]; idx++; }
   lidong = rest[idx] || ''; idx++;
   li = rest[idx] || '';
-  // siText/guText: 법정동명 매칭·화면표시용 (플레이스홀더 "-기타지역"은 빈 문자열로 취급)
-  const siText = si === '-기타지역' ? '' : si;
+  // siText/guText: 법정동명 매칭·화면표시용 (플레이스홀더 "-기타지역"은 빈 문자열로 취급, 세종은 시/도와 같은 값이라 빈 문자열)
+  const siText = (si === '-기타지역' || sejongSi) ? '' : si;
   // gu: API 전송용(구/군 없으면 "-기타지역" 그대로 필요, 실제 네트워크 캡처로 확인됨), guText: 매칭·화면표시용
   const gu = guRaw || '-기타지역';
   const guText = guRaw;
