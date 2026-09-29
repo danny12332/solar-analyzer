@@ -160,6 +160,13 @@
   .cost-table tr.total td{border-top:2px solid var(--ink);border-bottom:none;font-weight:700;padding-top:12px;}
   .cost-table tr.total td.num{font-size:16px;color:var(--coral);}
   .footnote{font-size:11.5px;color:var(--ink-faint);margin-top:10px;line-height:1.6;}
+  .civil-head{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
+  @media (max-width:600px){.civil-head{grid-template-columns:1fr;}}
+  .civil-head > div{background:var(--sun-tint);border:1px solid #F1DFB4;border-radius:var(--r-sm);padding:10px 12px;display:flex;flex-direction:column;gap:2px;}
+  .civil-head .civil-label{font-size:11px;color:#7A4E05;font-weight:700;}
+  .civil-head b{font-family:'IBM Plex Mono',monospace;font-size:15.5px;font-weight:500;color:var(--ink);white-space:nowrap;}
+  .civil-head b.civil-total{color:var(--coral);}
+  .civil-head small{font-size:11px;color:var(--ink-soft);}
   .reco{background:var(--sky-tint);border:1px solid #BFD9EC;border-radius:var(--r-md);padding:16px 18px;font-size:13.5px;}
   .reco.warn{background:var(--coral-tint);border-color:#EBBFAF;}
   .reco ul{margin:8px 0 0;padding-left:18px;}
@@ -3249,14 +3256,15 @@ function runAnalysis(){
   const civilTotal = civilAreaCost + cwWall + cwRoad + cwDesign;
 
   const civilRows = [
-    { label:'정지작업(절성토)', amount: cwGrading*area },
-    { label:'배수시설', amount: cwDrain*area },
-    { label:'사면보호', amount: cwSlope*area },
-    { label:'울타리·부대시설', amount: cwFence*area },
-    { label:'옹벽 등 구조물', amount: cwWall },
-    { label:'진입로 공사', amount: cwRoad },
-    { label:'설계·측량·인허가 대행비', amount: cwDesign },
+    { label:'정지작업(절성토)', unit: cwGrading, amount: cwGrading*area },
+    { label:'배수시설', unit: cwDrain, amount: cwDrain*area },
+    { label:'사면보호', unit: cwSlope, amount: cwSlope*area },
+    { label:'울타리·부대시설', unit: cwFence, amount: cwFence*area },
+    { label:'옹벽 등 구조물', unit: null, amount: cwWall },
+    { label:'진입로 공사', unit: null, amount: cwRoad },
+    { label:'설계·측량·인허가 대행비', unit: null, amount: cwDesign },
   ];
+  const civilPerSqmAll = area > 0 ? civilTotal / area : 0;   // 별도공사 포함 ㎡당 환산
 
   // ===== 개발부담금 =====
   const landChange = document.getElementById('landChange').checked;
@@ -3290,7 +3298,7 @@ function runAnalysis(){
     };
   }
 
-  renderResults({stampClass, stampText, zone, effectiveLimit, chargeRows, chargeTotal, checklist, reco, area, cat, absoluteBlock, civilRows, civilTotal, devResult});
+  renderResults({stampClass, stampText, zone, effectiveLimit, chargeRows, chargeTotal, checklist, reco, area, cat, absoluteBlock, civilRows, civilTotal, civilPerSqm, civilPerSqmAll, devResult});
 }
 
 
@@ -3334,12 +3342,18 @@ function renderResults(r){
 
     <div class="grid2">
       <div class="card">
-        <h2>토목공사비 (추정)</h2>
+        <h2>토목공사비 (추정) — 부담금과 별도</h2>
+        <div class="civil-head">
+          <div><span class="civil-label">면적비례 단가</span><b>${Math.round(r.civilPerSqm).toLocaleString('ko-KR')}원/㎡</b><small>≈ ${Math.round(r.civilPerSqm*3.3058).toLocaleString('ko-KR')}원/평</small></div>
+          <div><span class="civil-label">총액 ㎡당 환산</span><b>${Math.round(r.civilPerSqmAll).toLocaleString('ko-KR')}원/㎡</b><small>별도공사·설계비 포함</small></div>
+          <div><span class="civil-label">총액</span><b class="civil-total">${fmtWon(r.civilTotal)}</b><small>${r.area.toLocaleString('ko-KR')}㎡ (약 ${Math.round(r.area/3.3058).toLocaleString('ko-KR')}평) 기준</small></div>
+        </div>
         <table class="cost-table">
-          ${r.civilRows.map(c => `<tr><td>${c.label}</td><td class="num">${fmtWon(c.amount)}</td></tr>`).join('')}
-          <tr class="total"><td>토목공사비 합계</td><td class="num">${fmtWon(r.civilTotal)}</td></tr>
+          <tr><th style="text-align:left;font-weight:500;color:var(--ink-soft);padding:4px;">항목</th><th style="text-align:right;font-weight:500;color:var(--ink-soft);padding:4px;">단가</th><th style="text-align:right;font-weight:500;color:var(--ink-soft);padding:4px;">금액</th></tr>
+          ${r.civilRows.map(c => `<tr><td>${c.label}</td><td class="num" style="color:var(--ink-soft);">${c.unit != null ? Math.round(c.unit).toLocaleString('ko-KR') + '원/㎡' : '일식'}</td><td class="num">${fmtWon(c.amount)}</td></tr>`).join('')}
+          <tr class="total"><td colspan="2">토목공사비 합계</td><td class="num">${fmtWon(r.civilTotal)}</td></tr>
         </table>
-        <p class="footnote">일반적 참고 범위의 추정치입니다. 실제 비용은 현장 여건·시공사 견적에 따라 크게 달라질 수 있습니다.</p>
+        <p class="footnote">일반적 참고 범위의 추정치이며 농지보전부담금 등 부담금과는 별도 비용입니다. 단가는 왼쪽 "토목공사비·개발부담금 계산"에서 바꿀 수 있고, 산지는 경사도에 따라 정지·사면보호 단가가 자동으로 달라집니다. 실제 비용은 현장 여건·시공사 견적에 따라 크게 달라질 수 있습니다.</p>
       </div>
       <div class="card">
         <h2>개발부담금</h2>
