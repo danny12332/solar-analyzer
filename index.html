@@ -654,6 +654,7 @@ const JIMOK_TO_CAT = { '전':'farm','답':'farm','과':'farm','목':'farm','임'
 const JIMOK_NOT_DEV = ['도','철','제','천','구','유','양','수','공','체','원','종','사','묘'];
 function applyParcelToForm(props, kakaoPath){
   lastParcelPnu = String(props.pnu || '').trim();
+  lastParcelPath = kakaoPath || null;
   const note = document.getElementById('jimokNote');
   const areaNote = document.getElementById('areaNote');
   const jibun = String(props.jibun || '').trim();
@@ -897,8 +898,111 @@ function applyLandInfoToForm(info){
   return allSet;
 }
 
+
+// ===== 진입로(지적상 도로 접함) · 주변 건물(이격거리 5호 판단 보조) 자동 확인 =====
+// 근거 데이터: 브이월드 연속지적도(LP_PA_CBND_BUBUN, jibun 끝 글자 = 지목 부호) / 도로명주소 건물(LT_C_SPBD)
+// 2D 데이터 API의 buffer 파라미터(geomFilter 도형을 m 단위로 확장)를 사용 — 문서에서 확인된 파라미터.
+const autoSite = { road: null, houses: null };
+let siteCheckGroupId = null;
+
+function pathToWkt(kakaoPath){
+  const pts = kakaoPath.map(p => `${p.getLng()} ${p.getLat()}`);
+  if(pts[0] !== pts[pts.length - 1]) pts.push(pts[0]);
+  return `POLYGON((${pts.join(',')}))`;
+}
+
+async function checkAccessRoad(kakaoPath, ownPnu){
+  const data = await vworldJsonp({
+    service: 'data', version: '2.0', request: 'GetFeature',
+    format: 'json', errorformat: 'json', size: '200', page: '1',
+    data: 'LP_PA_CBND_BUBUN',
+    geomFilter: pathToWkt(kakaoPath), buffer: '1',
+    columns: 'pnu,jibun,addr,ag_geom',
+    geometry: 'true', attribute: 'true', crs: 'EPSG:4326',
+    domain: VWORLD_DOMAIN, key: VWORLD_KEY
+  }, 12000);
+  const resp = data && data.response;
+  if(!resp || resp.status !== 'OK') return { ok: false, reason: resp && resp.status };
+  const feats = (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
+  const neighbors = feats.map(f => ({ props: f.properties || {}, geom: f.geometry })).filter(n => String(n.props.pnu || '') !== String(ownPnu || ''));
+  const suffix = n => { const m = String(n.props.jibun || '').match(/([가-힣])$/); return m ? m[1] : ''; };
+  const roads = neighbors.filter(n => suffix(n) === '도');
+  const waters = neighbors.filter(n => ['천','구','제','유'].includes(suffix(n)));
+  return { ok: true, total: neighbors.length, roads, waters };
+}
+
+async function checkNearbyBuildings(kakaoPath){
+  const data = await vworldJsonp({
+    service: 'data', version: '2.0', request: 'GetFeature',
+    format: 'json', errorformat: 'json', size: '1000', page: '1',
+    data: 'LT_C_SPBD',
+    geomFilter: pathToWkt(kakaoPath), buffer: '200',
+    geometry: 'true', attribute: 'true', crs: 'EPSG:4326',
+    domain: VWORLD_DOMAIN, key: VWORLD_KEY
+  }, 15000);
+  const resp = data && data.response;
+  if(!resp || resp.status !== 'OK') return { ok: false, reason: resp && resp.status, total: 0 };
+  const feats = (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
+  const total = (resp.result && resp.result.featureCollection && resp.result.featureCollection.totalCount) || feats.length;
+  const keys = feats.length ? Object.keys(feats[0].properties || {}).filter(k => k !== 'ag_geom') : [];
+  return { ok: true, total: Number(total) || feats.length, feats, keys };
+}
+
+function drawSiteChecks(map){
+  if(siteCheckGroupId){ removeMeasureGroup(siteCheckGroupId); siteCheckGroupId = null; }
+  const shapes = [];
+  const addPoly = (geom, color, fill) => {
+    const path = parseVworldGeom(geom);
+    if(!path || path.length < 3) return;
+    const poly = new kakao.maps.Polygon({ map, path: path.map(p => new kakao.maps.LatLng(p.lat, p.lng)), strokeWeight: 2, strokeColor: color, strokeOpacity: 0.9, fillColor: color, fillOpacity: fill });
+    measureShapes.push(poly); shapes.push(poly);
+  };
+  if(autoSite.road && autoSite.road.ok){
+    autoSite.road.roads.forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#1E6FD9', 0.25));
+    autoSite.road.waters.forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#2AA7C7', 0.2));
+  }
+  if(autoSite.houses && autoSite.houses.ok){
+    autoSite.houses.feats.forEach(f => addPoly(f.geometry || (f.properties && f.properties.ag_geom), '#E4741C', 0.35));
+  }
+  if(shapes.length) siteCheckGroupId = registerMeasureGroup(shapes);
+}
+
+async function runSiteChecks(kakaoPath, ownPnu){
+  autoSite.road = null; autoSite.houses = null;
+  const [r, h] = await Promise.all([
+    checkAccessRoad(kakaoPath, ownPnu).catch(e => ({ ok: false, reason: e.message })),
+    checkNearbyBuildings(kakaoPath).catch(e => ({ ok: false, reason: e.message, total: 0 }))
+  ]);
+  autoSite.road = r; autoSite.houses = h;
+  try { drawSiteChecks(ensureKakaoMap()); } catch(e){ console.warn('site check draw', e); }
+}
+
+function roadCheckItem(){
+  const base = '현황도로(지목 전·답·구거)는 사용승낙서 사실상 필수. 폭 3m 이상 접도 여부와 도로 지정·공고 이력 확인';
+  const r = autoSite.road;
+  if(!r) return { tag:'check', title:'진입로 확인', desc: base };
+  if(!r.ok) return { tag:'check', title:'진입로 확인', desc: '(지적 인접 필지 자동 조회 실패: ' + (r.reason || '응답 없음') + ') ' + base };
+  if(r.roads.length){
+    const names = r.roads.slice(0, 5).map(n => n.props.jibun || n.props.pnu).join(', ');
+    return { tag:'clear', title:'진입로 — 지적상 도로 접함', desc: `경계에 접한 도로 필지(지목 "도") ${r.roads.length}필지: ${names}${r.roads.length > 5 ? ' 외' : ''} (지도에 파란색 표시). 도로 폭 3m 이상 여부와 실제 통행 가능 여부(현황)는 로드뷰·현장에서 확인 필요. 지목이 도로라도 사도(私道)면 승낙이 필요할 수 있음.` };
+  }
+  return { tag:'need', title:'진입로 — 지적상 도로 접함 없음', desc: `경계에 접한 ${r.total}필지 중 지목 "도로" 필지가 없습니다. 현황도로(전·답·구거 위 도로)를 통해야 하므로 토지주 사용승낙서가 사실상 필수이며, 그 도로의 지정·공고 이력을 확인하세요.${r.waters.length ? ` 접한 하천·구거·제방 ${r.waters.length}필지(지도 하늘색) — 종단 점용은 원칙적으로 어려움.` : ''}` };
+}
+
+function setbackCheckItem(){
+  const base = '도로 이격거리는 적용 불가(전국 폐지). 주거지역(5호 이상 주택)은 최대 200m 이내에서 지자체 조례로 정함 — 실제 조례 값(0~200m)은 관할 지자체 확인 필요. 주민참여형·지붕형·자가소비용 태양광은 이격거리 자체가 적용되지 않음.';
+  const h = autoSite.houses;
+  if(!h) return { tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc: base };
+  if(!h.ok) return { tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc: '(반경 200m 건물 자동 조회 실패: ' + (h.reason || '응답 없음') + ') ' + base };
+  if(h.total < 5){
+    return { tag:'clear', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (5호 미만)`, desc: `도로명주소 건물 자료 기준으로 부지 경계에서 200m 안에 건물이 ${h.total}동뿐이라, 주택 5호 이상이라는 주거지역 요건을 충족할 수 없습니다 → 주거지 이격거리 적용 대상이 아닌 것으로 판단됩니다(지도 주황색 표시). 단, 도로명주소가 없는 무허가 건물 등은 자료에 없을 수 있으니 위성사진으로 재확인하세요. ` + base };
+  }
+  return { tag:'check', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (주택 여부 확인 필요)`, desc: `도로명주소 건물 자료 기준으로 부지 경계 200m 안에 건물이 ${h.total}동 있습니다(지도 주황색). 이 중 주택이 5호 이상이면 지자체 조례 이격거리(최대 200m)가 적용될 수 있습니다. 건물 용도(주택/창고/축사 등)는 자료로 구분하지 못했으므로 위성사진·로드뷰로 확인하세요. ` + base };
+}
+
 let autoAnalyzeSeq = 0;
 let lastParcelPnu = '';
+let lastParcelPath = null;
 function showAutoResultNote(text){
   const rs = document.getElementById('resultsWrap');
   if(rs){ const n = document.createElement('p'); n.className = 'hint'; n.style.margin = '0 0 4px'; n.textContent = text; rs.prepend(n); }
@@ -911,7 +1015,9 @@ async function autoAnalyzeFromParcel(){
   if(lastParcelPnu){
     zoneNote.className = 'auto-note'; zoneNote.textContent = '토지대장·개별공시지가·토지이용계획 조회 중...';
     try{
+      const siteChecks = lastParcelPath ? runSiteChecks(lastParcelPath, lastParcelPnu) : Promise.resolve();
       const info = await fetchLandInfo(lastParcelPnu);
+      await siteChecks;
       if(my !== autoAnalyzeSeq) return;
       renderLandInfoPanel(info, lastParcelPnu);
       const allSet = applyLandInfoToForm(info);
@@ -3030,8 +3136,8 @@ function runAnalysis(){
   if(cat === 'forest' && slope !== '10'){
     checklist.push({ tag:'check', title:'경사도 기준', desc:`평균경사도 ${slope==='99'?'30° 이상':slope+'° 구간'} — 산지 태양광은 통상 15° 초과 시 조례상 불허 사례가 많으므로 관할청 확인 필요` });
   }
-  checklist.push({ tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc:'도로 이격거리는 적용 불가(전국 폐지). 주거지역(5호 이상 주택)은 최대 200m 이내에서 지자체 조례로 정함 — 실제 조례 값(0~200m)은 관할 지자체 확인 필요. 주민참여형·지붕형·자가소비용 태양광은 이격거리 자체가 적용되지 않음. 9.18 이전 신청 건은 기존 조례가 적용될 수 있어 시행일 확인 필요.' });
-  checklist.push({ tag:'check', title:'진입로 확인', desc:'현황도로(지목 전·답·구거)는 사용승낙서 사실상 필수. 폭 3m 이상 접도 여부와 도로 지정·공고 이력 확인' });
+  checklist.push(setbackCheckItem());
+  checklist.push(roadCheckItem());
   if(area >= 10000){
     checklist.push({ tag:'check', title:'주민 의견수렴', desc:'1만㎡ 이상 발전시설은 주변 500m 이내 주민 의견 수렴을 조례로 요구하는 지자체가 많음' });
   }
