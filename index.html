@@ -229,21 +229,21 @@
   <!-- 오늘의 SMP · REC 시세 (전력거래소) -->
   <section class="market-band" id="marketBand" aria-label="오늘의 SMP·REC 시세">
     <div class="mk-card">
-      <div class="mk-label">오늘의 SMP <span>육지 · 원/kWh</span></div>
+      <div class="mk-label">오늘의 SMP <span>육지 · 하루전시장 24시간 평균 · 원/kWh</span></div>
       <div class="mk-value" id="mkSmp">—</div>
       <div class="mk-sub" id="mkSmpSub">전력거래소에서 불러오는 중…</div>
     </div>
     <div class="mk-card">
-      <div class="mk-label">오늘의 REC <span>현물시장 평균가 · 원/REC</span></div>
+      <div class="mk-label">최근 REC 현물시장 <span>육지 평균가 · 원/REC</span></div>
       <div class="mk-value" id="mkRec">—</div>
       <div class="mk-sub" id="mkRecSub">화·목 10:00~16:00 개장</div>
     </div>
     <div class="mk-card mk-jeju">
-      <div class="mk-label">SMP 제주 <span>하루전시장 · 원/kWh</span></div>
+      <div class="mk-label">SMP 제주 <span>24시간 평균 · 원/kWh</span></div>
       <div class="mk-value" id="mkJeju">—</div>
       <div class="mk-sub" id="mkJejuSub"></div>
     </div>
-    <a class="mk-link" id="mkLink" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener">전력거래소<br>오늘의 전력정보 ↗</a>
+    <a class="mk-link" id="mkLink" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener" title="출처: 공공데이터포털 한국전력거래소 오픈API">전력거래소<br>오늘의 전력정보 ↗</a>
   </section>
 
   <div class="app-grid">
@@ -3422,7 +3422,7 @@ function renderResults(r){
   const kd = d => { const m = String(d || '').match(/(\d{4})\.(\d{2})\.(\d{2})/); return m ? `${m[2]}.${m[3]} 거래일` : ''; };
   const fail = (why) => {
     band.classList.add('failed');
-    g('mkSmp').textContent = '조회 실패'; g('mkSmpSub').textContent = why || '전력거래소 페이지를 읽지 못했습니다';
+    g('mkSmp').textContent = '조회 실패'; g('mkSmpSub').textContent = why || '공공데이터포털 API 응답이 없습니다';
     g('mkRec').textContent = '조회 실패'; g('mkRecSub').textContent = '오른쪽 버튼으로 전력거래소에서 확인하세요';
     g('mkJeju').textContent = '—'; g('mkJejuSub').textContent = '';
   };
@@ -3437,7 +3437,7 @@ function renderResults(r){
     } else { g('mkSmp').textContent = '—'; g('mkSmpSub').textContent = 'SMP 값을 읽지 못했습니다'; }
     if(j.rec){
       g('mkRec').innerHTML = `${fmt(j.rec.avg)}<small>평균</small>`;
-      g('mkRecSub').innerHTML = `${kd(j.rec.date)} · 종가 <b>${fmt(j.rec.close)}</b> · 최저 ${fmt(j.rec.min)} ~ 최고 ${fmt(j.rec.max)} · 거래량 ${fmt(j.rec.volume)} REC`;
+      g('mkRecSub').innerHTML = `${kd(j.rec.date)} · 종가(육지·제주 통합) <b>${j.rec.close != null ? fmt(j.rec.close) : '-'}</b> · 육지 최저 ${fmt(j.rec.min)} ~ 최고 ${fmt(j.rec.max)}${j.rec.volume != null ? ` · 체결 ${fmt(j.rec.volume)} REC` : ''}`;
     } else { g('mkRec').textContent = '—'; g('mkRecSub').textContent = 'REC 값을 읽지 못했습니다'; }
     if(j.smpJeju){
       g('mkJeju').innerHTML = `${fmt(j.smpJeju.avg)}<small>평균</small>`;
