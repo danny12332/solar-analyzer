@@ -5,74 +5,122 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>태양광사업 분석기 v2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
+  /* ===== 태양광 에너지 테마: 새벽 하늘 → 낮 하늘, 포인트는 해 ===== */
   :root{
-    --paper:#EDF1E8; --surface:#FFFFFF; --surface-2:#F5F8F3; --line:#DCE3D5;
-    --ink:#1B241E; --ink-soft:#57655B; --ink-faint:#8B978A;
-    --forest:#33604A; --forest-deep:#22402F; --forest-tint:#E2EEE5;
-    --amber:#B07A0C; --amber-tint:#F8ECCF;
-    --rust:#A5442A; --rust-tint:#F4E0D6;
-    --stamp-red:#AE3B2E;
-    --header-h:64px;
-    /* 이전 변수명 호환용 별칭 */
-    --card-line:var(--line); --forest-dim:var(--forest-tint); --rust-dim:var(--rust-tint); --amber-dim:var(--amber-tint); --card:var(--surface);
+    --paper:#EEF4F8; --surface:#FFFFFF; --surface-2:#F3F7FA; --line:#D6E1EA;
+    --ink:#1E2D3C; --ink-soft:#4E6172; --ink-faint:#8696A5;
+    --sun:#F2A413; --sun-deep:#C4790A; --sun-tint:#FDF0D3; --sun-glow:rgba(242,164,19,.35);
+    --sky:#2C7DB5; --sky-deep:#164B73; --sky-tint:#DFEEF8; --dusk:#12314B;
+    --leaf:#4C8A3B; --leaf-tint:#E3F1DC;
+    --coral:#D65A33; --coral-tint:#FBE2D8;
+    --header-h:76px;
+    --r-lg:16px; --r-md:10px; --r-sm:6px;
+    --shadow:0 2px 6px rgba(22,75,115,.06), 0 10px 28px rgba(22,75,115,.06);
+    /* 기존 코드(인라인 스타일·JS)가 참조하는 변수명 — 새 팔레트로 연결 */
+    --forest:var(--sky); --forest-deep:var(--sky-deep); --forest-tint:var(--sky-tint);
+    --amber:var(--sun-deep); --amber-tint:var(--sun-tint);
+    --rust:var(--coral); --rust-tint:var(--coral-tint); --stamp-red:var(--coral);
+    --card-line:var(--line); --forest-dim:var(--sky-tint); --rust-dim:var(--coral-tint); --amber-dim:var(--sun-tint); --card:var(--surface);
   }
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Noto Sans KR',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;}
-
-  /* ---------- Masthead ---------- */
-  header.top{
-    position:sticky;top:0;z-index:40;
-    background:var(--forest-deep);color:#EFF4EF;
-    padding:14px clamp(18px,3vw,40px);
-    display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;
-    border-bottom:1px solid rgba(255,255,255,.08);
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto;} *{transition:none !important;animation:none !important;}}
+  body{
+    margin:0;color:var(--ink);font-family:'IBM Plex Sans KR','Noto Sans KR',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;
+    background:linear-gradient(180deg,#FBEFD9 0px,#F3F1E6 180px,var(--paper) 460px) fixed;
   }
-  header.top .brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
-  header.top h1{font-family:'Noto Serif KR',serif;font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;color:#fff;}
-  header.top .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#9FC2AC;margin:0;}
-  header.top .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#BFD2C6;text-align:right;line-height:1.7;}
-  header.top .meta b{color:#F0B074;font-weight:500;}
+  ::selection{background:var(--sun-tint);}
+  :focus-visible{outline:3px solid var(--sun);outline-offset:2px;}
 
-  /* ---------- Shell ---------- */
-  .shell{max-width:1720px;margin:0 auto;padding:28px clamp(18px,3vw,40px) 90px;}
+  /* ---------- 상단 띠: 지평선 ---------- */
+  header.top{
+    position:sticky;top:0;z-index:40;min-height:var(--header-h);
+    background:
+      radial-gradient(circle at 100% 130%, rgba(242,164,19,.85) 0, rgba(242,164,19,.45) 90px, rgba(242,164,19,0) 220px),
+      linear-gradient(180deg,var(--dusk) 0%,#1A4A70 100%);
+    color:#EAF2F8;padding:14px clamp(18px,3vw,40px);
+    display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;
+    border-bottom:2px solid var(--sun);
+  }
+  header.top .brand{display:flex;align-items:center;gap:14px;}
+  header.top .sunmark{width:40px;height:40px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 40% 38%,#FFE29A 0,#F2A413 55%,#D9820F 100%);
+    box-shadow:0 0 0 6px rgba(242,164,19,.18),0 0 26px var(--sun-glow);}
+  header.top h1{font-family:'Gowun Batang',serif;font-weight:700;font-size:23px;margin:0;letter-spacing:-.01em;color:#fff;line-height:1.2;}
+  header.top .eyebrow{font-size:12px;color:#BFD6E8;margin:3px 0 0;}
+  header.top .meta{font-size:12px;color:#CFE0EE;text-align:right;line-height:1.7;}
+  header.top .meta b{color:#FFD27A;font-weight:500;}
+  @media (max-width:700px){header.top .meta{text-align:left;}}
 
-  .toolbar-card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 22px 22px;margin-bottom:24px;box-shadow:0 1px 2px rgba(27,36,30,.04);}
-  .toolbar-card h2{font-family:'Noto Serif KR',serif;font-size:16px;margin:0 0 14px;}
+  /* ---------- 본문 틀 ---------- */
+  .shell{max-width:1720px;margin:0 auto;padding:26px clamp(18px,3vw,40px) 90px;}
 
-  .app-grid{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:24px;align-items:start;}
+  .app-grid{display:grid;grid-template-columns:minmax(320px,390px) 1fr;gap:22px;align-items:start;}
   @media (max-width:980px){.app-grid{grid-template-columns:1fr;}}
 
-  .rail{position:sticky;top:calc(var(--header-h) + 16px);display:flex;flex-direction:column;gap:18px;max-height:calc(100vh - var(--header-h) - 32px);overflow-y:auto;padding-right:4px;}
+  .rail{position:sticky;top:calc(var(--header-h) + 14px);display:flex;flex-direction:column;gap:18px;max-height:calc(100vh - var(--header-h) - 28px);overflow-y:auto;padding-right:4px;}
   @media (max-width:980px){.rail{position:static;max-height:none;overflow:visible;}}
   .rail::-webkit-scrollbar{width:6px;}
-  .rail::-webkit-scrollbar-thumb{background:#C7D2C0;border-radius:3px;}
-
+  .rail::-webkit-scrollbar-thumb{background:#BFD0DE;border-radius:3px;}
   .main-col{display:flex;flex-direction:column;gap:18px;min-width:0;}
 
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:22px 22px 24px;box-shadow:0 1px 2px rgba(27,36,30,.04);}
-  .card h2{font-family:'Noto Serif KR',serif;font-size:17px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line);}
+  /* 카드: 큰 틀은 둥글게, 안쪽 상자는 덜 둥글게 */
+  .card, .toolbar-card, .stamp-band{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);}
+  .card{padding:22px 24px 24px;}
+  .card h2{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line);}
+
+  /* 주소 검색 띠 (헤더 바로 아래, 전체 폭) */
+  .toolbar-card{padding:20px 24px 18px;margin-bottom:22px;
+    background:linear-gradient(180deg,#FFFFFF 0%,#FFFDF7 100%);border-color:#EAD9B3;}
+  .toolbar-card h2{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin:0 0 12px;}
+  .toolbar-card .row2{grid-template-columns:1fr auto;align-items:end;}
+  .toolbar-card .row2 button.run{margin-top:0;padding:12px 22px;white-space:nowrap;}
+  @media (max-width:700px){.toolbar-card .row2{grid-template-columns:1fr;}}
+  .toolbar-card .lookups{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;align-items:start;}
+  @media (max-width:980px){.toolbar-card .lookups{grid-template-columns:1fr;}}
+  .toolbar-card .lookups button.run{margin-top:0;}
+  .toolbar-card #siteAddress{font-size:15px;padding:12px 14px;}
+
+  /* 입력칸 */
   .field{margin-bottom:15px;}
   .field label{display:block;font-size:12.5px;font-weight:500;color:var(--ink-soft);margin-bottom:5px;}
-  .field select, .field input{width:100%;padding:10px 11px;border:1px solid #C7D0C1;border-radius:5px;font-family:inherit;font-size:14px;background:var(--surface-2);color:var(--ink);transition:border-color .15s, background .15s;}
-  .field select:focus, .field input:focus{outline:none;border-color:var(--forest);background:var(--surface);box-shadow:0 0 0 3px var(--forest-tint);}
+  .field select, .field input{width:100%;padding:10px 12px;border:1px solid #C4D3DF;border-radius:var(--r-sm);font-family:inherit;font-size:14px;background:var(--surface);color:var(--ink);transition:border-color .15s, box-shadow .15s;}
+  .field select:focus, .field input:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px var(--sky-tint);}
   .field .hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0 4px;color:var(--ink-soft);}
   .checkrow input{width:auto;}
-  button.run{width:100%;padding:13px;margin-top:6px;background:var(--ink);color:#F6F7F3;border:none;border-radius:6px;font-family:'Noto Sans KR',sans-serif;font-weight:700;font-size:14.5px;letter-spacing:.01em;cursor:pointer;transition:background .15s, transform .1s;}
-  button.run:hover{background:var(--forest);}
-  button.run:active{transform:scale(.99);}
-  button.run:disabled{opacity:.55;cursor:default;}
 
+  /* 버튼: 기본은 해 색, 큰 실행 버튼은 짙은 하늘 */
+  button.run{width:100%;padding:12px 16px;margin-top:6px;background:var(--ink);color:#F6F9FC;border:none;border-radius:var(--r-md);font-family:inherit;font-weight:700;font-size:14px;letter-spacing:.01em;cursor:pointer;transition:filter .15s, transform .1s;}
+  button.run:hover{filter:brightness(1.12);}
+  button.run:active{transform:scale(.99);}
+  button.run:disabled{opacity:.55;cursor:default;filter:none;}
+  button.run.sun{background:var(--sun);color:#2A1A00;}
+  button.run.sun:hover{filter:brightness(1.05);}
+
+  /* 지도 도구 버튼(칩) — JS가 켜짐/꺼짐을 인라인 색으로 바꾸므로 여백·모양만 정의 */
+  .map-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+  .map-head h2{margin:0;padding:0;border:none;}
+  .map-tools{display:flex;gap:6px;flex-wrap:wrap;}
+  .map-tools button.run{width:auto;margin:0;padding:7px 13px;font-size:12.5px;border-radius:999px;font-weight:500;}
+  .panel-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 14px;background:var(--sun-tint);border:1px solid #F1DFB4;border-radius:var(--r-md);}
+  .panel-bar > span{font-size:12.5px;font-weight:700;color:#7A4E05;white-space:nowrap;}
+  .panel-bar label{font-size:11.5px;color:var(--ink-soft);}
+  .panel-bar input, .panel-bar select{padding:3px 5px;border:1px solid #E2CFA3;border-radius:4px;background:#fff;font-family:inherit;font-size:12px;color:var(--ink);}
+  .panel-bar button.run{width:auto;margin:0;padding:6px 12px;font-size:12px;border-radius:var(--r-sm);}
+  #kakaoMap{width:100%;height:560px;border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
+  #kakaoRoadview{width:100%;height:420px;border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
+
+  /* 결과 */
   .results{display:flex;flex-direction:column;gap:18px;}
-  .stamp-band{display:flex;align-items:center;gap:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:22px 26px;box-shadow:0 1px 2px rgba(27,36,30,.04);}
-  .stamp{width:92px;height:92px;border-radius:50%;border:3px solid var(--stamp-red);color:var(--stamp-red);display:flex;align-items:center;justify-content:center;text-align:center;font-family:'Noto Serif KR',serif;font-weight:700;font-size:15px;transform:rotate(-9deg);flex:none;opacity:.92;}
-  .stamp.ok{border-color:var(--forest);color:var(--forest);}
-  .stamp.warn{border-color:var(--amber);color:var(--amber);}
-  .stamp-text h3{margin:0 0 6px;font-family:'Noto Serif KR',serif;font-size:19px;}
+  .stamp-band{display:flex;align-items:center;gap:22px;padding:22px 26px;}
+  .stamp{width:96px;height:96px;border-radius:50%;border:3px solid var(--coral);color:var(--coral);display:flex;align-items:center;justify-content:center;text-align:center;font-family:'Gowun Batang',serif;font-weight:700;font-size:15px;transform:rotate(-9deg);flex:none;opacity:.94;}
+  .stamp.ok{border-color:var(--leaf);color:var(--leaf);}
+  .stamp.warn{border-color:var(--sun-deep);color:var(--sun-deep);}
+  .stamp-text h3{margin:0 0 6px;font-family:'Gowun Batang',serif;font-size:20px;}
   .stamp-text p{margin:0;font-size:13.5px;color:var(--ink-soft);}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
   @media (max-width:900px){.grid2{grid-template-columns:1fr;}}
@@ -80,43 +128,43 @@
   .checklist li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--surface-2);font-size:13.5px;}
   .checklist li:last-child{border-bottom:none;}
   .tag{flex:none;width:64px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;padding:3px 0;border-radius:4px;height:fit-content;}
-  .tag.need{background:var(--rust-tint);color:var(--rust);}
-  .tag.check{background:var(--amber-tint);color:#8A5F06;}
-  .tag.clear{background:var(--forest-tint);color:var(--forest);}
+  .tag.need{background:var(--coral-tint);color:var(--coral);}
+  .tag.check{background:var(--sun-tint);color:#8A5A05;}
+  .tag.clear{background:var(--leaf-tint);color:var(--leaf);}
   .li-body b{display:block;font-weight:700;margin-bottom:2px;}
   .li-body span{color:var(--ink-soft);font-size:12.5px;}
   .cost-table{width:100%;border-collapse:collapse;font-size:13.5px;}
   .cost-table td{padding:9px 4px;border-bottom:1px solid var(--surface-2);vertical-align:top;}
   .cost-table td.num{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
   .cost-table tr.total td{border-top:2px solid var(--ink);border-bottom:none;font-weight:700;padding-top:12px;}
-  .cost-table tr.total td.num{font-size:16px;color:var(--rust);}
+  .cost-table tr.total td.num{font-size:16px;color:var(--coral);}
   .footnote{font-size:11.5px;color:var(--ink-faint);margin-top:10px;line-height:1.6;}
-  .reco{background:var(--forest-tint);border:1px solid #CBE0D2;border-radius:6px;padding:16px 18px;font-size:13.5px;}
-  .reco.warn{background:var(--rust-tint);border-color:#E7BEB0;}
+  .reco{background:var(--sky-tint);border:1px solid #BFD9EC;border-radius:var(--r-md);padding:16px 18px;font-size:13.5px;}
+  .reco.warn{background:var(--coral-tint);border-color:#EBBFAF;}
   .reco ul{margin:8px 0 0;padding-left:18px;}
   .reco li{margin-bottom:6px;}
   .ordinance-table, .ref-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px;}
   .ordinance-table th, .ordinance-table td, .ref-table th, .ref-table td{border:1px solid var(--line);padding:7px 8px;text-align:left;}
   .ordinance-table th, .ref-table th{background:var(--surface-2);font-weight:500;color:var(--ink-soft);}
   .verified-badge{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:1px 6px;border-radius:8px;white-space:nowrap;}
-  .v-true{background:var(--forest-tint);color:var(--forest);}
-  .v-false{background:var(--rust-tint);color:var(--rust);}
+  .v-true{background:var(--leaf-tint);color:var(--leaf);}
+  .v-false{background:var(--coral-tint);color:var(--coral);}
   details{margin-top:10px;}
-  summary{cursor:pointer;font-size:12.5px;color:var(--forest);font-weight:500;}
-  .placeholder{display:flex;align-items:center;justify-content:center;min-height:220px;color:var(--ink-faint);font-size:13.5px;text-align:center;padding:20px;background:var(--surface-2);border-radius:6px;border:1px dashed var(--line);}
+  summary{cursor:pointer;font-size:12.5px;color:var(--sky);font-weight:500;}
+  .placeholder{display:flex;align-items:center;justify-content:center;min-height:220px;color:var(--ink-faint);font-size:13.5px;text-align:center;padding:20px;background:var(--surface-2);border-radius:var(--r-md);border:1px dashed var(--line);}
   .grade-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
   .grade-table td, .grade-table th{border:1px solid var(--line);padding:8px;}
   .grade-table th{background:var(--surface-2);text-align:left;}
-  .grade-A{color:var(--forest);font-weight:700;}
-  .grade-D{color:var(--rust);font-weight:700;}
-  .keyline{background:var(--forest-tint);border-left:3px solid var(--forest);padding:10px 14px;margin:10px 0;font-size:13px;border-radius:0 4px 4px 0;}
+  .grade-A{color:var(--leaf);font-weight:700;}
+  .grade-D{color:var(--coral);font-weight:700;}
+  .keyline{background:var(--sun-tint);border-left:3px solid var(--sun);padding:10px 14px;margin:10px 0;font-size:13px;border-radius:0 4px 4px 0;}
   .subhide{display:none;}
 
-  /* ---------- Reference tabs ---------- */
+  /* ---------- 참고자료 탭 ---------- */
   .ref-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:0;}
-  .ref-tab-btn{background:none;border:none;padding:10px 16px;font-family:'Noto Sans KR',sans-serif;font-size:13.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s, border-color .15s;}
-  .ref-tab-btn:hover{color:var(--forest);}
-  .ref-tab-btn.active{color:var(--forest);border-bottom-color:var(--forest);font-weight:700;}
+  .ref-tab-btn{background:none;border:none;padding:10px 16px;font-family:inherit;font-size:13.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s, border-color .15s;}
+  .ref-tab-btn:hover{color:var(--sky);}
+  .ref-tab-btn.active{color:var(--sky-deep);border-bottom-color:var(--sun);font-weight:700;}
   .ref-pane{display:none;}
   .ref-pane.active{display:block;}
 #kakaoMap.measuring, #kakaoMap.measuring * { cursor: crosshair !important; }
@@ -126,8 +174,11 @@
 <body>
 <header class="top">
   <div class="brand">
-    <h1>태양광사업 분석기</h1>
-    <p class="eyebrow">Solar Site Feasibility · 입지·인허가·부담금 분석</p>
+    <div class="sunmark" aria-hidden="true"></div>
+    <div>
+      <h1>태양광사업 분석기</h1>
+      <p class="eyebrow">입지 · 인허가 · 계통 · 부담금을 한 화면에서</p>
+    </div>
   </div>
   <div class="meta">
     기준일 2026.08 · 국가 법령·고시 + 실무자료 기준<br>
@@ -137,11 +188,7 @@
 
 <div class="shell">
 
-  <div class="app-grid">
-
-    <!-- LEFT: sticky rail -->
-    <div class="rail">
-
+  <!-- 주소 검색 (전체 폭) -->
       <div class="toolbar-card">
         <h2>주소로 위치 확인</h2>
         <div class="row2" style="align-items:end;">
@@ -150,20 +197,31 @@
             <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1" autocomplete="off">
             <div id="addrSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--card-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
           </div>
-          <button class="run" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
+          <button class="run sun" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
         </div>
-        <div style="margin-top:12px;">
-          <button class="run" id="eumBtn" style="width:100%;background:var(--forest);" onclick="openEumResult()">📄 이 주소의 토지이용계획(지목·용도지역·용도지구) 바로 조회</button>
-          <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
-          <button class="run" id="kepcoBtn" style="width:100%;background:var(--amber);margin-top:10px;" onclick="checkKepcoCapacity()">⚡ 이 주소의 배전선로 여유용량 조회 (한전ON)</button>
-          <div id="kepcoResult" style="margin-top:8px;"></div>
-          <button class="run" id="bldrgstBtn" style="width:100%;background:#3B5B7A;margin-top:10px;" onclick="checkBuildingRegister()">🏢 이 주소의 건축물대장 조회</button>
-          <div id="bldrgstResult" style="margin-top:8px;"></div>
-          <p id="parcelStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+        <div class="lookups">
+          <div>
+            <button class="run" id="eumBtn" style="background:var(--sky);" onclick="openEumResult()">📄 토지이용계획 바로 조회</button>
+            <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+          </div>
+          <div>
+            <button class="run sun" id="kepcoBtn" onclick="checkKepcoCapacity()">⚡ 배전선로 여유용량 (한전ON)</button>
+            <div id="kepcoResult" style="margin-top:8px;"></div>
+          </div>
+          <div>
+            <button class="run" id="bldrgstBtn" style="background:var(--sky-deep);" onclick="checkBuildingRegister()">🏢 건축물대장 조회</button>
+            <div id="bldrgstResult" style="margin-top:8px;"></div>
+          </div>
         </div>
+        <p id="parcelStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
       </div>
+
+  <div class="app-grid">
+
+    <!-- LEFT: sticky rail -->
+    <div class="rail">
 
       <!-- INPUT -->
       <div class="card">
@@ -296,21 +354,21 @@
     <!-- MAIN: results -->
     <div class="main-col">
       <div class="card" id="mapEmbedWrap" style="display:none;">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-          <h2 style="margin:0;padding:0;border:none;">주소 위치 지도</h2>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="run" id="satBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="toggleSatellite()">🛰 위성보기</button>
-            <button type="button" class="run" id="cadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleCadastral()">🗺 지적편집도</button>
-            <button type="button" class="run" id="rvRoadBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadviewRoads()">🛣 로드뷰 가능 도로</button>
-            <button type="button" class="run" id="roadviewBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRoadview()">🚶 로드뷰</button>
-            <button type="button" class="run" id="distanceBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleDistanceMode()">📏 거리재기</button>
-            <button type="button" class="run" id="areaBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleAreaMode()">📐 면적재기</button>
-            <button type="button" class="run" id="radiusBtn" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--forest-dim);color:var(--forest);width:auto;" onclick="toggleRadiusMode()">📍 반경재기</button>
-            <button type="button" class="run" style="margin-top:0;padding:8px 14px;font-size:12.5px;background:var(--surface-2);color:var(--ink-soft);width:auto;" onclick="clearMeasurements()">🧹 측정 지우기</button>
+        <div class="map-head">
+          <h2>주소 위치 지도</h2>
+          <div class="map-tools">
+            <button type="button" class="run" id="satBtn" style="background:var(--ink);color:#F6F7F3;" onclick="toggleSatellite()">🛰 위성보기</button>
+            <button type="button" class="run" id="cadBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
+            <button type="button" class="run" id="rvRoadBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadviewRoads()">🛣 로드뷰 가능 도로</button>
+            <button type="button" class="run" id="roadviewBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadview()">🚶 로드뷰</button>
+            <button type="button" class="run" id="distanceBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleDistanceMode()">📏 거리재기</button>
+            <button type="button" class="run" id="areaBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleAreaMode()">📐 면적재기</button>
+            <button type="button" class="run" id="radiusBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRadiusMode()">📍 반경재기</button>
+            <button type="button" class="run" style="background:var(--surface-2);color:var(--ink-soft);" onclick="clearMeasurements()">🧹 측정 지우기</button>
           </div>
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border-radius:6px;">
-          <span style="font-size:12px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">☀️ 태양광 패널 배치</span>
+        <div class="panel-bar">
+          <span>☀️ 태양광 패널 배치</span>
           <label style="font-size:11.5px;color:var(--ink-soft);">배치 대상
             <select id="mountType" onchange="onMountTypeChange()" style="padding:2px 4px;">
               <option value="ground">지상(개활지)</option>
@@ -328,20 +386,20 @@
           <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
           <label id="flipShadeLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;"><input id="flipShadeHalf" type="checkbox" style="vertical-align:middle;"> 처마/용마루 반대로 뒤집기</label>
           <label id="ewRackLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">동서지붕 남향 거치대 각도(°) <input id="panelRackTilt" type="number" value="10" step="1" min="0" style="width:48px;padding:2px 4px;"></label>
-          <button type="button" class="run" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--ink);color:#F6F7F3;width:auto;" onclick="onGenerateLayoutClick()">배치 생성</button>
-          <button type="button" class="run" id="solarIllustrationBtn" style="margin-top:0;padding:6px 12px;font-size:12px;background:var(--forest-dim);color:var(--forest);width:auto;display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
+          <button type="button" class="run" onclick="onGenerateLayoutClick()">배치 생성</button>
+          <button type="button" class="run" id="solarIllustrationBtn" style="background:var(--forest-dim);color:var(--forest);display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
         </div>
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
-        <div id="kakaoMap" style="width:100%;height:520px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
+        <div id="kakaoMap"></div>
         <div id="kakaoRoadviewWrap" style="margin-top:14px;display:none;">
           <p style="font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:0 0 8px;">🚶 로드뷰 — 지도 위 파란 카메라 아이콘이 현재 로드뷰 위치·방향입니다</p>
-          <div id="kakaoRoadview" style="width:100%;height:420px;border:1px solid var(--card-line);border-radius:6px;background:#eee;"></div>
+          <div id="kakaoRoadview"></div>
         </div>
         <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
         <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적·반경은 참고용이며 실제 값과 다를 수 있습니다. 지도를 클릭하거나 주소를 검색하면 그 지점의 <b>지번 주소와 도로명 주소가 함께</b> 표시됩니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🚶 로드뷰" 버튼을 켠 뒤 지도를 클릭하면 그 위치의 로드뷰가 아래에 나타나고, 지도 위 카메라 아이콘이 위치·바라보는 방향을 함께 보여줍니다. 거리재기·면적재기·반경재기는 지도를 클릭해 점을 찍고, 지도를 오른쪽 클릭하거나 버튼을 다시 누르면 측정이 끝납니다.</p>
       </div>
       <div class="results" id="resultsWrap">
-        <div class="card"><div class="placeholder">왼쪽에 부지 조건을 입력하고<br>‘부지 분석 실행’을 눌러주세요</div></div>
+        <div class="card"><div class="placeholder">왼쪽에서 부지 조건을 고른 뒤 ‘부지 분석 실행’을 누르면<br>여기에 인허가 체크리스트와 예상 부담금이 나옵니다</div></div>
       </div>
     </div><!-- /main-col -->
 
