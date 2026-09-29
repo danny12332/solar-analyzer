@@ -59,6 +59,22 @@
   @media (max-width:700px){header.top .ticker{justify-content:flex-start;margin-left:0;}}
   @media (max-width:700px){header.top .meta{text-align:left;}}
 
+  /* ---------- 오늘의 SMP·REC 시세 띠 ---------- */
+  .market-band{display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:12px;align-items:stretch;margin-bottom:18px;}
+  @media (max-width:980px){.market-band{grid-template-columns:1fr 1fr;} .market-band .mk-link{grid-column:1/-1;}}
+  .mk-card{background:linear-gradient(160deg,#173B5C 0%,#1F5580 100%);color:#EAF2F8;border-radius:var(--r-lg);padding:14px 20px;box-shadow:var(--shadow);border:1px solid rgba(255,255,255,.08);position:relative;overflow:hidden;}
+  .mk-card::after{content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,rgba(242,164,19,.35) 0,rgba(242,164,19,0) 70%);}
+  .mk-card.mk-jeju{background:linear-gradient(160deg,#1F5580 0%,#2C7DB5 100%);}
+  .mk-label{font-size:12.5px;font-weight:700;letter-spacing:.02em;color:#CFE0EE;}
+  .mk-label span{font-weight:400;color:#9FBDD6;margin-left:6px;font-size:11.5px;}
+  .mk-value{font-family:'IBM Plex Mono',monospace;font-size:34px;line-height:1.15;color:#FFD27A;margin:4px 0 2px;font-weight:500;}
+  .mk-value small{font-size:14px;color:#EAF2F8;margin-left:4px;font-family:'IBM Plex Sans KR',sans-serif;}
+  .mk-sub{font-size:12px;color:#BFD6E8;}
+  .mk-sub b{color:#fff;font-weight:500;}
+  .mk-link{display:flex;align-items:center;justify-content:center;text-align:center;padding:14px 18px;border-radius:var(--r-lg);background:var(--sun);color:#2A1A00;font-weight:700;font-size:13px;text-decoration:none;line-height:1.4;box-shadow:var(--shadow);}
+  .mk-link:hover{filter:brightness(1.05);}
+  .market-band.failed .mk-value{color:#BFD6E8;font-size:22px;}
+
   /* ---------- 본문 틀 ---------- */
   .shell{max-width:1720px;margin:0 auto;padding:26px clamp(18px,3vw,40px) 90px;}
 
@@ -204,15 +220,32 @@
     </div>
   </div>
   <div class="meta">
-    <div class="ticker" id="marketTicker" title="전력거래소 메인 '오늘의 전력정보' 기준">
-      <a href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener" id="marketTickerLink">SMP · REC 시세 불러오는 중…</a>
-    </div>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
 </header>
 
 <div class="shell">
+
+  <!-- 오늘의 SMP · REC 시세 (전력거래소) -->
+  <section class="market-band" id="marketBand" aria-label="오늘의 SMP·REC 시세">
+    <div class="mk-card">
+      <div class="mk-label">오늘의 SMP <span>육지 · 원/kWh</span></div>
+      <div class="mk-value" id="mkSmp">—</div>
+      <div class="mk-sub" id="mkSmpSub">전력거래소에서 불러오는 중…</div>
+    </div>
+    <div class="mk-card">
+      <div class="mk-label">오늘의 REC <span>현물시장 평균가 · 원/REC</span></div>
+      <div class="mk-value" id="mkRec">—</div>
+      <div class="mk-sub" id="mkRecSub">화·목 10:00~16:00 개장</div>
+    </div>
+    <div class="mk-card mk-jeju">
+      <div class="mk-label">SMP 제주 <span>하루전시장 · 원/kWh</span></div>
+      <div class="mk-value" id="mkJeju">—</div>
+      <div class="mk-sub" id="mkJejuSub"></div>
+    </div>
+    <a class="mk-link" id="mkLink" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener">전력거래소<br>오늘의 전력정보 ↗</a>
+  </section>
 
   <!-- 주소 검색 (전체 폭) -->
       <div class="toolbar-card">
@@ -3378,19 +3411,37 @@ function renderResults(r){
   if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', setup); } else { setup(); }
 })();
 
-// ===== 상단 SMP·REC 시세 (Worker /market → 전력거래소 메인 "오늘의 전력정보") =====
-(function loadMarketTicker(){
-  const el = document.getElementById('marketTickerLink');
-  if(!el) return;
+// ===== 오늘의 SMP·REC 시세 띠 (Worker /market → 전력거래소 메인 "오늘의 전력정보") =====
+(function loadMarketBand(){
+  const band = document.getElementById('marketBand');
+  if(!band) return;
+  const g = id => document.getElementById(id);
   const fmt = n => Number(n).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
-  const md = d => d ? d.replace(/^\d{4}\./, '') : '';
-  fetch('https://rough-moon-e02c.ruwk66.workers.dev/market').then(r => r.json()).then(j => {
-    if(!j || !j.ok || (!j.smpLand && !j.rec)){ el.textContent = 'SMP · REC 시세 조회 실패 — 전력거래소에서 확인'; return; }
-    const parts = [];
-    if(j.smpLand) parts.push(`SMP(육지) <span class="v">${fmt(j.smpLand.avg)}</span> 원/kWh <span class="d">${md(j.smpLand.date)} 평균 · ${fmt(j.smpLand.min)}~${fmt(j.smpLand.max)}</span>`);
-    if(j.rec) parts.push(`REC <span class="v">${fmt(j.rec.avg)}</span> 원/REC <span class="d">${md(j.rec.date)} 평균 · 종가 ${fmt(j.rec.close)}</span>`);
-    el.innerHTML = parts.join(' <span class="d">|</span> ');
-  }).catch(() => { el.textContent = 'SMP · REC 시세 조회 실패 — 전력거래소에서 확인'; });
+  const kd = d => { const m = String(d || '').match(/(\d{4})\.(\d{2})\.(\d{2})/); return m ? `${m[2]}.${m[3]} 거래일` : ''; };
+  const fail = (why) => {
+    band.classList.add('failed');
+    g('mkSmp').textContent = '조회 실패'; g('mkSmpSub').textContent = why || '전력거래소 페이지를 읽지 못했습니다';
+    g('mkRec').textContent = '조회 실패'; g('mkRecSub').textContent = '오른쪽 버튼으로 전력거래소에서 확인하세요';
+    g('mkJeju').textContent = '—'; g('mkJejuSub').textContent = '';
+  };
+  fetch('https://rough-moon-e02c.ruwk66.workers.dev/market').then(r => {
+    if(!r.ok) throw new Error('Worker 응답 ' + r.status + (r.status === 404 ? ' (Worker에 /market 경로가 아직 없습니다 — worker.js 최신본 배포 필요)' : ''));
+    return r.json();
+  }).then(j => {
+    if(!j || !j.ok || (!j.smpLand && !j.rec)){ fail(j && j.error ? j.error : ''); return; }
+    if(j.smpLand){
+      g('mkSmp').innerHTML = `${fmt(j.smpLand.avg)}<small>평균</small>`;
+      g('mkSmpSub').innerHTML = `${kd(j.smpLand.date)} · 최소 <b>${fmt(j.smpLand.min)}</b> ~ 최고 <b>${fmt(j.smpLand.max)}</b>`;
+    } else { g('mkSmp').textContent = '—'; g('mkSmpSub').textContent = 'SMP 값을 읽지 못했습니다'; }
+    if(j.rec){
+      g('mkRec').innerHTML = `${fmt(j.rec.avg)}<small>평균</small>`;
+      g('mkRecSub').innerHTML = `${kd(j.rec.date)} · 종가 <b>${fmt(j.rec.close)}</b> · 최저 ${fmt(j.rec.min)} ~ 최고 ${fmt(j.rec.max)} · 거래량 ${fmt(j.rec.volume)} REC`;
+    } else { g('mkRec').textContent = '—'; g('mkRecSub').textContent = 'REC 값을 읽지 못했습니다'; }
+    if(j.smpJeju){
+      g('mkJeju').innerHTML = `${fmt(j.smpJeju.avg)}<small>평균</small>`;
+      g('mkJejuSub').innerHTML = `${kd(j.smpJeju.date)} · ${fmt(j.smpJeju.min)} ~ ${fmt(j.smpJeju.max)}`;
+    } else { g('mkJeju').textContent = '—'; }
+  }).catch(e => fail(e && e.message ? e.message : ''));
 })();
 </script>
 </body>
