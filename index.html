@@ -490,6 +490,7 @@
           <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
           <label id="flipShadeLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;"><input id="flipShadeHalf" type="checkbox" style="vertical-align:middle;"> 처마/용마루 반대로 뒤집기</label>
           <label id="ewRackLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">동서지붕 남향 거치대 각도(°) <input id="panelRackTilt" type="number" value="10" step="1" min="0" style="width:48px;padding:2px 4px;"></label>
+          <label>배치 기준 <select id="densityRule" style="padding:2px 4px;"><option value="practice" selected>실무 밀도 (건물 200평/100kW · 토지 300평/100kW)</option><option value="max">기하학적 최대</option></select></label>
           <button type="button" class="run" onclick="onGenerateLayoutClick()">배치 생성</button>
           <button type="button" class="run" id="solarIllustrationBtn" style="background:var(--forest-dim);color:var(--forest);display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
         </div>
@@ -1730,6 +1731,35 @@ function onMountTypeChange(){
   document.getElementById('ewRackLabel').style.display = isGable ? 'inline' : 'none';
 }
 
+// ---- 실무 밀도 기준: 건물 지붕 200평당 100kW, 토지 300평당 100kW (사용자 제공 실무 기준, 2026.09.29) ----
+// 기하학적으로 들어가는 모듈 수가 기준 용량을 넘으면, 행(row)을 균등한 간격으로 골라 남기는 방식으로 기준 용량에 맞춤
+// (지상: 열 간격이 넓어지는 효과, 지붕: 유지보수 통로가 생기는 효과). 기준보다 적게 들어가면 기하 배치를 그대로 씀.
+const PYEONG_M2 = 3.305785;
+function densityTargetKw(areaM2, isRoof){
+  const pyeong = areaM2 / PYEONG_M2;
+  return isRoof ? (pyeong / 200) * 100 : (pyeong / 300) * 100;
+}
+function applyDensityRule(cands, targetCount){
+  if(!(targetCount > 0) || cands.length <= targetCount) return { chosen: cands, thinned: false };
+  const rows = [...new Set(cands.map(c => c.row))];
+  const perRow = cands.length / rows.length;
+  const rowsToKeep = Math.max(1, Math.round(targetCount / perRow));
+  const keep = new Set();
+  for(let i = 0; i < rowsToKeep; i++){ keep.add(rows[Math.floor(i * rows.length / rowsToKeep)]); }
+  let out = cands.filter(c => keep.has(c.row));
+  if(out.length > targetCount) out = out.slice(0, targetCount);
+  return { chosen: out, thinned: true };
+}
+function densityRuleOn(){ const el = document.getElementById('densityRule'); return !el || el.value === 'practice'; }
+function densityNote(isRoof, areaM2, targetKw, geomCount, chosenCount, wattPerPanel){
+  const py = Math.round(areaM2 / PYEONG_M2);
+  const ruleTxt = isRoof ? '건물 200평당 100kW' : '토지 300평당 100kW';
+  const geomKw = geomCount * wattPerPanel / 1000;
+  if(!densityRuleOn()) return `배치 기준: 기하학적 최대(${geomCount.toLocaleString('ko-KR')}장). 실무 밀도 기준(${ruleTxt})으로는 약 ${targetKw.toLocaleString('ko-KR',{maximumFractionDigits:0})}kW가 통상 계획용량입니다. `;
+  if(chosenCount < geomCount) return `실무 밀도 기준(${ruleTxt}) 적용: 면적 약 ${py.toLocaleString('ko-KR')}평 → 목표 약 ${targetKw.toLocaleString('ko-KR',{maximumFractionDigits:0})}kW에 맞춰 행 간격을 넓혔습니다(기하학적으로는 최대 ${geomCount.toLocaleString('ko-KR')}장·${geomKw.toLocaleString('ko-KR',{maximumFractionDigits:1})}kW 가능). `;
+  return `실무 밀도 기준(${ruleTxt}) 목표 약 ${targetKw.toLocaleString('ko-KR',{maximumFractionDigits:0})}kW보다 기하학적으로 들어가는 양(${geomCount.toLocaleString('ko-KR')}장)이 적어 그대로 배치했습니다. `;
+}
+
 function onGenerateLayoutClick(){
   const mt = document.getElementById('mountType').value;
   if(mt === 'gable' || mt === 'slab'){ generateRoofLayout(mt); } else { generateSolarLayout(); }
@@ -1789,31 +1819,41 @@ function generateRoofLayout(mountMode){
   const ymin = Math.min(...ys), ymax = Math.max(...ys);
   const ymid = (ymin + ymax) / 2; // 슬로프의 물리적 절반 지점 — 방위각 0(정남)일 때 y가 작을수록 처마(남)쪽, 클수록 용마루(북)쪽
 
-  const panelShapes = [];
-  let panelCount = 0, rowsUsed = 0, maxCols = 0;
-  let y = ymin;
+  const cands = [];
+  let y = ymin, rowIdx = 0;
   while(y + footprintSlopeDirProjected <= ymax){
-    let colsInRow = 0;
     for(let x = xmin; x + footprintRidgeDir <= xmax; x += (footprintRidgeDir + gap)){
       const cornersRot = [
         {x, y}, {x: x+footprintRidgeDir, y}, {x: x+footprintRidgeDir, y: y+footprintSlopeDirProjected}, {x, y: y+footprintSlopeDirProjected}
       ];
       const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, slopeAzimuthRad));
       const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
-      if(fits){
-        const path = cornersReal.map(c => solarToLatLng(c.x, c.y, lat0Rad));
-        const poly = new kakao.maps.Polygon({
-          map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
-          fillColor: '#4A5A1B', fillOpacity: 0.62
-        });
-        measureShapes.push(poly);
-        panelShapes.push(poly);
-        panelCount++; colsInRow++;
-      }
+      if(fits) cands.push({ cornersReal, row: rowIdx });
     }
-    if(colsInRow > 0){ rowsUsed++; maxCols = Math.max(maxCols, colsInRow); }
+    rowIdx++;
     y += ((y < ymid) !== flipShade) ? tightPitch : shadePitch;
   }
+  // 실무 밀도 기준(건물 200평/100kW) 적용
+  const targetKw = densityTargetKw(projectedAreaM2, true);
+  const targetCount = Math.floor(targetKw * 1000 / wattPerPanel);
+  const { chosen } = densityRuleOn() ? applyDensityRule(cands, targetCount) : { chosen: cands };
+  const panelShapes = [];
+  let panelCount = 0, rowsUsed = 0, maxCols = 0;
+  const rowCounts = {};
+  chosen.forEach(c => {
+    const path = c.cornersReal.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad));
+    const poly = new kakao.maps.Polygon({
+      map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
+      fillColor: '#4A5A1B', fillOpacity: 0.62
+    });
+    measureShapes.push(poly);
+    panelShapes.push(poly);
+    panelCount++;
+    rowCounts[c.row] = (rowCounts[c.row] || 0) + 1;
+  });
+  rowsUsed = Object.keys(rowCounts).length;
+  maxCols = Math.max(0, ...Object.values(rowCounts));
+  const geomCount = cands.length;
 
   if(panelCount === 0){
     statusEl.textContent = '❌ 이 지붕 경계·이격거리 조건으로는 패널이 한 장도 들어가지 않습니다. 경계를 다시 그리거나 이격거리를 줄여보세요.';
@@ -1848,7 +1888,7 @@ function generateRoofLayout(mountMode){
   const gapNote = isGable
     ? `${flipShade ? '용마루쪽' : '처마쪽'} 절반은 간격 ${gap}m, ${flipShade ? '처마쪽' : '용마루쪽'} 절반은 그늘 고려 간격 ${shadeGap}m로 배치했습니다(반대로 나오면 "처마/용마루 반대로 뒤집기" 체크 후 다시 생성하세요). `
     : `모듈간격 ${gap}m로 지붕 전체에 촘촘하게 배치했습니다. `;
-  statusEl.textContent = `✅ ${roofTypeLabel} 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. ${areaNote}${gapNote}지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
+  statusEl.textContent = `✅ ${roofTypeLabel} 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. ${densityNote(true, projectedAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}${areaNote}${gapNote}지붕에 밀착 설치 시 열 간 자기그늘이 없다는 가정이며, 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
@@ -1902,29 +1942,38 @@ function generateEastWestRoofLayout(){
   const xmin = Math.min(...xs), xmax = Math.max(...xs);
   const ymin = Math.min(...ys), ymax = Math.max(...ys);
 
-  const panelShapes = [];
-  let panelCount = 0, rowsUsed = 0, maxCols = 0;
-  for(let y = ymin; y + footprintRow <= ymax; y += pitch){
-    let colsInRow = 0;
+  const cands = [];
+  let rowIdx = 0;
+  for(let y = ymin; y + footprintRow <= ymax; y += pitch, rowIdx++){
     for(let x = xmin; x + footprintAcross <= xmax; x += (footprintAcross + gapAcross)){
       const cornersRot = [
         {x, y}, {x: x+footprintAcross, y}, {x: x+footprintAcross, y: y+footprintRow}, {x, y: y+footprintRow}
       ];
       const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, facingAzRad));
       const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
-      if(fits){
-        const path = cornersReal.map(c => solarToLatLng(c.x, c.y, lat0Rad));
-        const poly = new kakao.maps.Polygon({
-          map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
-          fillColor: '#4A5A1B', fillOpacity: 0.62
-        });
-        measureShapes.push(poly);
-        panelShapes.push(poly);
-        panelCount++; colsInRow++;
-      }
+      if(fits) cands.push({ cornersReal, row: rowIdx });
     }
-    if(colsInRow > 0){ rowsUsed++; maxCols = Math.max(maxCols, colsInRow); }
   }
+  const targetKw = densityTargetKw(projectedAreaM2, true);
+  const targetCount = Math.floor(targetKw * 1000 / wattPerPanel);
+  const { chosen } = densityRuleOn() ? applyDensityRule(cands, targetCount) : { chosen: cands };
+  const panelShapes = [];
+  let panelCount = 0, rowsUsed = 0, maxCols = 0;
+  const rowCounts = {};
+  chosen.forEach(c => {
+    const path = c.cornersReal.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad));
+    const poly = new kakao.maps.Polygon({
+      map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
+      fillColor: '#4A5A1B', fillOpacity: 0.62
+    });
+    measureShapes.push(poly);
+    panelShapes.push(poly);
+    panelCount++;
+    rowCounts[c.row] = (rowCounts[c.row] || 0) + 1;
+  });
+  rowsUsed = Object.keys(rowCounts).length;
+  maxCols = Math.max(0, ...Object.values(rowCounts));
+  const geomCount = cands.length;
 
   if(panelCount === 0){
     statusEl.textContent = '❌ 이 지붕 경계·이격거리 조건으로는 패널이 한 장도 들어가지 않습니다. 경계를 다시 그리거나 이격거리를 줄여보세요.';
@@ -1953,7 +2002,7 @@ function generateEastWestRoofLayout(){
   measureGroups[solarGroupId].shapes.push(label);
 
   const dirText = facingAzDeg === 0 ? '정남' : (facingAzDeg > 0 ? `정남에서 동쪽으로 ${Math.abs(facingAzDeg)}°` : `정남에서 서쪽으로 ${Math.abs(facingAzDeg)}°`);
-  statusEl.textContent = `✅ 동서지붕(물매 방향 ${slopeAzimuthDeg}°) 남향 거치대 배치 ${panelCount.toLocaleString('ko-KR')}장 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈은 마루선 방향 중 남쪽에 가까운 방위각 ${facingAzDeg}°(${dirText})를 향하고, 거치대 각도 ${rackTiltDeg}°, 열간격 ${pitch.toFixed(2)}m(동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준)로 배치했습니다. 그린 경계를 물매면 하나로 보고 계산했으니 동·서 두 면은 각각 따로 그려서 배치하세요. 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
+  statusEl.textContent = `✅ 동서지붕(물매 방향 ${slopeAzimuthDeg}°) 남향 거치대 배치 ${panelCount.toLocaleString('ko-KR')}장 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. ${densityNote(true, projectedAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}모듈은 마루선 방향 중 남쪽에 가까운 방위각 ${facingAzDeg}°(${dirText})를 향하고, 거치대 각도 ${rackTiltDeg}°, 열간격 ${pitch.toFixed(2)}m(동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준)로 배치했습니다. 그린 경계를 물매면 하나로 보고 계산했으니 동·서 두 면은 각각 따로 그려서 배치하세요. 주변 건물·나무의 그림자(외부 음영)는 반영되지 않았으니 반드시 현장에서 확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
@@ -1997,12 +2046,9 @@ function generateSolarLayout(){
   const xmin = Math.min(...xs), xmax = Math.max(...xs);
   const ymin = Math.min(...ys), ymax = Math.max(...ys);
 
-  const panelShapes = [];
-  let panelCount = 0;
-  let rowsUsed = 0;
-  const colsPerRowMax = { count: 0 };
-  for(let y = ymin; y + footprintNS <= ymax; y += pitch){
-    let colsInThisRow = 0;
+  const cands = [];
+  let rowIdx = 0;
+  for(let y = ymin; y + footprintNS <= ymax; y += pitch, rowIdx++){
     for(let x = xmin; x + footprintEW <= xmax; x += (footprintEW + gap)){
       const cornersRot = [
         {x, y}, {x: x+footprintEW, y}, {x: x+footprintEW, y: y+footprintNS}, {x, y: y+footprintNS}
@@ -2010,20 +2056,32 @@ function generateSolarLayout(){
       // 회전 좌표계 → 실제 위치 좌표계로 되돌려서 경계·이격 판정(경계 자체는 회전하지 않으므로 실제 좌표에서 검사해야 함)
       const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad));
       const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
-      if(fits){
-        const path = cornersReal.map(c => solarToLatLng(c.x, c.y, lat0Rad));
-        const poly = new kakao.maps.Polygon({
-          map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
-          fillColor: '#1B3A5C', fillOpacity: 0.62
-        });
-        measureShapes.push(poly);
-        panelShapes.push(poly);
-        panelCount++;
-        colsInThisRow++;
-      }
+      if(fits) cands.push({ cornersReal, row: rowIdx });
     }
-    if(colsInThisRow > 0){ rowsUsed++; colsPerRowMax.count = Math.max(colsPerRowMax.count, colsInThisRow); }
   }
+  // 실무 밀도 기준(토지 300평/100kW) 적용
+  const targetKw = densityTargetKw(siteAreaM2, false);
+  const targetCount = Math.floor(targetKw * 1000 / wattPerPanel);
+  const { chosen } = densityRuleOn() ? applyDensityRule(cands, targetCount) : { chosen: cands };
+  const panelShapes = [];
+  let panelCount = 0;
+  let rowsUsed = 0;
+  const colsPerRowMax = { count: 0 };
+  const rowCounts = {};
+  chosen.forEach(c => {
+    const path = c.cornersReal.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad));
+    const poly = new kakao.maps.Polygon({
+      map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
+      fillColor: '#1B3A5C', fillOpacity: 0.62
+    });
+    measureShapes.push(poly);
+    panelShapes.push(poly);
+    panelCount++;
+    rowCounts[c.row] = (rowCounts[c.row] || 0) + 1;
+  });
+  rowsUsed = Object.keys(rowCounts).length;
+  colsPerRowMax.count = Math.max(0, ...Object.values(rowCounts));
+  const geomCount = cands.length;
 
   if(panelCount === 0){
     statusEl.textContent = '❌ 이 경계·이격거리·각도 조건으로는 패널이 한 장도 들어가지 않습니다. 부지를 더 크게 그리거나 이격거리를 줄여보세요.';
@@ -2052,7 +2110,7 @@ function generateSolarLayout(){
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
 
-  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW (열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
