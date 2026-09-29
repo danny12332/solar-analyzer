@@ -135,11 +135,18 @@
   #kakaoMap{width:100%;height:560px;border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
   .map-stage{position:relative;}
   #kakaoRoadviewWrap{display:none;position:absolute;inset:0;z-index:5;border-radius:var(--r-md);overflow:hidden;background:#111;}
+  /* 분할 보기: 왼쪽 로드뷰 · 오른쪽 지도 (지도를 클릭해 로드뷰 위치를 옮길 수 있음) */
+  .map-stage.rv-split{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .map-stage.rv-split #kakaoRoadviewWrap{display:block;position:relative;inset:auto;height:560px;order:0;}
+  .map-stage.rv-split #kakaoMap{order:1;}
+  @media (max-width:900px){.map-stage.rv-split{grid-template-columns:1fr;} .map-stage.rv-split #kakaoRoadviewWrap{height:360px;} .map-stage.rv-split #kakaoMap{height:360px;}}
+  .rv-bar .rv-btn.rv-btn2{background:rgba(255,255,255,.92);color:var(--ink);}
   #kakaoRoadview{width:100%;height:100%;}
   .rv-bar{position:absolute;top:10px;left:10px;right:10px;display:flex;align-items:center;gap:10px;pointer-events:none;}
   .rv-btn{pointer-events:auto;border:none;border-radius:999px;padding:8px 14px;background:var(--sun);color:#2A1A00;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);}
   .rv-btn:hover{filter:brightness(1.05);}
-  .rv-tip{font-size:11.5px;color:#fff;background:rgba(0,0,0,.55);padding:5px 10px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;}
+  .rv-tip{font-size:11.5px;color:#fff;background:rgba(0,0,0,.55);padding:5px 10px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;}
+  .map-stage.rv-split .rv-tip{display:none;}
 
   /* 결과 */
   .results{display:flex;flex-direction:column;gap:18px;}
@@ -507,7 +514,8 @@
             <div id="kakaoRoadview"></div>
             <div class="rv-bar">
               <button type="button" class="rv-btn" onclick="showMapStage()">🗺 지도로 돌아가기</button>
-              <span class="rv-tip">로드뷰를 드래그해 둘러보세요 · 지도로 돌아가 다른 지점을 클릭한 뒤 다시 "로드뷰"를 누르면 그 위치로 전환됩니다</span>
+              <button type="button" class="rv-btn rv-btn2" id="rvLayoutBtn" onclick="toggleRvLayout()">⛶ 로드뷰 크게</button>
+              <span class="rv-tip">오른쪽 지도를 클릭하면 그 지점의 로드뷰로 바뀝니다 · 로드뷰는 드래그해 둘러보세요</span>
             </div>
           </div>
         </div>
@@ -2421,9 +2429,20 @@ function removeWalkerOverlay(){
   if(roadviewWalker){ roadviewWalker.setMap(null); roadviewWalker = null; }
 }
 
+let rvLayout = 'split'; // 'split'(분할: 로드뷰+지도) | 'full'(로드뷰 전체)
+function applyRvLayout(){
+  const stage = document.getElementById('mapStage');
+  const wrap = document.getElementById('kakaoRoadviewWrap');
+  const btn = document.getElementById('rvLayoutBtn');
+  if(!roadviewOn){ stage.classList.remove('rv-split'); wrap.style.display = 'none'; return; }
+  if(rvLayout === 'split'){ stage.classList.add('rv-split'); wrap.style.display = 'block'; if(btn) btn.textContent = '⛶ 로드뷰 크게'; }
+  else { stage.classList.remove('rv-split'); wrap.style.display = 'block'; if(btn) btn.textContent = '◫ 분할 보기'; }
+  setTimeout(() => { try{ ensureKakaoMap().relayout(); }catch(e){} try{ if(roadviewObj) roadviewObj.relayout(); }catch(e){} }, 50);
+}
+function toggleRvLayout(){ rvLayout = (rvLayout === 'split') ? 'full' : 'split'; applyRvLayout(); }
 function showMapStage(){
   roadviewOn = false;
-  document.getElementById('kakaoRoadviewWrap').style.display = 'none';
+  applyRvLayout();
   removeWalkerOverlay();
   document.getElementById('roadviewStatus').textContent = '지도에서 보고 싶은 지점을 클릭한 뒤 "로드뷰"를 눌러주세요. "로드뷰 가능 도로"를 켜면 파란 선으로 표시됩니다.';
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
@@ -2442,7 +2461,7 @@ function showRoadviewStage(){
     return;
   }
   roadviewOn = true;
-  document.getElementById('kakaoRoadviewWrap').style.display = 'block';
+  applyRvLayout();
   const btn = document.getElementById('roadviewBtn');
   btn.textContent = '🚫 로드뷰 닫기';
   btn.style.background = 'var(--ink)';
@@ -2472,7 +2491,7 @@ function showRoadviewStage(){
         kakao.maps.event.addListener(roadviewObj, 'position_changed', updateWalkerOverlay);
       }
       roadviewObj.setPanoId(panoId, targetPos);
-      statusEl.textContent = '✅ 지도 자리에 로드뷰를 표시했습니다. 드래그하면 시점을 돌려볼 수 있습니다. "지도로 돌아가기"를 누르면 지도로 전환되고, 지도 위 파란 아이콘이 카메라 위치·방향을 보여줍니다.';
+      statusEl.textContent = '✅ 로드뷰(왼쪽)와 지도(오른쪽)를 나란히 표시했습니다. 오른쪽 지도를 클릭하면 그 지점의 로드뷰로 바뀌고, 파란 카메라 아이콘이 위치·방향을 보여줍니다. "로드뷰 크게"로 전체 화면, "지도로 돌아가기"로 종료합니다.';
       setTimeout(() => { roadviewObj.relayout(); updateWalkerOverlay(); }, 50);
     });
   };
