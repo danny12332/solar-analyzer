@@ -1210,6 +1210,17 @@ function setbackCheckItem(){
 }
 
 let autoAnalyzeSeq = 0;
+async function autoKepcoAfterAnalysis(seq){
+  if(!lastJibunAddress) return;
+  try{
+    await checkKepcoCapacity();
+  }catch(e){ console.warn('auto kepco', e); }
+  if(seq !== autoAnalyzeSeq) return; // 그 사이 다른 주소를 검색했으면 갱신하지 않음
+  if(document.querySelector('#resultsWrap .sum-card')){
+    runAnalysis(); // 요약 카드에 계통 결과 반영 (입력값은 그대로)
+    showAutoResultNote('자동 분석 결과입니다 — 토지 공부정보와 한전ON 배전선로 여유용량을 자동 조회해 반영했습니다. 토지이음·한전ON에서 최종 확인하세요.');
+  }
+}
 let lastParcelPnu = '';
 let lastParcelPath = null;
 function showAutoResultNote(text){
@@ -1234,6 +1245,8 @@ async function autoAnalyzeFromParcel(){
         runAnalysis();
         showAutoResultNote('자동 분석 결과입니다 — 지목·공부면적·개별공시지가·용도지역을 국가중점데이터(브이월드)에서 읽어 계산했습니다. 토지이음과 기준일이 다를 수 있으니 최종 확인하세요.');
       }
+      // 한전ON 배전선로 여유용량도 자동 조회 → 끝나면 핵심 요약의 "계통" 줄 갱신
+      autoKepcoAfterAnalysis(my);
       return;
     }catch(e){
       console.warn('land info', e);
@@ -3192,7 +3205,20 @@ function kepcoGuideText(subst_nm, addr_do, subst_cd, dl_cd){
 	return { guideText, delayNotice };
 }
 
+let kepcoRunning = false;
+let kepcoDebug = null; // 조회 과정 기록(전송값·단계별 지번 목록 건수) — 결과가 한전ON과 다를 때 원인 확인용
+function kepcoDebugHtml(){
+  if(!kepcoDebug) return '';
+  const a = kepcoDebug.admin || {};
+  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}`).join(' → ');
+  return `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값)</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
+}
 async function checkKepcoCapacity(){
+  if(kepcoRunning) return;
+  kepcoRunning = true;
+  try { await checkKepcoCapacityInner(); } finally { kepcoRunning = false; }
+}
+async function checkKepcoCapacityInner(){
   const resultEl = document.getElementById('kepcoResult');
   const btn = document.getElementById('kepcoBtn');
   const typedAddr = document.getElementById('siteAddress').value.trim();
@@ -3226,19 +3252,28 @@ async function checkKepcoCapacity(){
 
     // (lidong, li) 하나에 대해: 실제 등록된 지번 목록을 가져와 가장 가까운 순으로 정렬 후,
     // 상위 몇 개를 실제 배전선로 조회(/kepco-nearest)로 시도해 첫 성공을 반환
+    kepcoDebug = { addr, admin, jibun, steps: [] };
     async function tryArea(lidong, li, topN){
-      let jibunList;
+      let jibunList = [];
+      let listErr = '';
       try{ jibunList = await fetchJibunList(admin, lidong, li); }
-      catch(e){ return null; }
-      if(!jibunList.length) return null;
-      const sorted = jibunList
-        .map(jb => ({ jibun: jb, dist: jibunDistance(target, jb) }))
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, topN)
-        .map(x => ({ lidong, li, jibun: x.jibun }));
-      // 정확히 같은 지번이 실제 목록에 있으면 맨 앞으로
-      const exactIdx = sorted.findIndex(a => a.jibun === jibun);
-      if(exactIdx > 0){ const [ex] = sorted.splice(exactIdx, 1); sorted.unshift(ex); }
+      catch(e){ listErr = e && e.message ? e.message : String(e); }
+      kepcoDebug.steps.push({ lidong, li, listCount: jibunList.length, listErr });
+      let sorted;
+      if(jibunList.length){
+        sorted = jibunList
+          .map(jb => ({ jibun: jb, dist: jibunDistance(target, jb) }))
+          .sort((a, b) => a.dist - b.dist)
+          .slice(0, topN)
+          .map(x => ({ lidong, li, jibun: x.jibun }));
+        // 정확히 같은 지번이 실제 목록에 있으면 맨 앞으로
+        const exactIdx = sorted.findIndex(a => a.jibun === jibun);
+        if(exactIdx > 0){ const [ex] = sorted.splice(exactIdx, 1); sorted.unshift(ex); }
+      } else {
+        // 지번 목록을 못 받았어도(빈 목록·오류) 입력 지번 그대로 한 번은 직접 조회해 본다 (목록 API가 비어도 검색은 되는 경우 대비)
+        if(!(lidong === admin.lidong && li === admin.li)) return null;
+        sorted = [{ lidong, li, jibun }, { lidong, li, jibun: jibun.includes('-') ? jibun : jibun + '-0' }];
+      }
 
       const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
         method: 'POST',
@@ -3253,10 +3288,11 @@ async function checkKepcoCapacity(){
 
     let result = null;
     let matchLevel = 'exact';
+    const eqJibun = (a, b) => { const pa = parseJibunStr(a), pb = parseJibunStr(b); return !!(pa && pb && pa.isMountain === pb.isMountain && pa.bobn === pb.bobn && pa.bubn === pb.bubn); };
 
     // 1) 같은 리/동 안에서 실제 등록된 지번 중 가장 가까운 것부터 시도
     result = await tryArea(admin.lidong, admin.li, 8);
-    if(result) matchLevel = (result.matched.jibun === jibun) ? 'exact' : 'sameArea';
+    if(result) matchLevel = eqJibun(result.matched.jibun, jibun) ? 'exact' : 'sameArea';
 
     // 2) 같은 면 안의 다른 리에서 시도
     if(!result){
@@ -3281,6 +3317,7 @@ async function checkKepcoCapacity(){
     if(!result){
       resultEl.innerHTML = `
         <p class="hint" style="color:#b3402a;">❌ ${admin.lidong} 인근과 같은 구·시 안의 다른 동·읍·면까지 찾아봤지만 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>
+        ${kepcoDebugHtml()}
         ${contactHtml(admin)}`;
       return;
     }
@@ -3366,6 +3403,7 @@ async function checkKepcoCapacity(){
         ${levelNote}
         ${lineBlocks}
         <p class="footnote">한전ON 배전망 여유용량 조회 결과를 그대로 옮긴 참고 자료이며, 접속 가능 여부를 최종 확정하는 것은 아닙니다. "실제 여유용량"이 세 항목 모두 0보다 커야 연계 가능성이 있고, 실제 신청 시점에 값이 달라질 수 있으니 반드시 한전ON에서 재확인하세요. (조회 지번: ${matched.jibun}, 소재지: ${admin.do} ${admin.siText} ${admin.guText} ${matched.lidong} ${matched.li}${list.length > 1 ? `, 배전선로 후보 ${list.length}개` : ''})</p>
+        ${kepcoDebugHtml()}
       </div>
       ${contactHtml(admin)}`;
   }catch(err){
