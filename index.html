@@ -1164,10 +1164,11 @@ function drawSiteChecks(map){
     autoSite.road.roads.forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#1E6FD9', 0.25));
     autoSite.road.waters.forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#2AA7C7', 0.2));
   }
+  // 지도에는 건축물대장상 주택으로 확인된 건물만 빨간색으로 표시 (공장·창고·대장 미확인 건물은 표시하지 않음)
   if(autoSite.houses && autoSite.houses.ok){
     autoSite.houses.feats.forEach(f => {
-      const color = f._cls === 'house' ? '#D6362B' : (f._cls === 'other' ? '#7A8A99' : '#E4741C');
-      addPoly(f.geometry || (f.properties && f.properties.ag_geom), color, f._cls === 'house' ? 0.45 : 0.25);
+      if(f._cls !== 'house') return;
+      addPoly(f.geometry || (f.properties && f.properties.ag_geom), '#D6362B', 0.45);
     });
   }
   if(shapes.length) siteCheckGroupId = registerMeasureGroup(shapes);
@@ -1201,7 +1202,7 @@ function setbackCheckItem(){
   if(!h) return { tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc: base };
   if(!h.ok) return { tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc: '(반경 200m 건물 자동 조회 실패: ' + (h.reason || '응답 없음') + ') ' + base };
   if(h.classified && !h.classifyError){
-    const legend = `(지도: 주택 빨강 ${h.houses}동 · 주택 아닌 건물 회색 ${h.others}동 · 대장 미확인 주황 ${h.unknown}동)`;
+    const legend = `(지도에는 주택 ${h.houses}동만 빨간색으로 표시 · 주택 아닌 건물 ${h.others}동, 대장 미확인 ${h.unknown}동은 표시하지 않음)`;
     const unk = h.unknown ? ` 건축물대장이 없는(무허가·미등재 가능) 건물 ${h.unknown}동은 주택 여부를 확인하지 못했으니 위성사진·로드뷰로 확인하세요.` : '';
     if(h.houses + h.unknown < 5){
       return { tag:'clear', title:`이격거리 — 경계 200m 내 주택 ${h.houses}호 (대장 기준, 5호 미만)`, desc: `부지 경계 200m 안 건물 ${h.total}동 중 건축물대장 주용도가 주택인 건물은 ${h.houses}동입니다. 대장 미확인 ${h.unknown}동을 모두 주택으로 보더라도 5호 미만이므로, 주거지역(주택 5호 이상) 이격거리 적용 대상이 아닌 것으로 판단됩니다. ${legend} ` + base };
@@ -1214,9 +1215,9 @@ function setbackCheckItem(){
   // 대장 대조를 못 한 경우: 건물 수 기준 판단(이전 방식)
   const why = h.classifyError ? ` (대장 대조 실패: ${h.classifyError})` : '';
   if(h.total < 5){
-    return { tag:'clear', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (5호 미만)`, desc: `도로명주소 건물 자료 기준으로 부지 경계에서 200m 안에 건물이 ${h.total}동뿐이라, 주택 5호 이상이라는 주거지역 요건을 충족할 수 없습니다 → 주거지 이격거리 적용 대상이 아닌 것으로 판단됩니다(지도 주황색 표시).${why} 도로명주소가 없는 무허가 건물 등은 자료에 없을 수 있으니 위성사진으로 재확인하세요. ` + base };
+    return { tag:'clear', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (5호 미만)`, desc: `도로명주소 건물 자료 기준으로 부지 경계에서 200m 안에 건물이 ${h.total}동뿐이라, 주택 5호 이상이라는 주거지역 요건을 충족할 수 없습니다 → 주거지 이격거리 적용 대상이 아닌 것으로 판단됩니다.${why} 도로명주소가 없는 무허가 건물 등은 자료에 없을 수 있으니 위성사진으로 재확인하세요. ` + base };
   }
-  return { tag:'check', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (주택 여부 확인 필요)`, desc: `도로명주소 건물 자료 기준으로 부지 경계 200m 안에 건물이 ${h.total}동 있습니다(지도 주황색).${why} 이 중 주택이 5호 이상이면 지자체 조례 이격거리(최대 200m)가 적용될 수 있습니다. 위성사진·로드뷰로 확인하세요. ` + base };
+  return { tag:'check', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (주택 여부 확인 필요)`, desc: `도로명주소 건물 자료 기준으로 부지 경계 200m 안에 건물이 ${h.total}동 있습니다.${why} 건축물대장 대조가 되지 않아 주택 여부를 구분하지 못했고, 지도에는 표시하지 않았습니다. 이 중 주택이 5호 이상이면 지자체 조례 이격거리(최대 200m)가 적용될 수 있으니 위성사진·로드뷰로 확인하세요. ` + base };
 }
 
 let autoAnalyzeSeq = 0;
