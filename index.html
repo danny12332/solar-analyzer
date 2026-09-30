@@ -3210,7 +3210,7 @@ let kepcoDebug = null; // 조회 과정 기록(전송값·단계별 지번 목�
 function kepcoDebugHtml(){
   if(!kepcoDebug) return '';
   const a = kepcoDebug.admin || {};
-  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}`).join(' → ');
+  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}`).join('<br>→ ');
   return `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값)</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
 }
 async function checkKepcoCapacity(){
@@ -3272,8 +3272,17 @@ async function checkKepcoCapacityInner(){
       } else {
         // 지번 목록을 못 받았어도(빈 목록·오류) 입력 지번 그대로 한 번은 직접 조회해 본다 (목록 API가 비어도 검색은 되는 경우 대비)
         if(!(lidong === admin.lidong && li === admin.li)) return null;
-        sorted = [{ lidong, li, jibun }, { lidong, li, jibun: jibun.includes('-') ? jibun : jibun + '-0' }];
+        sorted = [{ lidong, li, jibun }];
       }
+      // ⚠ 지금까지 성공한 조회는 모두 부번이 있는 지번(1098-3, 186-1 등)이었고, 본번만 있는 지번(193, 300)은 목록에 있어도 조회가 비었음.
+      //   한전ON 검색이 "193-0" 형식을 요구할 가능성에 대비해, 부번 없는 후보마다 "-0"을 붙인 형식을 바로 뒤에 추가로 시도한다.
+      const expanded = [];
+      sorted.forEach(a => {
+        expanded.push(a);
+        if(!String(a.jibun).includes('-')) expanded.push({ lidong, li, jibun: String(a.jibun) + '-0' });
+      });
+      sorted = expanded.slice(0, 20);
+      kepcoDebug.steps[kepcoDebug.steps.length - 1].attempts = sorted.map(a => a.jibun).join(', ');
 
       const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
         method: 'POST',
