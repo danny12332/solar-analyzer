@@ -3278,12 +3278,31 @@ async function checkKepcoCapacityInner(){
     await loadJorye();
     const parsed = parseAddressParts(addr);
     if(!parsed){
-      resultEl.innerHTML = '<p class="hint" style="color:#b3402a;">❌ 주소 끝에서 지번을 찾지 못했습니다. "OO읍/OO리 123-4" 형식으로 입력해주세요.</p>';
+      // 지번이 없어도 행정구역(시·군·구)만 찾아 한전 문의처·실사 자료는 보여준다
+      let regionAdmin = null;
+      try{
+        const toks = addr.replace(/[(（][^)）]*[)）]/g, '').trim().split(/\s+/).filter(t => !/^\d/.test(t) && !/^산\d/.test(t));
+        for(let n = toks.length; n >= 2 && !regionAdmin; n--){
+          const { hit: h2 } = findBjdongCode(toks.slice(0, n).join(' '));
+          if(h2) regionAdmin = splitAdminName(h2.name);
+        }
+      }catch(e){ console.warn('region lookup', e); }
+      resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ 주소 끝에서 지번을 찾지 못해 배전선로는 조회하지 못했습니다. "OO읍/OO리 123-4" 형식으로 입력하면 조회됩니다.</p>`
+        + (regionAdmin ? kepcoPhoneLine(regionAdmin) + contactHtml(regionAdmin) : '');
       return;
     }
     const { hit } = findBjdongCode(parsed.dongText);
     if(!hit){
-      resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다.</p>`;
+      let regionAdmin = null;
+      try{
+        const toks = parsed.dongText.split(/\s+/);
+        for(let n = toks.length - 1; n >= 2 && !regionAdmin; n--){
+          const { hit: h2 } = findBjdongCode(toks.slice(0, n).join(' '));
+          if(h2) regionAdmin = splitAdminName(h2.name);
+        }
+      }catch(e){}
+      resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다.</p>`
+        + (regionAdmin ? kepcoPhoneLine(regionAdmin) + contactHtml(regionAdmin) : '');
       return;
     }
 
@@ -3380,6 +3399,7 @@ async function checkKepcoCapacityInner(){
 
     if(!result){
       resultEl.innerHTML = `
+        ${kepcoPhoneLine(admin)}
         <p class="hint" style="color:#b3402a;">❌ ${admin.lidong} 인근과 같은 구·시 안의 다른 동·읍·면까지 찾아봤지만 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>
         ${kepcoDebugHtml()}
         ${contactHtml(admin)}`;
