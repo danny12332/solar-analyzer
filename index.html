@@ -2958,6 +2958,55 @@ function bldrgstFormatDate(d){
   return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
 }
 
+// 세움터 자동 발급: 브라우저 자동화 도우미(Claude for Chrome)에 붙여넣을 지시문을 주소까지 채워 클립보드에 복사하고 세움터를 새 탭으로 연다.
+// 발급 자체(로그인·인증·클릭)는 정부 사이트 정책상 이 페이지가 대신할 수 없고, 사용자의 브라우저 안에서 도우미가 진행한다.
+function buildEaisInstruction(addr){
+  return `지금 열려 있는 세움터(cloud.eais.go.kr) 탭에서 아래 건물의 건축물대장과 건축물현황도를 발급받아 PDF로 저장해줘.
+   주소: ${addr}
+
+1. 로그인은 이미 되어 있어. 상단 메뉴에서 "민원서비스" 또는 "건축물대장 발급" 메뉴를 찾아 들어가. 메뉴 이름이 다르면 화면에서 가장 비슷한 것을 고르고 나에게 어떤 메뉴로 갔는지 알려줘.
+2. 건축물대장: 소재지에 위 주소를 입력해 건물을 검색하고, 대장 종류는 "일반건축물대장(표제부)"로 선택해. 건물이 여러 동이면 목록을 보여주고 어느 동인지 나에게 물어봐. 발급(온라인 출력)을 선택해 PDF로 저장해.
+3. 건축물현황도: 같은 건물에 대해 "건축물현황도" 발급 메뉴로 가서 배치도·각층 평면도를 선택해 PDF로 저장해. 현황도는 발급 요건(소유자·관계인 확인 등)이 있을 수 있으니, 그런 안내가 나오면 멈추고 나에게 알려줘.
+4. 수수료나 결제 화면이 나오면 금액을 알려준 뒤 내 확인을 받고 진행해.
+5. 인증·결제·개인정보 입력 화면은 절대 대신 진행하지 말고 멈춰서 나에게 알려줘.
+6. 끝나면 저장된 PDF 파일 이름과 위치를 알려줘.`;
+}
+async function startEaisAutomation(){
+  const addr = (lastBldrgst && lastBldrgst.addr) || lastJibunAddress || document.getElementById('siteAddress').value.trim();
+  if(!addr){ alert('먼저 주소를 검색해 주세요.'); return; }
+  const text = buildEaisInstruction(addr);
+  let copied = false;
+  try{ if(navigator.clipboard){ await navigator.clipboard.writeText(text); copied = true; } }catch(e){}
+  const st = document.getElementById('bldrgstResult');
+  const box = document.createElement('div');
+  box.className = 'keyline';
+  box.style.cssText = 'margin:8px 0;';
+  box.innerHTML = `
+    <b>🤖 세움터 자동 발급 — 브라우저 도우미(Claude for Chrome)로 진행</b>
+    <ol style="margin:6px 0 0;padding-left:18px;font-size:12.5px;line-height:1.6;">
+      <li>${copied ? '지시문(주소 포함)을 <b>클립보드에 복사했습니다.</b>' : '아래 지시문을 복사하세요.'}</li>
+      <li>새로 열린 <b>세움터</b> 탭에서 먼저 <b>직접 로그인</b>(간편인증)하세요.</li>
+      <li>크롬 오른쪽 위 <b>Claude 아이콘</b>을 눌러 사이드 패널을 열고, 입력칸에 <b>붙여넣기(Ctrl+V)</b> → 엔터.</li>
+      <li>도우미가 멈추고 물어보면 답하고, 인증·결제 화면은 직접 처리한 뒤 "계속"이라고 입력하세요.</li>
+    </ol>
+    <details style="margin-top:6px;"><summary style="font-size:11.5px;">지시문 전체 보기 / 다시 복사</summary>
+      <textarea readonly style="width:100%;height:150px;font-size:11.5px;margin-top:4px;font-family:inherit;" onclick="this.select()">${text.replace(/</g,'&lt;')}</textarea>
+    </details>
+    <p class="hint" style="margin:6px 0 0;">발급 자체(로그인·인증·클릭)는 정부 사이트 정책상 이 페이지가 대신할 수 없어, 사용자의 브라우저 안에서 도우미가 진행합니다. 도우미가 없으면 지시문의 순서대로 직접 진행하시면 됩니다.</p>`;
+  if(st) st.prepend(box);
+  window.open('https://cloud.eais.go.kr/', '_blank', 'noopener');
+}
+// 정부24 정식 발급: 대상 지번 주소를 클립보드에 복사한 뒤 정부24를 새 탭으로 연다 (정부24에서 '건축물대장' 검색 → 발급하기 → 소재지에 붙여넣기)
+async function openGov24ForBldrgst(){
+  const addr = (lastBldrgst && lastBldrgst.addr) || lastJibunAddress || document.getElementById('siteAddress').value.trim();
+  let copied = false;
+  try{ if(addr && navigator.clipboard){ await navigator.clipboard.writeText(addr); copied = true; } }catch(e){}
+  const st = document.getElementById('bldrgstResult');
+  const note = document.createElement('p'); note.className = 'hint'; note.style.margin = '4px 0';
+  note.textContent = copied ? `📋 "${addr}" 주소를 복사했습니다. 정부24에서 로그인 → 검색창에 "건축물대장" → 발급하기 → 소재지 칸에 붙여넣기(Ctrl+V) → 대장 종류 선택 → 수령방법 "온라인발급(본인출력)" → 민원신청 → PDF 저장 순서입니다.` : '주소 복사에 실패했습니다. 정부24에서 소재지를 직접 입력하세요.';
+  if(st) st.prepend(note);
+  window.open('https://www.gov.kr/', '_blank', 'noopener');
+}
 // 건축물대장 조회 결과를 인쇄용 창으로 열어 "PDF로 저장" (브라우저 인쇄 대화상자) — 정식 증명서가 아닌 조회 결과 출력물
 let lastBldrgst = null;
 function downloadBldrgstPdf(){
@@ -3064,7 +3113,8 @@ async function checkBuildingRegister(){
         <b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
         <div style="margin:8px 0 4px;display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sky-deep);" onclick="downloadBldrgstPdf()">🖨 PDF로 저장</button>
-          <a href="https://www.gov.kr/mw/AA020InfoCappViewApp.do?HighCtgCD=A02004&CappBizCD=15000000098" target="_blank" rel="noopener" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);text-decoration:none;display:inline-block;">정부24 정식 발급 ↗</a>
+          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sun);color:#2A1A00;" onclick="startEaisAutomation()">🤖 세움터 자동 발급 시작 (대장+현황도)</button>
+          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="openGov24ForBldrgst()">정부24 발급 ↗ (주소 복사됨)</button>
         </div>
         <div style="margin-top:8px;">${blocks}</div>
         <p class="footnote" style="margin-top:8px;">국토교통부 건축HUB(건축물대장정보 서비스) 실시간 조회 결과이며, 법적 효력이 있는 서류가 아닙니다. 정식 열람·발급은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 하세요.</p>
