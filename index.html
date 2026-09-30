@@ -318,7 +318,7 @@
     </span>
   </a>
   <div class="meta">
-    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소가 채워진 지시문을 복사하고 세움터를 엽니다 (Claude for Chrome으로 진행)">📄 건축물대장 및 현황도 발급</button><br>
+    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button><br>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
@@ -2968,49 +2968,40 @@ function bldrgstFormatDate(d){
   return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
 }
 
-// 세움터 자동 발급: 브라우저 자동화 도우미(Claude for Chrome)에 붙여넣을 지시문을 주소까지 채워 클립보드에 복사하고 세움터를 새 탭으로 연다.
-// 발급 자체(로그인·인증·클릭)는 정부 사이트 정책상 이 페이지가 대신할 수 없고, 사용자의 브라우저 안에서 도우미가 진행한다.
-function buildEaisInstruction(addr){
-  return `지금 열려 있는 세움터(cloud.eais.go.kr) 탭에서 아래 건물의 건축물대장과 건축물현황도를 발급받아 PDF로 저장해줘.
-   주소: ${addr}
-
-1. 로그인은 이미 되어 있어. 상단 메뉴에서 "민원서비스" 또는 "건축물대장 발급" 메뉴를 찾아 들어가. 메뉴 이름이 다르면 화면에서 가장 비슷한 것을 고르고 나에게 어떤 메뉴로 갔는지 알려줘.
-2. 건축물대장: 소재지에 위 주소를 입력해 건물을 검색하고, 대장 종류는 "일반건축물대장(표제부)"로 선택해. 건물이 여러 동이면 목록을 보여주고 어느 동인지 나에게 물어봐. 발급(온라인 출력)을 선택해 PDF로 저장해.
-3. 건축물현황도: 같은 건물에 대해 "건축물현황도" 발급 메뉴로 가서 배치도·각층 평면도를 선택해 PDF로 저장해. 현황도는 발급 요건(소유자·관계인 확인 등)이 있을 수 있으니, 그런 안내가 나오면 멈추고 나에게 알려줘.
-4. 수수료나 결제 화면이 나오면 금액을 알려준 뒤 내 확인을 받고 진행해.
-5. 인증·결제·개인정보 입력 화면은 절대 대신 진행하지 말고 멈춰서 나에게 알려줘.
-6. 끝나면 저장된 PDF 파일 이름과 위치를 알려줘.`;
-}
+// 세움터 발급 보조: 세움터는 자동화 프로그램(매크로·스크래핑) 사용을 제재한다고 공지(2026.10.01 확인)하고 있으므로
+// 페이지가 대신 클릭·입력하는 기능은 두지 않는다. 대상 주소를 복사하고 세움터를 열어 직접 발급하는 순서만 안내한다.
 async function startEaisAutomation(){
   const addr = (lastBldrgst && lastBldrgst.addr) || lastJibunAddress || document.getElementById('siteAddress').value.trim();
   if(!addr){ alert('먼저 주소를 검색해 주세요.'); return; }
-  const text = buildEaisInstruction(addr);
   // 새 탭은 클릭 직후(비동기 대기 전)에 열어야 팝업 차단에 걸리지 않음
   const tab = window.open('https://cloud.eais.go.kr/', '_blank', 'noopener');
   let copied = false;
-  try{ if(navigator.clipboard){ await navigator.clipboard.writeText(text); copied = true; } }catch(e){}
+  try{ if(navigator.clipboard){ await navigator.clipboard.writeText(addr); copied = true; } }catch(e){}
+  const bld = (lastBldrgst && lastBldrgst.items && lastBldrgst.items.length) ? lastBldrgst.items : null;
+  const bldLine = bld ? `<li>동이 여러 개면 목록에서 고릅니다. 건축HUB 조회 결과: ${bld.map(it => escLand(it.bldNm || it.dongNm || '동')).filter(Boolean).slice(0,6).join(', ')}${bld.length > 6 ? ' 외' : ''} (${bld.length}개 동)</li>` : '';
   const old = document.getElementById('eaisModal'); if(old) old.remove();
   const modal = document.createElement('div');
   modal.id = 'eaisModal'; modal.className = 'eais-modal';
   modal.innerHTML = `
     <div class="eais-box">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <h3>📄 건축물대장 및 현황도 발급 — ${addr}</h3>
+        <h3>📄 건축물대장 및 현황도 발급 — ${escLand(addr)}</h3>
         <button type="button" class="li-close" onclick="document.getElementById('eaisModal').remove()" aria-label="닫기">✕</button>
       </div>
-      <p style="margin:0;font-size:13px;color:var(--ink-soft);">건축물대장(표제부) + 건축물현황도를 Claude for Chrome(브라우저 도우미)로 발급받는 순서입니다. 세움터 탭이 새 창으로 열렸습니다.</p>
+      <p style="margin:0;font-size:13px;color:var(--ink-soft);">세움터 탭이 새로 열렸습니다. ${copied ? '<b>주소를 클립보드에 복사했으니</b> 소재지 칸에 붙여넣기(Ctrl+V)만 하면 됩니다.' : '주소 복사에 실패했습니다. 위 주소를 직접 입력하세요.'}</p>
       <ol>
-        <li>${copied ? '지시문(주소 포함)을 <b>클립보드에 복사했습니다.</b>' : '아래 지시문을 복사하세요(자동 복사 실패).'}</li>
-        <li>새로 열린 <b>세움터</b> 탭에서 먼저 <b>직접 로그인</b>(간편인증)하세요.</li>
-        <li>크롬 오른쪽 위 <b>Claude 아이콘</b>을 눌러 사이드 패널을 열고, 입력칸에 <b>붙여넣기(Ctrl+V)</b> → 엔터.</li>
-        <li>도우미가 멈추고 물어보면 답하고, 인증·결제 화면은 직접 처리한 뒤 "계속"이라고 입력하세요.</li>
+        <li>세움터에서 <b>로그인</b>(간편인증)합니다.</li>
+        <li>상단 <b>민원서비스</b> 메뉴에서 <b>건축물대장 발급</b>으로 들어갑니다.</li>
+        <li>소재지 칸에 <b>Ctrl+V</b>로 주소를 붙여넣고 검색합니다.</li>
+        ${bldLine}
+        <li>대장 종류(일반건축물대장 갑/을)를 고르고 <b>발급 → PDF 저장</b>합니다.</li>
+        <li>이어서 <b>건축물현황도</b> 발급 메뉴에서 같은 건물의 배치도·평면도를 선택해 PDF로 저장합니다.</li>
       </ol>
-      <details style="margin-top:8px;"><summary style="font-size:12px;">지시문 전체 보기 / 다시 복사</summary>
-        <textarea readonly onclick="this.select()">${text.replace(/</g,'&lt;')}</textarea>
-        <button type="button" class="run" style="width:auto;margin-top:6px;padding:6px 12px;font-size:12px;" onclick="navigator.clipboard && navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='복사됨 ✓';})">다시 복사</button>
-      </details>
-      <p class="hint" style="margin:10px 0 0;">발급 자체(로그인·인증·클릭)는 정부 사이트 정책상 이 페이지가 대신할 수 없어, 사용자의 브라우저 안에서 도우미가 진행합니다. 도우미가 없으면 지시문의 순서대로 직접 진행하시면 됩니다.</p>
-      <div style="text-align:right;margin-top:12px;"><button type="button" class="run sun" style="width:auto;padding:8px 16px;" onclick="document.getElementById('eaisModal').remove()">확인</button></div>
+      <p class="hint" style="margin:10px 0 0;">세움터는 매크로·스크래핑 등 자동화 프로그램 사용을 제재한다고 공지하고 있어(정보통신망법·형법 업무방해·이용약관 제16조), 이 페이지는 클릭·입력을 대신하지 않고 주소 복사와 순서 안내까지만 합니다. 정부24에서는 건축물대장만 발급되며 현황도는 세움터에서만 발급됩니다.</p>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button type="button" class="run" style="width:auto;padding:8px 14px;font-size:12.5px;background:var(--surface-2);color:var(--ink);" onclick="navigator.clipboard && navigator.clipboard.writeText('${escLand(addr).replace(/'/g, "\\'")}').then(()=>{this.textContent='주소 복사됨 ✓';})">주소 다시 복사</button>
+        <button type="button" class="run sun" style="width:auto;padding:8px 16px;" onclick="document.getElementById('eaisModal').remove()">확인</button>
+      </div>
     </div>`;
   modal.addEventListener('click', e => { if(e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
