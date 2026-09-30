@@ -1930,8 +1930,34 @@ function densityNote(isRoof, areaM2, targetKw, geomCount, chosenCount, wattPerPa
   return `실무 밀도 기준(${ruleTxt}) 목표 약 ${targetKw.toLocaleString('ko-KR',{maximumFractionDigits:0})}kW보다 기하학적으로 들어가는 양(${geomCount.toLocaleString('ko-KR')}장)이 적어 그대로 배치했습니다. `;
 }
 
+// 그린 경계가 건물(도로명주소 건물 자료) 위에 있는지 판정 — 경계 꼭짓점·중심점 중 과반이 건물 폴리곤 안이면 건물로 봄
+function drawnAreaIsOnBuilding(){
+  const h = autoSite && autoSite.houses;
+  if(!h || !h.ok || !h.feats || !h.feats.length || !lastAreaPolygonPath || lastAreaPolygonPath.length < 3) return false;
+  const lat0Rad = lastAreaPolygonPath.reduce((a, p) => a + p.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180;
+  const pts = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad));
+  const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length, cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+  const testPts = pts.concat([{ x: cx, y: cy }]);
+  const buildings = h.feats.map(f => parseVworldGeom(f.geometry || (f.properties && f.properties.ag_geom))).filter(b => b && b.length >= 3)
+    .map(b => b.map(q => solarToXY(new kakao.maps.LatLng(q.lat, q.lng), lat0Rad)));
+  if(!buildings.length) return false;
+  let inside = 0;
+  testPts.forEach(pt => { if(buildings.some(b => pointInPolygonXY(pt, b))) inside++; });
+  return inside > testPts.length / 2;
+}
 function onGenerateLayoutClick(){
-  const mt = document.getElementById('mountType').value;
+  const mtEl = document.getElementById('mountType');
+  let mt = mtEl.value;
+  // 지상으로 되어 있는데 그린 경계가 건물 위면 → 건물 슬라브로 자동 전환 (건물은 200평/100kW 기준, 지상은 300평/100kW 기준이라 용량이 크게 달라짐)
+  if(mt === 'ground'){
+    let onBld = false;
+    try{ onBld = drawnAreaIsOnBuilding(); }catch(e){ console.warn('building check', e); }
+    if(onBld){
+      mtEl.value = 'slab'; onMountTypeChange(); mt = 'slab';
+      const st = document.getElementById('roadviewStatus');
+      if(st) st.textContent = '그린 경계가 건물 위라서 배치 대상을 "건물 슬라브(평지붕)"로 자동 전환했습니다. 경사지붕이면 "건물 박공"으로 바꿔 다시 생성하세요.';
+    }
+  }
   if(mt === 'gable' || mt === 'slab'){ generateRoofLayout(mt); } else { generateSolarLayout(); }
 }
 
