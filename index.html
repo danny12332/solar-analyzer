@@ -2793,7 +2793,7 @@ function getSiblingLis(admin){
   const seen = new Set();
   const result = [];
   for(const x of BJDONG_LIST){
-    const nm = String(x.name).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim(); // 한자 병기 제거
+    const nm = String(x.name).replace(/[(（][^)）]*[)）]/g, '').replace(/\s+/g, ' ').trim(); // 한자 병기 제거
     if(nm.startsWith(prefix)){
       const rest = nm.slice(prefix.length).trim();
       // rest가 "OO리" 형태인 하나의 토큰일 때만 후보로 채택 (그 이하 세부 내용이 있으면 제외)
@@ -2813,7 +2813,7 @@ function getSiblingDongs(admin){
   const seen = new Set();
   const result = [];
   for(const x of BJDONG_LIST){
-    const nm = String(x.name).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim(); // 한자 병기 제거
+    const nm = String(x.name).replace(/[(（][^)）]*[)）]/g, '').replace(/\s+/g, ' ').trim(); // 한자 병기 제거
     if(nm.startsWith(prefix)){
       const rest = nm.slice(prefix.length).trim();
       const firstToken = rest.split(' ')[0];
@@ -3014,7 +3014,7 @@ async function checkBuildingRegister(){
 // 법정동명(예: "경기도 고양시 덕양구 원당동")을 한전ON 검색 폼의 필드(도/시/구/동리/리)로 분해
 function splitAdminName(fullName){
   // 법정동 자료의 이름에 붙는 한자 병기(예: "평사리(平沙)")를 제거 — 한전ON은 한글 이름만 받음 (2026.09.30 경산시 진량읍 평사리 사례로 확인)
-  const t = String(fullName).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().split(' ');
+  const t = String(fullName).replace(/[(（][^)）]*[)）]/g, '').replace(/\s+/g, ' ').trim().split(' ');
   const doTok = t[0];
   const rest = t.slice(1);
   const isProvince = /(특별자치도|도)$/.test(doTok) && !/(특별시|광역시|자치시)$/.test(doTok);
@@ -3222,7 +3222,7 @@ function kepcoDebugHtml(){
   if(!kepcoDebug) return '';
   const a = kepcoDebug.admin || {};
   const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}${st.nearest ? ' · 배전선로 조회 → ' + st.nearest : ''}`).join('<br>→ ');
-  return `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값)</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
+  return `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값) · 코드 v0930-3</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
 }
 async function checkKepcoCapacity(){
   if(kepcoRunning) return;
