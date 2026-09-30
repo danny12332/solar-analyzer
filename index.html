@@ -1323,6 +1323,7 @@ let radiusCenterMarker = null;
 let previewCircle = null; // 반경재기 실시간 미리보기
 let previewLine = null;   // 거리재기 실시간 미리보기
 let previewLabel = null;
+let previewPoly = null;   // 면적재기 실시간 미리보기(임시 다각형)
 let measureShapes = []; // 지우기 대상(선·다각형·원·라벨) 전체 목록
 let distanceVertexMarkers = []; // 거리재기 각 클릭 지점의 작은 점 마커
 let areaVertexMarkers = []; // 면적재기 각 클릭 지점의 작은 점 마커
@@ -1525,6 +1526,7 @@ function ensureKakaoMap(){
   kakao.maps.event.addListener(kakaoMapObj, 'mousemove', function(mouseEvent){
     if(mapMode === 'radius' && radiusCenter){ updateRadiusPreview(mouseEvent.latLng); }
     else if(mapMode === 'distance' && distancePoints.length > 0){ updateDistancePreview(mouseEvent.latLng); }
+    else if(mapMode === 'area' && areaPoints.length > 0){ updateAreaPreview(mouseEvent.latLng); }
   });
   return kakaoMapObj;
 }
@@ -1638,6 +1640,7 @@ function haversineMeters(p1, p2){
 // ---- 거리재기 ----
 // ---- 실시간 드래그 미리보기 ----
 function clearPreview(){
+  if(previewPoly){ previewPoly.setMap(null); previewPoly = null; }
   if(previewCircle){ previewCircle.setMap(null); previewCircle = null; }
   if(previewLine){ previewLine.setMap(null); previewLine = null; }
   if(previewLabel){ previewLabel.setMap(null); previewLabel = null; }
@@ -1683,6 +1686,31 @@ function updateDistancePreview(pos){
     previewLabel.setPosition(pos);
     previewLabel.setContent(content);
   }
+}
+
+// 면적재기 미리보기: 마지막 점 → 마우스 → 첫 점을 잇는 점선과 임시 면적
+function updateAreaPreview(pos){
+  const map = ensureKakaoMap();
+  const lastPt = areaPoints[areaPoints.length - 1];
+  const path = areaPoints.length >= 2 ? [lastPt, pos, areaPoints[0]] : [lastPt, pos];
+  if(!previewLine){
+    previewLine = new kakao.maps.Polyline({ map, path, strokeWeight: 3, strokeColor: '#33604A', strokeOpacity: 0.6, strokeStyle: 'shortdash' });
+  } else { previewLine.setPath(path); }
+  let content;
+  if(areaPoints.length >= 2){
+    const tmp = areaPoints.concat([pos]);
+    if(!previewPoly){
+      previewPoly = new kakao.maps.Polygon({ map, path: tmp, strokeWeight: 0, fillColor: '#33604A', fillOpacity: 0.12 });
+    } else { previewPoly.setPath(tmp); }
+    const a = shoelaceArea(tmp);
+    content = `<div style="background:rgba(30,30,30,.85);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">약 ${Math.round(a).toLocaleString('ko-KR')} ㎡ (${Math.round(a/3.305785).toLocaleString('ko-KR')}평) · +${Math.round(haversineMeters(lastPt, pos)).toLocaleString('ko-KR')} m</div>`;
+  } else {
+    content = `<div style="background:rgba(30,30,30,.85);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">+${Math.round(haversineMeters(lastPt, pos)).toLocaleString('ko-KR')} m</div>`;
+  }
+  if(!previewLabel){
+    previewLabel = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.6 });
+    previewLabel.setMap(map);
+  } else { previewLabel.setPosition(pos); previewLabel.setContent(content); }
 }
 
 let currentDistanceGroupId = null; // 현재 그리고 있는 거리재기 결과의 그룹 id (완료 후에도 X로 삭제 가능하도록 유지)
@@ -1838,7 +1866,9 @@ function onMountTypeChange(){
   const isRoof = (mt === 'gable' || mt === 'slab'); // 지붕 계열(슬라브·박공) 공통: 밀착 설치, 낮은 각도
   const isGable = mt === 'gable';
   const curAzimuth = document.getElementById('panelAzimuth').value; // 기존 값(자동 감지된 방위각 포함) 유지
-  const curSetback = document.getElementById('panelSetback').value;
+  const prevSetback = parseFloat(document.getElementById('panelSetback').value);
+  // 건물 지붕은 배치도 실무 기준대로 건물 끝에서 0.5m 이격을 기본값으로 (사용자가 0.5 외 값을 넣었으면 유지)
+  const curSetback = isRoof ? ((!prevSetback || prevSetback === 0.3) ? 0.5 : prevSetback) : (prevSetback === 0.5 ? 0 : (prevSetback || 0));
   // 경사각 기본값: 지상(개활지) 30°, 슬라브·박공은 거치대/물매 각도 5~10° 범위(실제 시공 사례 기준) → 8°
   document.getElementById('tiltLabel').innerHTML = isGable
     ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="8" step="1" style="width:48px;padding:2px 4px;">`
@@ -1849,7 +1879,7 @@ function onMountTypeChange(){
     ? `물매 방향(°, 경사 내려가는 쪽, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`
     : `방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`;
   document.getElementById('setbackLabel').innerHTML = isRoof
-    ? `처마/가장자리 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0.3}" step="0.1" min="0" style="width:50px;padding:2px 4px;">`
+    ? `건물 끝 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0.5}" step="0.1" min="0" style="width:50px;padding:2px 4px;">`
     : `경계 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0}" step="0.5" min="0" style="width:50px;padding:2px 4px;">`;
   // 처마/용마루 그늘 구간 구분은 실제로 "경사면"인 박공지붕에만 의미가 있음 — 평평한 슬라브에는 해당 없음
   document.getElementById('shadeGapLabel').style.display = isGable ? 'inline' : 'none';
@@ -2332,6 +2362,7 @@ function buildSolarIllustrationSVG(stats){
 
 function addAreaPoint(latlng){
   const map = ensureKakaoMap();
+  clearPreview();
   areaPoints.push(latlng);
   const vMarker = createVertexMarker(map, latlng, '#33604A');
   areaVertexMarkers.push(vMarker);
@@ -2357,7 +2388,7 @@ function addAreaPoint(latlng){
       measureGroups[currentAreaGroupId].shapes.push(areaLabel);
     }
   }
-  document.getElementById('roadviewStatus').textContent = `면적재기 중 — 점 ${areaPoints.length}개 찍음(3개 이상부터 면적 표시). 끝나려면 지도를 오른쪽 클릭하거나 "📐 면적재기" 버튼을 다시 눌러 종료하세요.`;
+  document.getElementById('roadviewStatus').textContent = `면적재기 중 — 점 ${areaPoints.length}개 찍음. 마우스를 움직이면 다음 선과 임시 면적이 따라옵니다. 끝나려면 지도를 오른쪽 클릭하거나 "📐 면적재기" 버튼을 다시 눌러 종료하세요.`;
   document.getElementById('roadviewStatus').style.color = 'var(--ink-soft)';
 }
 
@@ -2372,6 +2403,7 @@ function toggleAreaMode(){
       finalMsg = `✅ 면적재기 완료 — 약 ${Math.round(area).toLocaleString('ko-KR')} ㎡ (${Math.round(area/3.305785).toLocaleString('ko-KR')}평). 이 경계로 "☀️ 태양광 배치"를 만들 수 있습니다 (건물 방향에 맞춰 방위각을 ${suggestedAz}°로 자동 설정했습니다. 필요하면 직접 수정하세요).`;
     }
     document.getElementById('roadviewStatus').textContent = finalMsg;
+    clearPreview();
     areaPoints = []; areaPolygon = null; areaLabel = null; currentAreaGroupId = null;
     setMode('normal');
   } else {
