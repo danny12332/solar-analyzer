@@ -524,7 +524,7 @@
           <label id="tiltLabel" style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="645" step="5" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
-          <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="0" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
+          <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="3" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
           <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
           <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
           <label id="flipShadeLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;"><input id="flipShadeHalf" type="checkbox" style="vertical-align:middle;"> 처마/용마루 반대로 뒤집기</label>
@@ -1890,7 +1890,11 @@ function onMountTypeChange(){
   const curAzimuth = document.getElementById('panelAzimuth').value; // 기존 값(자동 감지된 방위각 포함) 유지
   const prevSetback = parseFloat(document.getElementById('panelSetback').value);
   // 건물 지붕은 배치도 실무 기준대로 건물 끝에서 0.5m 이격을 기본값으로 (사용자가 0.5 외 값을 넣었으면 유지)
-  const curSetback = isRoof ? ((!prevSetback || prevSetback === 0.3) ? 0.5 : prevSetback) : (prevSetback === 0.5 ? 0 : (prevSetback || 0));
+  // 실무 기준 기본 이격: 토지(지상)는 경계에서 3m, 건물 지붕은 처마 끝에서 0.5m. 사용자가 다른 값을 넣었으면 유지.
+  const defaults = [0, 0.3, 0.5, 3];
+  const curSetback = isRoof
+    ? ((!prevSetback || defaults.includes(prevSetback)) ? 0.5 : prevSetback)
+    : ((!prevSetback || defaults.includes(prevSetback)) ? 3 : prevSetback);
   // 경사각 기본값: 지상(개활지) 30°, 슬라브·박공은 거치대/물매 각도 5~10° 범위(실제 시공 사례 기준) → 8°
   document.getElementById('tiltLabel').innerHTML = isGable
     ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="8" step="1" style="width:48px;padding:2px 4px;">`
@@ -1902,7 +1906,7 @@ function onMountTypeChange(){
     : `방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`;
   document.getElementById('setbackLabel').innerHTML = isRoof
     ? `건물 끝 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0.5}" step="0.1" min="0" style="width:50px;padding:2px 4px;">`
-    : `경계 이격(m) <input id="panelSetback" type="number" value="${curSetback || 0}" step="0.5" min="0" style="width:50px;padding:2px 4px;">`;
+    : `경계 이격(m) <input id="panelSetback" type="number" value="${curSetback || 3}" step="0.5" min="0" style="width:50px;padding:2px 4px;">`;
   // 처마/용마루 그늘 구간 구분은 실제로 "경사면"인 박공지붕에만 의미가 있음 — 평평한 슬라브에는 해당 없음
   document.getElementById('shadeGapLabel').style.display = isGable ? 'inline' : 'none';
   document.getElementById('flipShadeLabel').style.display = isGable ? 'inline' : 'none';
