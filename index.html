@@ -2503,15 +2503,23 @@ function toggleCadastral(){
   btn.style.color = cadastralOn ? '#F6F7F3' : 'var(--forest)';
 }
 
-function toggleRoadviewRoads(){
+function setRoadviewRoads(on){
   const map = ensureKakaoMap();
-  roadviewRoadsOn = !roadviewRoadsOn;
-  if(roadviewRoadsOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW); }
-  else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW); }
+  if(on === roadviewRoadsOn) return;
+  roadviewRoadsOn = on;
+  try{
+    if(roadviewRoadsOn){ map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW); }
+    else { map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW); }
+  }catch(e){ console.warn('roadview overlay', e); }
   const btn = document.getElementById('rvRoadBtn');
-  btn.style.background = roadviewRoadsOn ? 'var(--ink)' : 'var(--forest-dim)';
-  btn.style.color = roadviewRoadsOn ? '#F6F7F3' : 'var(--forest)';
+  if(btn){
+    btn.style.background = roadviewRoadsOn ? 'var(--ink)' : 'var(--forest-dim)';
+    btn.style.color = roadviewRoadsOn ? '#F6F7F3' : 'var(--forest)';
+  }
 }
+function toggleRoadviewRoads(){ setRoadviewRoads(!roadviewRoadsOn); }
+// 로드뷰를 켜면 "로드뷰 가능 도로"(파란 선)를 자동으로 함께 켜고, 닫으면 켜기 전 상태로 되돌림
+let roadsWereOnBeforeRv = false;
 
 // 지도 ↔ 로드뷰, 같은 자리(같은 크기)에서 화면만 전환
 let roadviewWalker = null; // 지도 위 카메라 위치·방향 아이콘
@@ -2551,6 +2559,7 @@ function applyRvLayout(){
 function toggleRvLayout(){ rvLayout = (rvLayout === 'split') ? 'full' : 'split'; applyRvLayout(); }
 function showMapStage(){
   roadviewOn = false;
+  setRoadviewRoads(roadsWereOnBeforeRv);
   applyRvLayout();
   removeWalkerOverlay();
   document.getElementById('roadviewStatus').textContent = '지도에서 보고 싶은 지점을 클릭한 뒤 "로드뷰"를 눌러주세요. "로드뷰 가능 도로"를 켜면 파란 선으로 표시됩니다.';
@@ -2569,7 +2578,9 @@ function showRoadviewStage(){
     statusEl.style.color = '#b3402a';
     return;
   }
+  if(!roadviewOn){ roadsWereOnBeforeRv = roadviewRoadsOn; }
   roadviewOn = true;
+  setRoadviewRoads(true);
   applyRvLayout();
   const btn = document.getElementById('roadviewBtn');
   btn.textContent = '🚫 로드뷰 닫기';
@@ -2600,7 +2611,7 @@ function showRoadviewStage(){
         kakao.maps.event.addListener(roadviewObj, 'position_changed', updateWalkerOverlay);
       }
       roadviewObj.setPanoId(panoId, targetPos);
-      statusEl.textContent = '✅ 로드뷰(왼쪽)와 지도(오른쪽)를 나란히 표시했습니다. 오른쪽 지도를 클릭하면 그 지점의 로드뷰로 바뀌고, 파란 카메라 아이콘이 위치·방향을 보여줍니다. "로드뷰 크게"로 전체 화면, "지도로 돌아가기"로 종료합니다.';
+      statusEl.textContent = '✅ 로드뷰(왼쪽)와 지도(오른쪽)를 나란히 표시했습니다. 지도의 파란 선이 로드뷰 가능 도로이며, 그 위를 클릭하면 그 지점의 로드뷰로 바뀝니다. 파란 카메라 아이콘이 위치·방향을 보여줍니다. ✕를 누르면 지도로 돌아갑니다.';
       setTimeout(() => { roadviewObj.relayout(); updateWalkerOverlay(); }, 50);
     });
   };
