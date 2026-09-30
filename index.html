@@ -2958,6 +2958,36 @@ function bldrgstFormatDate(d){
   return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
 }
 
+// 건축물대장 조회 결과를 인쇄용 창으로 열어 "PDF로 저장" (브라우저 인쇄 대화상자) — 정식 증명서가 아닌 조회 결과 출력물
+let lastBldrgst = null;
+function downloadBldrgstPdf(){
+  if(!lastBldrgst){ alert('먼저 건축물대장을 조회해 주세요.'); return; }
+  const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const d = lastBldrgst.fetchedAt;
+  const stamp = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const w = window.open('', '_blank');
+  if(!w){ alert('팝업이 차단되었습니다. 이 사이트의 팝업을 허용한 뒤 다시 눌러주세요.'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>건축물대장 표제부 조회 결과 - ${esc(lastBldrgst.addr)}</title>
+    <style>
+      body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:#1E2D3C;margin:28px 34px;font-size:12.5px;line-height:1.55;}
+      h1{font-size:18px;margin:0 0 4px;} .sub{color:#666;font-size:11.5px;margin:0 0 14px;}
+      .blk{border:1px solid #cfd8e0;border-radius:6px;padding:10px 14px;margin-bottom:10px;page-break-inside:avoid;}
+      .blk b{display:block;margin-bottom:6px;font-size:13px;}
+      .blk div{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid #eef2f5;}
+      .blk div span:first-child{color:#556;} .blk div span:last-child{font-weight:600;text-align:right;}
+      .foot{margin-top:14px;font-size:10.5px;color:#777;border-top:1px solid #cfd8e0;padding-top:8px;}
+      @media print{ body{margin:12mm;} button{display:none;} }
+      button{margin-bottom:14px;padding:8px 14px;font-size:13px;cursor:pointer;}
+    </style></head><body>
+    <button onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
+    <h1>건축물대장 표제부 조회 결과</h1>
+    <p class="sub">대상: ${esc(lastBldrgst.addr)} · 조회 시각 ${stamp} · 출처: 국토교통부 건축HUB 건축물대장정보 서비스(오픈API)</p>
+    ${lastBldrgst.blocks.replace(/<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var\(--card-line\);">/g, '<div class="blk">').replace(/<div style="">/g, '<div class="blk">')}
+    <p class="foot">이 문서는 공개 API 조회 결과를 정리한 출력물이며 법적 효력이 있는 건축물대장 등본·초본이 아닙니다. 정식 발급은 정부24(gov.kr) 또는 세움터에서 하세요.</p>
+    <script>setTimeout(function(){ window.print(); }, 400);<\/script>
+    </body></html>`);
+  w.document.close();
+}
 async function checkBuildingRegister(){
   const statusEl = document.getElementById('bldrgstResult');
   const btn = document.getElementById('bldrgstBtn');
@@ -3027,10 +3057,15 @@ async function checkBuildingRegister(){
         </div>`;
     }).join('');
 
+    lastBldrgst = { items: data.items, addr, blocks, fetchedAt: new Date() };
     statusEl.innerHTML = `
       <div class="keyline" style="margin-top:0;position:relative;">
         <span onclick="closeResultPanel('bldrgstResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
         <b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
+        <div style="margin:8px 0 4px;display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sky-deep);" onclick="downloadBldrgstPdf()">🖨 PDF로 저장</button>
+          <a href="https://www.gov.kr/mw/AA020InfoCappViewApp.do?HighCtgCD=A02004&CappBizCD=15000000098" target="_blank" rel="noopener" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);text-decoration:none;display:inline-block;">정부24 정식 발급 ↗</a>
+        </div>
         <div style="margin-top:8px;">${blocks}</div>
         <p class="footnote" style="margin-top:8px;">국토교통부 건축HUB(건축물대장정보 서비스) 실시간 조회 결과이며, 법적 효력이 있는 서류가 아닙니다. 정식 열람·발급은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 하세요.</p>
       </div>`;
