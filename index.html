@@ -45,6 +45,18 @@
     border-bottom:2px solid var(--sun);
   }
   header.top .brand{display:flex;align-items:center;gap:14px;}
+  /* 헤더 중앙 SMP·REC 시세 */
+  header.top .hdr-market{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;flex:1;min-width:0;}
+  .hm-item{display:flex;flex-direction:column;gap:1px;min-width:150px;padding:6px 14px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#EAF2F8;text-decoration:none;}
+  .hm-item:hover{background:rgba(255,255,255,.14);}
+  .hm-label{font-size:11px;font-weight:700;color:#CFE0EE;letter-spacing:.02em;}
+  .hm-label small{font-weight:400;color:#9FBDD6;font-size:10.5px;margin-left:4px;}
+  .hm-value{font-family:'IBM Plex Mono',monospace;font-size:22px;line-height:1.15;color:#FFD27A;font-weight:500;}
+  .hm-value small{font-size:11px;color:#EAF2F8;margin-left:3px;font-family:'IBM Plex Sans KR',sans-serif;}
+  .hm-sub{font-size:10.5px;color:#BFD6E8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;}
+  .hm-sub b{color:#fff;font-weight:500;}
+  .hdr-market.failed .hm-value{font-size:14px;color:#BFD6E8;}
+  @media (max-width:1100px){.hm-jeju{display:none;}}
   header.top .sunmark{width:40px;height:40px;border-radius:50%;flex:none;
     background:radial-gradient(circle at 40% 38%,#FFE29A 0,#F2A413 55%,#D9820F 100%);
     box-shadow:0 0 0 6px rgba(242,164,19,.18),0 0 26px var(--sun-glow);}
@@ -58,22 +70,6 @@
   header.top .ticker .d{color:#BFD6E8;font-size:11px;}
   @media (max-width:700px){header.top .ticker{justify-content:flex-start;margin-left:0;}}
   @media (max-width:700px){header.top .meta{text-align:left;}}
-
-  /* ---------- 오늘의 SMP·REC 시세 띠 ---------- */
-  .market-band{display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:12px;align-items:stretch;margin-bottom:18px;}
-  @media (max-width:980px){.market-band{grid-template-columns:1fr 1fr;} .market-band .mk-link{grid-column:1/-1;}}
-  .mk-card{background:linear-gradient(160deg,#173B5C 0%,#1F5580 100%);color:#EAF2F8;border-radius:var(--r-lg);padding:14px 20px;box-shadow:var(--shadow);border:1px solid rgba(255,255,255,.08);position:relative;overflow:hidden;}
-  .mk-card::after{content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,rgba(242,164,19,.35) 0,rgba(242,164,19,0) 70%);}
-  .mk-card.mk-jeju{background:linear-gradient(160deg,#1F5580 0%,#2C7DB5 100%);}
-  .mk-label{font-size:12.5px;font-weight:700;letter-spacing:.02em;color:#CFE0EE;}
-  .mk-label span{font-weight:400;color:#9FBDD6;margin-left:6px;font-size:11.5px;}
-  .mk-value{font-family:'IBM Plex Mono',monospace;font-size:34px;line-height:1.15;color:#FFD27A;margin:4px 0 2px;font-weight:500;}
-  .mk-value small{font-size:14px;color:#EAF2F8;margin-left:4px;font-family:'IBM Plex Sans KR',sans-serif;}
-  .mk-sub{font-size:12px;color:#BFD6E8;}
-  .mk-sub b{color:#fff;font-weight:500;}
-  .mk-link{display:flex;align-items:center;justify-content:center;text-align:center;padding:14px 18px;border-radius:var(--r-lg);background:var(--sun);color:#2A1A00;font-weight:700;font-size:13px;text-decoration:none;line-height:1.4;box-shadow:var(--shadow);}
-  .mk-link:hover{filter:brightness(1.05);}
-  .market-band.failed .mk-value{color:#BFD6E8;font-size:22px;}
 
   /* ---------- 본문 틀 ---------- */
   .shell{max-width:1720px;margin:0 auto;padding:26px clamp(18px,3vw,40px) 90px;}
@@ -288,6 +284,23 @@
       <p class="eyebrow">입지 · 인허가 · 계통 · 부담금을 한 화면에서</p>
     </div>
   </div>
+  <div class="hdr-market" id="marketBand" aria-label="오늘의 SMP·REC 시세">
+    <a class="hm-item" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener" title="출처: 공공데이터포털 한국전력거래소 오픈API · 클릭하면 전력거래소로 이동">
+      <span class="hm-label">오늘의 SMP <small>육지 · 원/kWh</small></span>
+      <span class="hm-value" id="mkSmp">—</span>
+      <span class="hm-sub" id="mkSmpSub">불러오는 중…</span>
+    </a>
+    <a class="hm-item" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener" title="출처: 공공데이터포털 한국전력거래소 오픈API · 클릭하면 전력거래소로 이동">
+      <span class="hm-label">REC 현물시장 <small>육지 평균 · 원/REC</small></span>
+      <span class="hm-value" id="mkRec">—</span>
+      <span class="hm-sub" id="mkRecSub">화·목 개장</span>
+    </a>
+    <a class="hm-item hm-jeju" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener">
+      <span class="hm-label">SMP 제주 <small>원/kWh</small></span>
+      <span class="hm-value" id="mkJeju">—</span>
+      <span class="hm-sub" id="mkJejuSub"></span>
+    </a>
+  </div>
   <div class="meta">
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
@@ -295,26 +308,6 @@
 </header>
 
 <div class="shell">
-
-  <!-- 오늘의 SMP · REC 시세 (전력거래소) -->
-  <section class="market-band" id="marketBand" aria-label="오늘의 SMP·REC 시세">
-    <div class="mk-card">
-      <div class="mk-label">오늘의 SMP <span>육지 · 하루전시장 24시간 평균 · 원/kWh</span></div>
-      <div class="mk-value" id="mkSmp">—</div>
-      <div class="mk-sub" id="mkSmpSub">전력거래소에서 불러오는 중…</div>
-    </div>
-    <div class="mk-card">
-      <div class="mk-label">최근 REC 현물시장 <span>육지 평균가 · 원/REC</span></div>
-      <div class="mk-value" id="mkRec">—</div>
-      <div class="mk-sub" id="mkRecSub">화·목 10:00~16:00 개장</div>
-    </div>
-    <div class="mk-card mk-jeju">
-      <div class="mk-label">SMP 제주 <span>24시간 평균 · 원/kWh</span></div>
-      <div class="mk-value" id="mkJeju">—</div>
-      <div class="mk-sub" id="mkJejuSub"></div>
-    </div>
-    <a class="mk-link" id="mkLink" href="https://www.kpx.or.kr/main/" target="_blank" rel="noopener" title="출처: 공공데이터포털 한국전력거래소 오픈API">전력거래소<br>오늘의 전력정보 ↗</a>
-  </section>
 
   <div class="app-grid">
 
@@ -3053,6 +3046,12 @@ function splitAdminName(fullName){
 // (지자체가 조례를 아직 개정 안 했으면 실무상 예전 기준이 그대로 적용되는 경우가 있어 자동 판정은 위험함).
 const SETBACK_LAW_NOTICE = `<p class="hint" style="margin:8px 0 0;color:#8a6d1f;font-size:12.5px;">⚡ 2026.9.18 시행 개정 시행령: <b>도로 이격거리 규제 전면 폐지</b>, <b>주거지역 이격거리는 지자체 조례라도 최대 200m 상한</b>(반경 내 조례 기준호수—최소 5호 이상—미만이면 규제 자체 미적용)입니다. 주민참여형·건물지붕형·자가소비용 태양광은 이격거리 규제가 아예 면제됩니다. 아래 조례 내용 중 이 상한을 초과하는 수치는 상위법령에 따라 효력이 없을 가능성이 높지만, 해당 지자체가 조례를 아직 개정하지 않았다면 실무적으로는 예전 기준이 그대로 적용되는 경우가 있으니 반드시 담당자에게 최신 시행 여부를 확인하세요.</p>`;
 
+// 한전 결과창 맨 위에 붙는 한전 문의 전화 한 줄 (실사 자료의 "한전선로용량 관련" 항목)
+function kepcoPhoneLine(admin){
+  const localData = getJoryeEntry(admin);
+  if(!localData || !localData.kepco) return '';
+  return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--sun-tint);border-left:3px solid var(--sun);border-radius:0 4px 4px 0;font-size:12.5px;">☎ <b>한전 문의</b> — ${localData.kepco}</p>`;
+}
 function contactHtml(admin){
   const localData = getJoryeEntry(admin);
 
@@ -3420,6 +3419,7 @@ async function checkKepcoCapacityInner(){
     resultEl.innerHTML = `
       <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;position:relative;">
         <span onclick="closeResultPanel('kepcoResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
+        ${kepcoPhoneLine(admin)}
         ${reinforceNote}
         ${regionNote}
         ${levelNote}
@@ -3886,7 +3886,7 @@ function renderResults(r){
   const fail = (why) => {
     band.classList.add('failed');
     g('mkSmp').textContent = '조회 실패'; g('mkSmpSub').textContent = why || '공공데이터포털 API 응답이 없습니다';
-    g('mkRec').textContent = '조회 실패'; g('mkRecSub').textContent = '오른쪽 버튼으로 전력거래소에서 확인하세요';
+    g('mkRec').textContent = '조회 실패'; g('mkRecSub').textContent = '클릭해서 전력거래소에서 확인';
     g('mkJeju').textContent = '—'; g('mkJejuSub').textContent = '';
   };
   fetch('https://rough-moon-e02c.ruwk66.workers.dev/market').then(r => {
@@ -3897,15 +3897,15 @@ function renderResults(r){
     lastMarket = j;
     if(j.smpLand){
       g('mkSmp').innerHTML = `${fmt(j.smpLand.avg)}<small>평균</small>`;
-      g('mkSmpSub').innerHTML = `${kd(j.smpLand.date)} · 최소 <b>${fmt(j.smpLand.min)}</b> ~ 최고 <b>${fmt(j.smpLand.max)}</b>`;
+      g('mkSmpSub').innerHTML = `${kd(j.smpLand.date)} · <b>${fmt(j.smpLand.min)}</b>~<b>${fmt(j.smpLand.max)}</b>`;
     } else { g('mkSmp').textContent = '—'; g('mkSmpSub').textContent = 'SMP 값을 읽지 못했습니다'; }
     if(j.rec){
       g('mkRec').innerHTML = `${fmt(j.rec.avg)}<small>평균</small>`;
-      g('mkRecSub').innerHTML = `${kd(j.rec.date)} · 종가(육지·제주 통합) <b>${j.rec.close != null ? fmt(j.rec.close) : '-'}</b> · 육지 최저 ${fmt(j.rec.min)} ~ 최고 ${fmt(j.rec.max)}${j.rec.volume != null ? ` · 체결 ${fmt(j.rec.volume)} REC` : ''}`;
+      g('mkRecSub').innerHTML = `${kd(j.rec.date)} · 종가 <b>${j.rec.close != null ? fmt(j.rec.close) : '-'}</b> · ${fmt(j.rec.min)}~${fmt(j.rec.max)}`;
     } else { g('mkRec').textContent = '—'; g('mkRecSub').textContent = 'REC 값을 읽지 못했습니다'; }
     if(j.smpJeju){
       g('mkJeju').innerHTML = `${fmt(j.smpJeju.avg)}<small>평균</small>`;
-      g('mkJejuSub').innerHTML = `${kd(j.smpJeju.date)} · ${fmt(j.smpJeju.min)} ~ ${fmt(j.smpJeju.max)}`;
+      g('mkJejuSub').innerHTML = `${kd(j.smpJeju.date)} · ${fmt(j.smpJeju.min)}~${fmt(j.smpJeju.max)}`;
     } else { g('mkJeju').textContent = '—'; }
   }).catch(e => fail(e && e.message ? e.message : ''));
 })();
