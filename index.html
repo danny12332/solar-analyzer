@@ -3218,7 +3218,7 @@ let kepcoDebug = null; // 조회 과정 기록(전송값·단계별 지번 목�
 function kepcoDebugHtml(){
   if(!kepcoDebug) return '';
   const a = kepcoDebug.admin || {};
-  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}`).join('<br>→ ');
+  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}${st.nearest ? ' · 배전선로 조회 → ' + st.nearest : ''}`).join('<br>→ ');
   return `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값)</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
 }
 async function checkKepcoCapacity(){
@@ -3298,8 +3298,10 @@ async function checkKepcoCapacityInner(){
         body: JSON.stringify({ do: admin.do, si: admin.si, gu: admin.gu, attempts: sorted }),
         signal: controller.signal
       });
-      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const step = kepcoDebug.steps[kepcoDebug.steps.length - 1];
+      if(!res.ok){ step.nearest = 'HTTP ' + res.status; throw new Error('HTTP ' + res.status); }
       const result = await res.json();
+      step.nearest = result.error ? ('오류: ' + result.error) : (result.matched ? ('일치: ' + result.matched.jibun) : '결과 없음(matched null)');
       return (result.matched && result.dlt_resultList && result.dlt_resultList.length) ? result : null;
     }
 
