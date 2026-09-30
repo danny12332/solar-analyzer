@@ -173,6 +173,24 @@
   .cost-table tr.total td{border-top:2px solid var(--ink);border-bottom:none;font-weight:700;padding-top:12px;}
   .cost-table tr.total td.num{font-size:16px;color:var(--coral);}
   .footnote{font-size:11.5px;color:var(--ink-faint);margin-top:10px;line-height:1.6;}
+  .sum-card{border-left:4px solid var(--sun);}
+  .sum-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+  .sum-head h2{margin:0 0 10px;border:none;padding:0;}
+  .sum-stamp{font-family:'Gowun Batang',serif;font-weight:700;font-size:14px;padding:4px 12px;border-radius:999px;border:2px solid var(--coral);color:var(--coral);margin-bottom:10px;}
+  .sum-stamp.ok{border-color:var(--leaf);color:var(--leaf);}
+  .sum-stamp.warn{border-color:var(--sun-deep);color:var(--sun-deep);}
+  .sum-grid{display:flex;flex-direction:column;border-top:1px solid var(--line);}
+  .sum-row{display:grid;grid-template-columns:84px 1fr;gap:10px;padding:8px 6px;border-bottom:1px solid var(--surface-2);font-size:13px;line-height:1.55;align-items:start;}
+  .sum-row.ok{background:var(--leaf-tint);}
+  .sum-row.warn{background:var(--coral-tint);}
+  .sum-row.check{background:var(--sun-tint);}
+  .sum-k{font-weight:700;color:var(--ink-soft);font-size:12px;padding-top:1px;}
+  .sum-v b{color:var(--ink);}
+  .sum-muted{color:var(--ink-faint);font-size:11.5px;}
+  .sum-guide{margin-top:4px;display:inline-block;background:#FFFF00;color:#FF0000;font-weight:700;padding:1px 4px;font-size:12.5px;}
+  .sum-flags{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px;}
+  .sum-flag{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--sun-tint);color:#7A4E05;}
+  .sum-flag.need{background:var(--coral-tint);color:var(--coral);}
   .civil-head{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
   @media (max-width:600px){.civil-head{grid-template-columns:1fr;}}
   .civil-head > div{background:var(--sun-tint);border:1px solid #F1DFB4;border-radius:var(--r-sm);padding:10px 12px;display:flex;flex-direction:column;gap:2px;}
@@ -755,6 +773,7 @@ function applyParcelToForm(props, kakaoPath){
   lastParcelPnu = String(props.pnu || '').trim();
   lastParcelPath = kakaoPath || null;
   ['landCategory','farmZone','forestType','useZone'].forEach(id => collapseSeg(id, false));
+  lastKepcoSummary = null; lastLandInfo = null;
   const note = document.getElementById('jimokNote');
   const areaNote = document.getElementById('areaNote');
   const jibun = String(props.jibun || '').trim();
@@ -945,6 +964,7 @@ function renderLandInfoPanel(info, pnu){
     </div>`;
 }
 function applyLandInfoToForm(info){
+  lastLandInfo = info;
   const jimokNote = document.getElementById('jimokNote');
   const areaNote = document.getElementById('areaNote');
   const zoneNote = document.getElementById('zoneNote');
@@ -1051,7 +1071,66 @@ async function checkNearbyBuildings(kakaoPath){
   const feats = (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
   const total = (resp.result && resp.result.featureCollection && resp.result.featureCollection.totalCount) || feats.length;
   const keys = feats.length ? Object.keys(feats[0].properties || {}).filter(k => k !== 'ag_geom') : [];
-  return { ok: true, total: Number(total) || feats.length, feats, keys };
+  const result = { ok: true, total: Number(total) || feats.length, feats, keys, houses: null, unknown: null, others: null, classified: false, classifyError: '' };
+  try { await classifyBuildingsByRegister(result); } catch(e){ result.classifyError = e && e.message ? e.message : String(e); }
+  return result;
+}
+
+// ---- 반경 내 건물의 "주택 여부"를 건축물대장(건축HUB 표제부 주용도)으로 판별 ----
+// 도로명주소 건물의 bd_mgt_sn(25자리) 앞 19자리 = PNU(법정동10 + 대지구분1 + 본번4 + 부번4) → 같은 법정동의 표제부 목록을 받아
+// 본번·부번으로 대조. 주용도명에 아래 단어가 있으면 주택으로 봄. 대장이 없는 필지의 건물은 "미확인"으로 따로 셈.
+const HOUSE_PURPS_RE = /주택|아파트|연립|다세대|다가구|다중주택|기숙사/;
+const BLDRGST_LIST_URL = 'https://rough-moon-e02c.ruwk66.workers.dev/bldrgst-list';
+const bldrgstListCache = {};
+async function fetchBldrgstList(code10){
+  if(bldrgstListCache[code10]) return bldrgstListCache[code10];
+  const all = [];
+  for(let page = 1; page <= 4; page++){ // 최대 4페이지(2,000건)
+    const res = await fetch(`${BLDRGST_LIST_URL}?code=${code10}&pageNo=${page}&numOfRows=500`);
+    if(!res.ok){ if(page === 1) throw new Error('건축물대장 목록 응답 ' + res.status); break; }
+    const j = await res.json();
+    const items = j.items || [];
+    all.push(...items);
+    const total = Number(j.totalCount) || 0;
+    if(items.length < 500 || all.length >= total) break;
+  }
+  bldrgstListCache[code10] = all;
+  return all;
+}
+async function classifyBuildingsByRegister(result){
+  const feats = result.feats || [];
+  if(!feats.length){ result.houses = 0; result.unknown = 0; result.others = 0; result.classified = true; return; }
+  // 건물별 PNU 분해
+  const byDong = {};
+  feats.forEach(f => {
+    const sn = String((f.properties && (f.properties.bd_mgt_sn || f.properties.BD_MGT_SN)) || '');
+    const pnu = sn.length >= 19 ? sn.slice(0, 19) : '';
+    f._pnu = pnu;
+    if(pnu){ const dong = pnu.slice(0, 10); (byDong[dong] = byDong[dong] || []).push(f); }
+  });
+  const dongs = Object.keys(byDong);
+  if(!dongs.length){ result.houses = 0; result.unknown = feats.length; result.others = 0; result.classified = true; result.classifyError = 'bd_mgt_sn 속성 없음'; return; }
+  // 법정동별 표제부 목록 → "대지구분|본번|부번" → 주용도 목록
+  const purpsByLot = {};
+  for(const dong of dongs.slice(0, 4)){ // 반경 200m는 보통 1~3개 법정동
+    const items = await fetchBldrgstList(dong);
+    items.forEach(it => {
+      const key = dong + '|' + String(it.platGbCd ?? '0') + '|' + String(it.bun || '').padStart(4, '0') + '|' + String(it.ji || '').padStart(4, '0');
+      (purpsByLot[key] = purpsByLot[key] || []).push(String(it.mainPurpsCdNm || ''));
+    });
+  }
+  let houses = 0, others = 0, unknown = 0;
+  feats.forEach(f => {
+    const pnu = f._pnu;
+    if(!pnu){ unknown++; f._cls = 'unknown'; return; }
+    const platGb = pnu[10] === '2' ? '1' : '0';
+    const key = pnu.slice(0, 10) + '|' + platGb + '|' + pnu.slice(11, 15) + '|' + pnu.slice(15, 19);
+    const purps = purpsByLot[key];
+    if(!purps){ unknown++; f._cls = 'unknown'; return; }
+    if(purps.some(pn => HOUSE_PURPS_RE.test(pn))){ houses++; f._cls = 'house'; f._purps = purps.filter(pn => HOUSE_PURPS_RE.test(pn)).join('/'); }
+    else { others++; f._cls = 'other'; f._purps = purps.join('/'); }
+  });
+  result.houses = houses; result.others = others; result.unknown = unknown; result.classified = true;
 }
 
 function drawSiteChecks(map){
@@ -1068,7 +1147,10 @@ function drawSiteChecks(map){
     autoSite.road.waters.forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#2AA7C7', 0.2));
   }
   if(autoSite.houses && autoSite.houses.ok){
-    autoSite.houses.feats.forEach(f => addPoly(f.geometry || (f.properties && f.properties.ag_geom), '#E4741C', 0.35));
+    autoSite.houses.feats.forEach(f => {
+      const color = f._cls === 'house' ? '#D6362B' : (f._cls === 'other' ? '#7A8A99' : '#E4741C');
+      addPoly(f.geometry || (f.properties && f.properties.ag_geom), color, f._cls === 'house' ? 0.45 : 0.25);
+    });
   }
   if(shapes.length) siteCheckGroupId = registerMeasureGroup(shapes);
 }
@@ -1100,10 +1182,23 @@ function setbackCheckItem(){
   const h = autoSite.houses;
   if(!h) return { tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc: base };
   if(!h.ok) return { tag:'check', title:'이격거리 (2026.9.18 개정 시행령 기준)', desc: '(반경 200m 건물 자동 조회 실패: ' + (h.reason || '응답 없음') + ') ' + base };
-  if(h.total < 5){
-    return { tag:'clear', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (5호 미만)`, desc: `도로명주소 건물 자료 기준으로 부지 경계에서 200m 안에 건물이 ${h.total}동뿐이라, 주택 5호 이상이라는 주거지역 요건을 충족할 수 없습니다 → 주거지 이격거리 적용 대상이 아닌 것으로 판단됩니다(지도 주황색 표시). 단, 도로명주소가 없는 무허가 건물 등은 자료에 없을 수 있으니 위성사진으로 재확인하세요. ` + base };
+  if(h.classified && !h.classifyError){
+    const legend = `(지도: 주택 빨강 ${h.houses}동 · 주택 아닌 건물 회색 ${h.others}동 · 대장 미확인 주황 ${h.unknown}동)`;
+    const unk = h.unknown ? ` 건축물대장이 없는(무허가·미등재 가능) 건물 ${h.unknown}동은 주택 여부를 확인하지 못했으니 위성사진·로드뷰로 확인하세요.` : '';
+    if(h.houses + h.unknown < 5){
+      return { tag:'clear', title:`이격거리 — 경계 200m 내 주택 ${h.houses}호 (대장 기준, 5호 미만)`, desc: `부지 경계 200m 안 건물 ${h.total}동 중 건축물대장 주용도가 주택인 건물은 ${h.houses}동입니다. 대장 미확인 ${h.unknown}동을 모두 주택으로 보더라도 5호 미만이므로, 주거지역(주택 5호 이상) 이격거리 적용 대상이 아닌 것으로 판단됩니다. ${legend} ` + base };
+    }
+    if(h.houses >= 5){
+      return { tag:'need', title:`이격거리 — 경계 200m 내 주택 ${h.houses}호 (대장 기준, 5호 이상)`, desc: `부지 경계 200m 안에 건축물대장 주용도가 주택인 건물이 ${h.houses}동 있어 주거지역 요건(5호 이상)에 해당할 수 있습니다. 지자체 조례 이격거리(최대 200m)와 주택까지의 실제 거리를 확인하세요.${unk} ${legend} ` + base };
+    }
+    return { tag:'check', title:`이격거리 — 경계 200m 내 주택 ${h.houses}호 + 미확인 ${h.unknown}동`, desc: `대장상 주택은 ${h.houses}동으로 5호 미만이지만, 대장 미확인 건물 ${h.unknown}동을 합치면 5호 이상이 될 수 있습니다.${unk} ${legend} ` + base };
   }
-  return { tag:'check', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (주택 여부 확인 필요)`, desc: `도로명주소 건물 자료 기준으로 부지 경계 200m 안에 건물이 ${h.total}동 있습니다(지도 주황색). 이 중 주택이 5호 이상이면 지자체 조례 이격거리(최대 200m)가 적용될 수 있습니다. 건물 용도(주택/창고/축사 등)는 자료로 구분하지 못했으므로 위성사진·로드뷰로 확인하세요. ` + base };
+  // 대장 대조를 못 한 경우: 건물 수 기준 판단(이전 방식)
+  const why = h.classifyError ? ` (대장 대조 실패: ${h.classifyError})` : '';
+  if(h.total < 5){
+    return { tag:'clear', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (5호 미만)`, desc: `도로명주소 건물 자료 기준으로 부지 경계에서 200m 안에 건물이 ${h.total}동뿐이라, 주택 5호 이상이라는 주거지역 요건을 충족할 수 없습니다 → 주거지 이격거리 적용 대상이 아닌 것으로 판단됩니다(지도 주황색 표시).${why} 도로명주소가 없는 무허가 건물 등은 자료에 없을 수 있으니 위성사진으로 재확인하세요. ` + base };
+  }
+  return { tag:'check', title:`이격거리 — 경계 200m 내 건물 ${h.total}동 (주택 여부 확인 필요)`, desc: `도로명주소 건물 자료 기준으로 부지 경계 200m 안에 건물이 ${h.total}동 있습니다(지도 주황색).${why} 이 중 주택이 5호 이상이면 지자체 조례 이격거리(최대 200m)가 적용될 수 있습니다. 위성사진·로드뷰로 확인하세요. ` + base };
 }
 
 let autoAnalyzeSeq = 0;
@@ -1428,6 +1523,10 @@ function ensureKakaoMap(){
 
 let addressOverlay = null; // 지도 위 지번/도로명 주소 라벨
 let lastJibunAddress = null; // 마지막으로 확인된 지번 주소 (도로명으로 검색해도 배전선로 조회는 항상 이 값을 사용)
+// 핵심 요약 카드용: 각 조회 결과를 보관 (조회 안 했으면 null)
+let lastKepcoSummary = null;   // { lines:[{subst, mtr, dl, vol1, vol2, vol3, ok}], guides:[텍스트], jibun, matchLevel }
+let lastLandInfo = null;       // fetchLandInfo() 결과
+let lastMarket = null;         // /market 응답
 let lastLatLng = null; // 마지막으로 확인된 좌표 (카카오 실시간 법정동코드 조회용)
 
 function setMarkerPosition(pos, geocodeInfo){
@@ -3191,6 +3290,10 @@ async function checkKepcoCapacity(){
       if(g.guideText && !guideHits.some(h => h.text === g.guideText)) guideHits.push({ text: g.guideText, subst: r.SUBST_NM });
       if(g.delayNotice && !guideHits.some(h => h.text === g.delayNotice)) guideHits.push({ text: g.delayNotice, subst: r.SUBST_NM, delay: true });
     });
+    lastKepcoSummary = {
+      lines: list.map(r => ({ subst: r.SUBST_NM ?? '-', mtr: r.MTR_NO ?? '-', dl: r.DL_NM ?? '-', vol1: Number(r.VOL_1), vol2: Number(r.VOL_2), vol3: Number(r.VOL_3), ok: Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0 })),
+      guides: guideHits.map(h => h.text), jibun: matched ? matched.jibun : jibun, matchLevel
+    };
     const reinforceNote = guideHits.length ? `
       <div style="margin:0 0 10px;">
         ${guideHits.map(h => h.delay
@@ -3390,6 +3493,100 @@ function runAnalysis(){
 }
 
 
+// ===== 핵심 요약 카드 =====
+function buildSummaryHtml(r){
+  const g = id => document.getElementById(id);
+  const won = n => Math.round(n).toLocaleString('ko-KR') + '원';
+  const kwFmt = n => n.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'kW';
+  const py = Math.round(r.area / PYEONG_M2);
+  const addr = lastJibunAddress || (g('siteAddress') ? g('siteAddress').value : '') || '-';
+  const pnu = lastParcelPnu || '';
+  const price = parseFloat(g('price').value) || 0;
+  const cat = r.cat;
+  const catLabel = { farm: '농지', forest: '산지', misc: '잡종지·대지·공장용지 등' }[cat] || cat;
+  const jimok = lastLandInfo && lastLandInfo.jimok ? lastLandInfo.jimok : catLabel;
+  const areaSrc = lastLandInfo && lastLandInfo.area ? '토지대장' : '입력값';
+  const priceSrc = lastLandInfo && lastLandInfo.price ? `${lastLandInfo.price.year}년 공시` : '입력값';
+
+  // 예상 용량 (실무 밀도 기준)
+  const kwLand = densityTargetKw(r.area, false);
+  const kwRoof = densityTargetKw(r.area, true);
+  const capText = cat === 'misc'
+    ? `건물 지붕 기준 약 <b>${kwFmt(kwRoof)}</b> (200평/100kW) · 토지 기준 약 <b>${kwFmt(kwLand)}</b> (300평/100kW)`
+    : `토지 기준 약 <b>${kwFmt(kwLand)}</b> (300평/100kW)`;
+  const kwForRevenue = cat === 'misc' ? kwRoof : kwLand;
+
+  // 계통
+  let gridText = '<span class="sum-muted">한전ON 미조회 — 왼쪽 "배전선로 여유용량" 버튼</span>';
+  let gridCls = 'muted';
+  if(lastKepcoSummary && lastKepcoSummary.lines.length){
+    const L = lastKepcoSummary.lines[0];
+    const okAll = lastKepcoSummary.lines.some(x => x.ok);
+    gridText = `${L.subst} 변전소 #${L.mtr} · ${L.dl} 선로 — 여유 변전소 <b>${L.vol1.toLocaleString('ko-KR')}</b> / 주변압기 <b>${L.vol2.toLocaleString('ko-KR')}</b> / 배전선로 <b>${L.vol3.toLocaleString('ko-KR')}</b> kW${lastKepcoSummary.lines.length > 1 ? ` (후보 ${lastKepcoSummary.lines.length}개 중 1)` : ''}${lastKepcoSummary.matchLevel !== 'exact' ? ` · 조회 지번 ${lastKepcoSummary.jibun}` : ''}`;
+    gridCls = okAll ? 'ok' : 'warn';
+    if(lastKepcoSummary.guides.length){
+      gridText += lastKepcoSummary.guides.map(t => `<div class="sum-guide">${t}</div>`).join('');
+      gridCls = 'warn';
+    }
+  }
+
+  // 이격거리·진입로
+  const h = autoSite.houses, rd = autoSite.road;
+  let setbackText, setbackCls;
+  if(h && h.ok && h.classified && !h.classifyError){
+    if(h.houses + h.unknown < 5){ setbackText = `200m 내 주택 ${h.houses}호(대장 기준)${h.unknown ? ` + 미확인 ${h.unknown}동` : ''} → 5호 미만, 적용 대상 아님`; setbackCls = 'ok'; }
+    else if(h.houses >= 5){ setbackText = `200m 내 주택 ${h.houses}호(대장 기준) → 조례 이격거리 검토 필요`; setbackCls = 'warn'; }
+    else { setbackText = `200m 내 주택 ${h.houses}호 + 대장 미확인 ${h.unknown}동 → 현장 확인 필요`; setbackCls = 'check'; }
+  } else if(h && h.ok){
+    setbackText = h.total < 5 ? `200m 내 건물 ${h.total}동 → 5호 미만, 적용 대상 아님` : `200m 내 건물 ${h.total}동 → 주택 여부 확인 필요`;
+    setbackCls = h.total < 5 ? 'ok' : 'check';
+  } else { setbackText = '<span class="sum-muted">자동 조회 안 됨 — 주소 검색 후 확인</span>'; setbackCls = 'muted'; }
+  let roadText, roadCls;
+  if(rd && rd.ok){
+    if(rd.roads.length){ roadText = `지적상 도로 접함 (${rd.roads.slice(0,3).map(n => n.props.jibun || '').join(', ')}${rd.roads.length > 3 ? ' 외' : ''}) — 폭·현황 확인`; roadCls = 'ok'; }
+    else { roadText = '지적상 도로 접함 없음 → 현황도로 사용승낙 필요'; roadCls = 'warn'; }
+  } else { roadText = '<span class="sum-muted">자동 조회 안 됨</span>'; roadCls = 'muted'; }
+
+  // 비용
+  const upfront = r.chargeTotal + r.civilTotal;
+  const costText = `부담금 <b>${won(r.chargeTotal)}</b> + 토목공사비 <b>${won(r.civilTotal)}</b> = <b>${won(upfront)}</b> <span class="sum-muted">(설비·EPC 비용 별도)</span>`;
+
+  // 수익 참고 (시세 × 발전시간 가정)
+  let revenueText = '<span class="sum-muted">SMP·REC 시세 미조회</span>';
+  if(lastMarket && lastMarket.smpLand){
+    const smp = lastMarket.smpLand.avg;
+    const rec = lastMarket.rec ? lastMarket.rec.avg : 0;
+    const perKwh = smp + (rec ? rec / 1000 : 0);
+    const hours = parseFloat(g('genHours') ? g('genHours').value : 3.6) || 3.6;
+    const annualKwh = kwForRevenue * hours * 365;
+    revenueText = `SMP ${smp.toLocaleString('ko-KR')} + REC ${rec ? (rec/1000).toLocaleString('ko-KR', {maximumFractionDigits:1}) + '(가중치 1.0)' : '미조회'} ≈ <b>${perKwh.toLocaleString('ko-KR', {maximumFractionDigits:1})}원/kWh</b> · 연 발전량 약 ${Math.round(annualKwh/1000).toLocaleString('ko-KR')}MWh(일 ${hours}h 가정) → 연 매출 약 <b>${won(annualKwh * perKwh)}</b>`;
+  }
+
+  // 핵심 결론: 체크리스트에서 불허/확인필요 항목
+  const flags = r.checklist.filter(c => c.tag !== 'clear').map(c => `<li class="sum-flag ${c.tag}">${c.tag === 'need' ? '⛔' : '⚠'} ${c.title}</li>`).join('');
+
+  return `
+    <div class="card sum-card">
+      <div class="sum-head">
+        <h2>핵심 요약</h2>
+        <span class="sum-stamp ${r.stampClass}">${r.stampText.replace('\n', ' ')}</span>
+      </div>
+      <div class="sum-grid">
+        <div class="sum-row"><span class="sum-k">위치</span><span class="sum-v">${addr}${pnu ? ` <span class="sum-muted">PNU ${pnu}</span>` : ''}</span></div>
+        <div class="sum-row"><span class="sum-k">토지</span><span class="sum-v">지목 <b>${jimok}</b> · <b>${r.area.toLocaleString('ko-KR')}㎡</b> (약 ${py.toLocaleString('ko-KR')}평, ${areaSrc}) · <b>${r.zone.label}</b> · 공시지가 ${price.toLocaleString('ko-KR')}원/㎡ (${priceSrc})</span></div>
+        <div class="sum-row"><span class="sum-k">인허가</span><span class="sum-v">개발행위허가 규모 상한 ${fmtArea(r.effectiveLimit)} → <b>${r.area > r.effectiveLimit ? '규모 초과' : '상한 이내'}</b>${r.absoluteBlock ? ' · <b style="color:var(--coral);">즉시 탈락 사유 있음</b>' : ''}</span></div>
+        <div class="sum-row"><span class="sum-k">예상 용량</span><span class="sum-v">${capText} <span class="sum-muted">— 실무 밀도 기준 개략치</span></span></div>
+        <div class="sum-row ${gridCls}"><span class="sum-k">계통</span><span class="sum-v">${gridText}</span></div>
+        <div class="sum-row ${setbackCls}"><span class="sum-k">이격거리</span><span class="sum-v">${setbackText}</span></div>
+        <div class="sum-row ${roadCls}"><span class="sum-k">진입로</span><span class="sum-v">${roadText}</span></div>
+        <div class="sum-row"><span class="sum-k">초기 비용</span><span class="sum-v">${costText}</span></div>
+        <div class="sum-row"><span class="sum-k">수익 참고</span><span class="sum-v">${revenueText} <label class="sum-muted" style="white-space:nowrap;">일 발전시간 <input id="genHours" type="number" step="0.1" min="1" max="6" value="${(g('genHours') && g('genHours').value) || 3.6}" style="width:44px;padding:1px 3px;font-size:11px;" onchange="runAnalysis()">h</label></span></div>
+      </div>
+      ${flags ? `<ul class="sum-flags">${flags}</ul>` : '<p class="hint" style="margin:10px 0 0;">체크리스트에 불허·확인필요 항목이 없습니다.</p>'}
+      <p class="hint" style="margin:8px 0 0;">요약은 아래 상세 카드의 값을 그대로 모은 것입니다. 용량·매출은 실무 밀도 기준과 입력한 발전시간 가정에 따른 개략치이며, 계통·이격거리·진입로는 조회 시점의 공공 데이터 기준입니다.</p>
+    </div>`;
+}
+
 function renderResults(r){
   const wrap = document.getElementById('resultsWrap');
   const checklistHtml = r.checklist.map(c => `
@@ -3404,7 +3601,9 @@ function renderResults(r){
     <tr><td>${c.label}<div class="footnote" style="margin-top:2px;">${c.note}</div></td><td class="num">${fmtWon(c.amount)}</td></tr>
   `).join('');
 
-  wrap.innerHTML = `
+  let summaryHtml = '';
+  try { summaryHtml = buildSummaryHtml(r); } catch(e){ console.warn('summary', e); }
+  wrap.innerHTML = summaryHtml + `
     <div class="stamp-band">
       <div class="stamp ${r.stampClass}">${r.stampText.replace('\n','<br>')}</div>
       <div class="stamp-text">
@@ -3582,6 +3781,7 @@ function renderResults(r){
     return r.json();
   }).then(j => {
     if(!j || !j.ok || (!j.smpLand && !j.rec)){ fail(j && j.error ? j.error : ''); return; }
+    lastMarket = j;
     if(j.smpLand){
       g('mkSmp').innerHTML = `${fmt(j.smpLand.avg)}<small>평균</small>`;
       g('mkSmpSub').innerHTML = `${kd(j.smpLand.date)} · 최소 <b>${fmt(j.smpLand.min)}</b> ~ 최고 <b>${fmt(j.smpLand.max)}</b>`;
