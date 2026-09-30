@@ -2793,8 +2793,9 @@ function getSiblingLis(admin){
   const seen = new Set();
   const result = [];
   for(const x of BJDONG_LIST){
-    if(x.name.startsWith(prefix)){
-      const rest = x.name.slice(prefix.length).trim();
+    const nm = String(x.name).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim(); // 한자 병기 제거
+    if(nm.startsWith(prefix)){
+      const rest = nm.slice(prefix.length).trim();
       // rest가 "OO리" 형태인 하나의 토큰일 때만 후보로 채택 (그 이하 세부 내용이 있으면 제외)
       if(rest && !rest.includes(' ') && rest.endsWith('리') && rest !== admin.li && !seen.has(rest)){
         seen.add(rest);
@@ -2812,8 +2813,9 @@ function getSiblingDongs(admin){
   const seen = new Set();
   const result = [];
   for(const x of BJDONG_LIST){
-    if(x.name.startsWith(prefix)){
-      const rest = x.name.slice(prefix.length).trim();
+    const nm = String(x.name).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim(); // 한자 병기 제거
+    if(nm.startsWith(prefix)){
+      const rest = nm.slice(prefix.length).trim();
       const firstToken = rest.split(' ')[0];
       if(firstToken && firstToken !== admin.lidong && /(동|읍|면)$/.test(firstToken) && !seen.has(firstToken)){
         seen.add(firstToken);
@@ -3011,7 +3013,8 @@ async function checkBuildingRegister(){
 
 // 법정동명(예: "경기도 고양시 덕양구 원당동")을 한전ON 검색 폼의 필드(도/시/구/동리/리)로 분해
 function splitAdminName(fullName){
-  const t = fullName.split(' ');
+  // 법정동 자료의 이름에 붙는 한자 병기(예: "평사리(平沙)")를 제거 — 한전ON은 한글 이름만 받음 (2026.09.30 경산시 진량읍 평사리 사례로 확인)
+  const t = String(fullName).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().split(' ');
   const doTok = t[0];
   const rest = t.slice(1);
   const isProvince = /(특별자치도|도)$/.test(doTok) && !/(특별시|광역시|자치시)$/.test(doTok);
