@@ -318,7 +318,7 @@
     </span>
   </a>
   <div class="meta">
-    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소가 채워진 지시문을 복사하고 세움터를 엽니다 (Claude for Chrome으로 진행)">🤖 건축물대장·현황도 자동 발급</button><br>
+    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소가 채워진 지시문을 복사하고 세움터를 엽니다 (Claude for Chrome으로 진행)">📄 건축물대장 및 현황도 발급</button><br>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
@@ -2994,7 +2994,7 @@ async function startEaisAutomation(){
   modal.innerHTML = `
     <div class="eais-box">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <h3>🤖 세움터 자동 발급 — ${addr}</h3>
+        <h3>📄 건축물대장 및 현황도 발급 — ${addr}</h3>
         <button type="button" class="li-close" onclick="document.getElementById('eaisModal').remove()" aria-label="닫기">✕</button>
       </div>
       <p style="margin:0;font-size:13px;color:var(--ink-soft);">건축물대장(표제부) + 건축물현황도를 Claude for Chrome(브라우저 도우미)로 발급받는 순서입니다. 세움터 탭이 새 창으로 열렸습니다.</p>
@@ -3137,7 +3137,7 @@ async function checkBuildingRegister(){
         <b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
         <div style="margin:8px 0 4px;display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sky-deep);" onclick="downloadBldrgstPdf()">🖨 PDF로 저장</button>
-          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sun);color:#2A1A00;" onclick="startEaisAutomation()">🤖 세움터 자동 발급 시작 (대장+현황도)</button>
+          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sun);color:#2A1A00;" onclick="startEaisAutomation()">📄 건축물대장 및 현황도 발급 (세움터)</button>
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="openGov24ForBldrgst()">정부24 발급 ↗ (주소 복사됨)</button>
         </div>
         <div style="margin-top:8px;">${blocks}</div>
