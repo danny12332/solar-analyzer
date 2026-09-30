@@ -1241,10 +1241,10 @@ async function autoAnalyzeFromParcel(){
       if(my !== autoAnalyzeSeq) return;
       renderLandInfoPanel(info, lastParcelPnu);
       const allSet = applyLandInfoToForm(info);
-      if(allSet){
-        runAnalysis();
-        showAutoResultNote('자동 분석 결과입니다 — 지목·공부면적·개별공시지가·용도지역을 국가중점데이터(브이월드)에서 읽어 계산했습니다. 토지이음과 기준일이 다를 수 있으니 최종 확인하세요.');
-      }
+      runAnalysis();
+      showAutoResultNote(allSet
+        ? '자동 분석 결과입니다 — 지목·공부면적·개별공시지가·용도지역을 국가중점데이터(브이월드)에서 읽어 계산했습니다. 토지이음과 기준일이 다를 수 있으니 최종 확인하세요.'
+        : '자동 분석 결과입니다 — 일부 항목(⚠ 표시된 지목·용도지역·공시지가)은 자동으로 읽지 못해 왼쪽의 현재 선택값으로 계산했습니다. 해당 항목을 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.');
       // 한전ON 배전선로 여유용량도 자동 조회 → 끝나면 핵심 요약의 "계통" 줄 갱신
       autoKepcoAfterAnalysis(my);
       return;
@@ -1262,6 +1262,9 @@ async function autoAnalyzeFromParcel(){
   if(!found.length){
     zoneNote.className = 'auto-note warn';
     zoneNote.textContent = '⚠ 용도지역을 자동으로 읽지 못했습니다. 토지이음에서 확인해 2번 항목을 직접 골라주세요.';
+    runAnalysis();
+    showAutoResultNote('자동 분석 결과입니다 — 용도지역·공시지가를 자동으로 읽지 못해 왼쪽의 현재 선택값으로 계산했습니다. 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.');
+    autoKepcoAfterAnalysis(my);
     return;
   }
   const names = found.map(f => f.name);
@@ -1278,10 +1281,15 @@ async function autoAnalyzeFromParcel(){
   } else if(uniqKeys.length > 1){
     zoneNote.className = 'auto-note warn';
     zoneNote.textContent = `⚠ 이 지점에 용도지역 ${names.join(', ')}이(가) 함께 조회됩니다(경계에 걸침). 2번 항목을 직접 골라주세요.`;
+    runAnalysis();
+    showAutoResultNote('자동 분석 결과입니다 — 용도지역이 둘 이상 조회되어 왼쪽의 현재 선택값으로 계산했습니다. 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.');
   } else {
     zoneNote.className = 'auto-note warn';
     zoneNote.textContent = `⚠ 용도지역도상 "${names.join(', ')}" — 분석기 항목과 자동으로 맞추지 못했습니다. 2번 항목을 직접 골라주세요.`;
+    runAnalysis();
+    showAutoResultNote('자동 분석 결과입니다 — 용도지역을 분석기 항목과 맞추지 못해 왼쪽의 현재 선택값으로 계산했습니다. 고친 뒤 "부지 분석 실행"을 다시 눌러주세요.');
   }
+  autoKepcoAfterAnalysis(my);
 }
 
 function switchRefTab(tabId){
