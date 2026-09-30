@@ -3263,64 +3263,72 @@ async function checkKepcoCapacityInner(){
     // (lidong, li) 하나에 대해: 실제 등록된 지번 목록을 가져와 가장 가까운 순으로 정렬 후,
     // 상위 몇 개를 실제 배전선로 조회(/kepco-nearest)로 시도해 첫 성공을 반환
     kepcoDebug = { addr, admin, jibun, steps: [] };
-    async function tryArea(lidong, li, topN){
+    const eqJibun = (a, b) => { const pa = parseJibunStr(a), pb = parseJibunStr(b); return !!(pa && pb && pa.isMountain === pb.isMountain && pa.bobn === pb.bobn && pa.bubn === pb.bubn); };
+    async function tryArea(lidong, li, maxAttempts){
       let jibunList = [];
       let listErr = '';
       try{ jibunList = await fetchJibunList(admin, lidong, li); }
       catch(e){ listErr = e && e.message ? e.message : String(e); }
-      kepcoDebug.steps.push({ lidong, li, listCount: jibunList.length, listErr });
-      let sorted;
+      const step = { lidong, li, listCount: jibunList.length, listErr, attempts: '', nearest: '' };
+      kepcoDebug.steps.push(step);
+      let all;
       if(jibunList.length){
-        sorted = jibunList
+        all = jibunList
           .map(jb => ({ jibun: jb, dist: jibunDistance(target, jb) }))
           .sort((a, b) => a.dist - b.dist)
-          .slice(0, topN)
           .map(x => ({ lidong, li, jibun: x.jibun }));
         // 정확히 같은 지번이 실제 목록에 있으면 맨 앞으로
-        const exactIdx = sorted.findIndex(a => a.jibun === jibun);
-        if(exactIdx > 0){ const [ex] = sorted.splice(exactIdx, 1); sorted.unshift(ex); }
+        const exactIdx = all.findIndex(a => eqJibun(a.jibun, jibun));
+        if(exactIdx > 0){ const [ex] = all.splice(exactIdx, 1); all.unshift(ex); }
       } else {
-        // 지번 목록을 못 받았어도(빈 목록·오류) 입력 지번 그대로 한 번은 직접 조회해 본다 (목록 API가 비어도 검색은 되는 경우 대비)
+        // 지번 목록을 못 받았어도(빈 목록·오류) 입력 지번 그대로 한 번은 직접 조회해 본다
         if(!(lidong === admin.lidong && li === admin.li)) return null;
-        sorted = [{ lidong, li, jibun }];
+        all = [{ lidong, li, jibun }];
       }
-      // ⚠ 지금까지 성공한 조회는 모두 부번이 있는 지번(1098-3, 186-1 등)이었고, 본번만 있는 지번(193, 300)은 목록에 있어도 조회가 비었음.
-      //   한전ON 검색이 "193-0" 형식을 요구할 가능성에 대비해, 부번 없는 후보마다 "-0"을 붙인 형식을 바로 뒤에 추가로 시도한다.
-      const expanded = [];
-      sorted.forEach(a => {
-        expanded.push(a);
-        if(!String(a.jibun).includes('-')) expanded.push({ lidong, li, jibun: String(a.jibun) + '-0' });
-      });
-      sorted = expanded.slice(0, 40); // Worker 1회 요청당 45건 한도 안
-      kepcoDebug.steps[kepcoDebug.steps.length - 1].attempts = sorted.map(a => a.jibun).join(', ');
-
-      const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json;charset=UTF-8' },
-        body: JSON.stringify({ do: admin.do, si: admin.si, gu: admin.gu, attempts: sorted }),
-        signal: controller.signal
-      });
-      const step = kepcoDebug.steps[kepcoDebug.steps.length - 1];
-      if(!res.ok){ step.nearest = 'HTTP ' + res.status; throw new Error('HTTP ' + res.status); }
-      const result = await res.json();
-      step.nearest = result.error ? ('오류: ' + result.error) : (result.matched ? ('일치: ' + result.matched.jibun) : '결과 없음(matched null)');
-      return (result.matched && result.dlt_resultList && result.dlt_resultList.length) ? result : null;
+      // 한전 지번 목록에는 배전 정보가 없는 지번이 많아(이천 목리: 297건 중 가까운 30여 건 모두 결과 없음),
+      // 같은 리 안에서는 가까운 순으로 여러 묶음(1묶음 40건 = Worker 한도)을 이어서 조회한 뒤에야 다른 리로 넘어감
+      const limit = Math.min(all.length, maxAttempts);
+      const chunk = 40;
+      for(let i = 0; i < limit; i += chunk){
+        const attempts = all.slice(i, Math.min(i + chunk, limit));
+        step.attempts += (step.attempts ? ' / ' : '') + attempts.map(a => a.jibun).join(', ');
+        resultEl.innerHTML = `<p class="hint">한전ON 조회 중… ${lidong} ${li || ''} 등록 지번 ${Math.min(i + chunk, limit)}/${limit}개 확인 (가까운 지번 순)</p>`;
+        const ctl = new AbortController();
+        const tid = setTimeout(() => ctl.abort(), 60000);
+        let res;
+        try{
+          res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+            body: JSON.stringify({ do: admin.do, si: admin.si, gu: admin.gu, attempts }),
+            signal: ctl.signal
+          });
+        } finally { clearTimeout(tid); }
+        if(!res.ok){ step.nearest = 'HTTP ' + res.status; throw new Error('HTTP ' + res.status); }
+        const result = await res.json();
+        if(result.error){ step.nearest = '오류: ' + result.error; return null; }
+        if(result.matched && result.dlt_resultList && result.dlt_resultList.length){
+          step.nearest = '일치: ' + result.matched.jibun + ` (${i + attempts.findIndex(a => a.jibun === result.matched.jibun) + 1}번째 후보)`;
+          return result;
+        }
+        step.nearest = `결과 없음 (${Math.min(i + chunk, limit)}개 시도)`;
+      }
+      return null;
     }
 
     let result = null;
     let matchLevel = 'exact';
-    const eqJibun = (a, b) => { const pa = parseJibunStr(a), pb = parseJibunStr(b); return !!(pa && pb && pa.isMountain === pb.isMountain && pa.bobn === pb.bobn && pa.bubn === pb.bubn); };
 
     // 1) 같은 리/동 안에서 실제 등록된 지번 중 가장 가까운 것부터 시도
-    // 같은 리 안이 다른 리보다 항상 우선: 가까운 지번 순으로 최대 25개(부번 없는 지번은 -0 형식까지 포함해 최대 40회)까지 시도
-    result = await tryArea(admin.lidong, admin.li, 25);
+    // 같은 리 안이 다른 리보다 항상 우선: 가까운 지번 순으로 목록 전체(최대 320개, 40개씩 8묶음)까지 시도한 뒤에야 다른 리로 넘어감
+    result = await tryArea(admin.lidong, admin.li, 320);
     if(result) matchLevel = eqJibun(result.matched.jibun, jibun) ? 'exact' : 'sameArea';
 
     // 2) 같은 면 안의 다른 리에서 시도
     if(!result){
       const siblingLis = getSiblingLis(admin).slice(0, 3);
       for(const sib of siblingLis){
-        result = await tryArea(admin.lidong, sib, 5);
+        result = await tryArea(admin.lidong, sib, 20);
         if(result){ matchLevel = 'siblingLi'; break; }
       }
     }
@@ -3329,7 +3337,7 @@ async function checkKepcoCapacityInner(){
     if(!result){
       const siblingDongs = getSiblingDongs(admin).slice(0, 3);
       for(const sib of siblingDongs){
-        result = await tryArea(sib, '', 5);
+        result = await tryArea(sib, '', 20);
         if(result){ matchLevel = 'siblingDong'; break; }
       }
     }
