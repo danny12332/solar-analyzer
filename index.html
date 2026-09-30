@@ -3291,7 +3291,7 @@ async function checkKepcoCapacityInner(){
         expanded.push(a);
         if(!String(a.jibun).includes('-')) expanded.push({ lidong, li, jibun: String(a.jibun) + '-0' });
       });
-      sorted = expanded.slice(0, 20);
+      sorted = expanded.slice(0, 40); // Worker 1회 요청당 45건 한도 안
       kepcoDebug.steps[kepcoDebug.steps.length - 1].attempts = sorted.map(a => a.jibun).join(', ');
 
       const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
@@ -3312,7 +3312,8 @@ async function checkKepcoCapacityInner(){
     const eqJibun = (a, b) => { const pa = parseJibunStr(a), pb = parseJibunStr(b); return !!(pa && pb && pa.isMountain === pb.isMountain && pa.bobn === pb.bobn && pa.bubn === pb.bubn); };
 
     // 1) 같은 리/동 안에서 실제 등록된 지번 중 가장 가까운 것부터 시도
-    result = await tryArea(admin.lidong, admin.li, 8);
+    // 같은 리 안이 다른 리보다 항상 우선: 가까운 지번 순으로 최대 25개(부번 없는 지번은 -0 형식까지 포함해 최대 40회)까지 시도
+    result = await tryArea(admin.lidong, admin.li, 25);
     if(result) matchLevel = eqJibun(result.matched.jibun, jibun) ? 'exact' : 'sameArea';
 
     // 2) 같은 면 안의 다른 리에서 시도
