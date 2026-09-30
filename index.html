@@ -141,6 +141,13 @@
   .map-stage.rv-split #kakaoMap{order:1;}
   @media (max-width:900px){.map-stage.rv-split{grid-template-columns:1fr;} .map-stage.rv-split #kakaoRoadviewWrap{height:360px;} .map-stage.rv-split #kakaoMap{height:360px;}}
   .rv-bar .rv-btn.rv-btn2{background:rgba(255,255,255,.92);color:var(--ink);}
+  /* 지도 위 로드뷰 켜기 버튼 (오른쪽 위) */
+  .map-fab{position:absolute;top:10px;right:10px;z-index:4;border:none;border-radius:999px;padding:9px 15px;background:var(--sun);color:#2A1A00;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+  .map-fab:hover{filter:brightness(1.05);}
+  .map-stage.rv-split .map-fab{display:none;}
+  /* 로드뷰 닫기 ✕ (오른쪽 위) */
+  .rv-close{position:absolute;top:10px;right:10px;z-index:6;width:36px;height:36px;border:none;border-radius:50%;background:rgba(255,255,255,.95);color:var(--ink);font-size:18px;font-weight:700;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);}
+  .rv-close:hover{background:#fff;color:var(--coral);}
   #kakaoRoadview{width:100%;height:100%;}
   .rv-bar{position:absolute;top:10px;left:10px;right:10px;display:flex;align-items:center;gap:10px;pointer-events:none;}
   .rv-btn{pointer-events:auto;border:none;border-radius:999px;padding:8px 14px;background:var(--sun);color:#2A1A00;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);}
@@ -528,13 +535,14 @@
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
         <div class="map-stage" id="mapStage">
           <div id="kakaoMap"></div>
+          <button type="button" class="map-fab" id="rvFab" onclick="toggleRoadview()" title="지도에서 지점을 클릭한 뒤 누르면 그 위치의 로드뷰가 열립니다">🚶 로드뷰</button>
           <div id="kakaoRoadviewWrap">
             <div id="kakaoRoadview"></div>
             <div class="rv-bar">
-              <button type="button" class="rv-btn" onclick="showMapStage()">🗺 지도로 돌아가기</button>
               <button type="button" class="rv-btn rv-btn2" id="rvLayoutBtn" onclick="toggleRvLayout()">⛶ 로드뷰 크게</button>
               <span class="rv-tip">오른쪽 지도를 클릭하면 그 지점의 로드뷰로 바뀝니다 · 로드뷰는 드래그해 둘러보세요</span>
             </div>
+            <button type="button" class="rv-close" onclick="showMapStage()" title="로드뷰 닫기 (지도로 돌아가기)">✕</button>
           </div>
         </div>
         <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
@@ -2533,7 +2541,9 @@ function applyRvLayout(){
   const stage = document.getElementById('mapStage');
   const wrap = document.getElementById('kakaoRoadviewWrap');
   const btn = document.getElementById('rvLayoutBtn');
-  if(!roadviewOn){ stage.classList.remove('rv-split'); wrap.style.display = 'none'; return; }
+  const fab = document.getElementById('rvFab');
+  if(!roadviewOn){ stage.classList.remove('rv-split'); wrap.style.display = 'none'; if(fab) fab.style.display = ''; return; }
+  if(fab) fab.style.display = 'none';
   if(rvLayout === 'split'){ stage.classList.add('rv-split'); wrap.style.display = 'block'; if(btn) btn.textContent = '⛶ 로드뷰 크게'; }
   else { stage.classList.remove('rv-split'); wrap.style.display = 'block'; if(btn) btn.textContent = '◫ 분할 보기'; }
   setTimeout(() => { try{ ensureKakaoMap().relayout(); }catch(e){} try{ if(roadviewObj) roadviewObj.relayout(); }catch(e){} }, 50);
