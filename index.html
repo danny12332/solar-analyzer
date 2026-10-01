@@ -1055,24 +1055,39 @@ function pathToWkt(kakaoPath){
   return `POLYGON((${pts.join(',')}))`;
 }
 
-async function checkAccessRoad(kakaoPath, ownPnu){
+async function fetchParcelsAround(kakaoPath, bufferM, size){
   const data = await vworldJsonp({
     service: 'data', version: '2.0', request: 'GetFeature',
-    format: 'json', errorformat: 'json', size: '200', page: '1',
+    format: 'json', errorformat: 'json', size: String(size || 200), page: '1',
     data: 'LP_PA_CBND_BUBUN',
-    geomFilter: pathToWkt(kakaoPath), buffer: '1',
+    geomFilter: pathToWkt(kakaoPath), buffer: String(bufferM),
     columns: 'pnu,jibun,addr,ag_geom',
     geometry: 'true', attribute: 'true', crs: 'EPSG:4326',
     domain: VWORLD_DOMAIN, key: VWORLD_KEY
   }, 12000);
   const resp = data && data.response;
-  if(!resp || resp.status !== 'OK') return { ok: false, reason: resp && resp.status };
-  const feats = (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
-  const neighbors = feats.map(f => ({ props: f.properties || {}, geom: f.geometry })).filter(n => String(n.props.pnu || '') !== String(ownPnu || ''));
+  if(!resp || resp.status !== 'OK') return null;
+  return (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
+}
+async function checkAccessRoad(kakaoPath, ownPnu){
+  const feats = await fetchParcelsAround(kakaoPath, 1, 200);
+  if(!feats) return { ok: false, reason: '인접 필지 조회 실패' };
+  const own = String(ownPnu || '');
+  const toN = f => ({ props: f.properties || {}, geom: f.geometry });
   const suffix = n => { const m = String(n.props.jibun || '').match(/([가-힣])$/); return m ? m[1] : ''; };
+  const neighbors = feats.map(toN).filter(n => String(n.props.pnu || '') !== own);
   const roads = neighbors.filter(n => suffix(n) === '도');
   const waters = neighbors.filter(n => ['천','구','제','유'].includes(suffix(n)));
-  return { ok: true, total: neighbors.length, roads, waters };
+  let nearRoads = [];
+  if(!roads.length){
+    // 직접 접한 도로가 없으면 경계에서 20m 안의 도로 필지를 찾아본다 (구거·하천·제방이 사이에 끼어 있는 흔한 경우)
+    const near = await fetchParcelsAround(kakaoPath, 20, 400);
+    if(near){
+      const adjPnus = new Set(neighbors.map(n => String(n.props.pnu || '')));
+      nearRoads = near.map(toN).filter(n => suffix(n) === '도' && String(n.props.pnu || '') !== own && !adjPnus.has(String(n.props.pnu || '')));
+    }
+  }
+  return { ok: true, total: neighbors.length, roads, waters, nearRoads };
 }
 
 async function checkNearbyBuildings(kakaoPath){
@@ -1162,6 +1177,7 @@ function drawSiteChecks(map){
   };
   if(autoSite.road && autoSite.road.ok){
     autoSite.road.roads.forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#1E6FD9', 0.25));
+    (autoSite.road.nearRoads || []).forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#1E6FD9', 0.12));
     autoSite.road.waters.forEach(n => addPoly(n.geom || (n.props && n.props.ag_geom), '#2AA7C7', 0.2));
   }
   // 지도에는 건축물대장상 주택으로 확인된 건물만 빨간색으로 표시 (공장·창고·대장 미확인 건물은 표시하지 않음)
@@ -1193,7 +1209,12 @@ function roadCheckItem(){
     const names = r.roads.slice(0, 5).map(n => n.props.jibun || n.props.pnu).join(', ');
     return { tag:'clear', title:'진입로 — 지적상 도로 접함', desc: `경계에 접한 도로 필지(지목 "도") ${r.roads.length}필지: ${names}${r.roads.length > 5 ? ' 외' : ''} (지도에 파란색 표시). 도로 폭 3m 이상 여부와 실제 통행 가능 여부(현황)는 로드뷰·현장에서 확인 필요. 지목이 도로라도 사도(私道)면 승낙이 필요할 수 있음.` };
   }
-  return { tag:'need', title:'진입로 — 지적상 도로 접함 없음', desc: `경계에 접한 ${r.total}필지 중 지목 "도로" 필지가 없습니다. 현황도로(전·답·구거 위 도로)를 통해야 하므로 토지주 사용승낙서가 사실상 필수이며, 그 도로의 지정·공고 이력을 확인하세요.${r.waters.length ? ` 접한 하천·구거·제방 ${r.waters.length}필지(지도 하늘색) — 종단 점용은 원칙적으로 어려움.` : ''}` };
+  if(r.nearRoads && r.nearRoads.length){
+    const names = r.nearRoads.slice(0, 3).map(n => n.props.jibun || n.props.pnu).join(', ');
+    const between = r.waters.length ? `사이에 하천·구거·제방 필지 ${r.waters.length}개(지도 하늘색)가 끼어 있습니다` : '사이에 다른 필지가 끼어 있습니다';
+    return { tag:'check', title:'진입로 — 도로 필지가 20m 이내에 있으나 직접 접하지 않음', desc: `경계에 직접 접한 지목 "도로" 필지는 없고, 경계에서 20m 안에 도로 필지 ${r.nearRoads.length}개(${names}${r.nearRoads.length > 3 ? ' 외' : ''}, 지도 연한 파란색)가 있습니다. ${between}. ${r.waters.length ? '구거·하천을 횡단해 진입하려면 관할 지자체(또는 농어촌공사)의 구거·하천 점용허가와 다리·암거 설치가 필요합니다. 횡단(가로지르기) 점용은 통상 가능하지만 종단(길게 따라가기) 점용은 원칙적으로 어렵습니다.' : '사이 필지 토지주의 사용승낙이 필요합니다.'} 현장에서 실제 통행 여부를 확인하세요.` };
+  }
+  return { tag:'need', title:'진입로 — 지적상 도로 접함 없음', desc: `경계에 접한 ${r.total}필지 중 지목 "도로" 필지가 없고, 20m 안에도 도로 필지가 없습니다. 현황도로(전·답·구거 위 도로)를 통해야 하므로 토지주 사용승낙서가 사실상 필수이며, 그 도로의 지정·공고 이력을 확인하세요.${r.waters.length ? ` 접한 하천·구거·제방 ${r.waters.length}필지(지도 하늘색) — 종단 점용은 원칙적으로 어려움.` : ''}` };
 }
 
 function setbackCheckItem(){
@@ -3825,6 +3846,7 @@ function buildSummaryHtml(r){
   let roadText, roadCls;
   if(rd && rd.ok){
     if(rd.roads.length){ roadText = `지적상 도로 접함 (${rd.roads.slice(0,3).map(n => n.props.jibun || '').join(', ')}${rd.roads.length > 3 ? ' 외' : ''}) — 폭·현황 확인`; roadCls = 'ok'; }
+    else if(rd.nearRoads && rd.nearRoads.length){ roadText = `도로 필지가 20m 이내에 있으나 직접 접하지 않음${rd.waters.length ? ' (사이에 구거·하천 — 점용허가 필요)' : ' (사이 필지 승낙 필요)'}`; roadCls = 'check'; }
     else { roadText = '지적상 도로 접함 없음 → 현황도로 사용승낙 필요'; roadCls = 'warn'; }
   } else { roadText = '<span class="sum-muted">자동 조회 안 됨</span>'; roadCls = 'muted'; }
 
