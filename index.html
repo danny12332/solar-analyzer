@@ -357,6 +357,7 @@
           </div>
         </div>
         <p id="parcelStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+        <div id="contactPanel"></div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
       </div>
@@ -792,6 +793,7 @@ function applyParcelToForm(props, kakaoPath){
   lastParcelPath = kakaoPath || null;
   ['landCategory','farmZone','forestType','useZone'].forEach(id => collapseSeg(id, false));
   lastKepcoSummary = null; lastLandInfo = null;
+  showRegionContacts();
   const note = document.getElementById('jimokNote');
   const areaNote = document.getElementById('areaNote');
   const jibun = String(props.jibun || '').trim();
@@ -3212,11 +3214,87 @@ function kepcoPhoneLine(admin){
   if(!localData || !localData.kepco) return '';
   return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--sun-tint);border-left:3px solid var(--sun);border-radius:0 4px 4px 0;font-size:12.5px;">☎ <b>한전 문의</b> — ${localData.kepco}</p>`;
 }
+// ===== 주소 검색 시 해당 지자체 담당부서 연락처 자동 표시 =====
+let lastAdmin = null; // 마지막으로 확인된 행정구역(한전ON 형식) — 요약 카드·연락처 패널에서 사용
+function resolveAdminFromAddress(addr){
+  if(!addr) return null;
+  try{
+    const parsed = parseAddressParts(addr);
+    if(parsed){ const { hit } = findBjdongCode(parsed.dongText); if(hit) return splitAdminName(hit.name); }
+    const toks = String(addr).replace(/[(（][^)）]*[)）]/g, '').trim().split(/\s+/).filter(t => !/^\d/.test(t) && !/^산\d/.test(t));
+    for(let n = toks.length; n >= 2; n--){ const { hit } = findBjdongCode(toks.slice(0, n).join(' ')); if(hit) return splitAdminName(hit.name); }
+  }catch(e){ console.warn('admin resolve', e); }
+  return null;
+}
+async function showRegionContacts(){
+  const panel = document.getElementById('contactPanel');
+  if(!panel) return;
+  const addr = lastJibunAddress || document.getElementById('siteAddress').value.trim();
+  if(!addr){ panel.innerHTML = ''; return; }
+  try{ await loadBjdong(); await loadJorye(); await loadContacts(); }catch(e){}
+  const admin = resolveAdminFromAddress(addr);
+  lastAdmin = admin;
+  panel.innerHTML = admin ? deptContactsHtml(admin) : '';
+  if(document.querySelector('#resultsWrap .sum-card')) { try{ runAnalysis(); }catch(e){} }
+}
+// ===== 지자체 담당부서 연락처 (contacts.json: 대표번호·발전사업허가·개발행위허가·건축허가) =====
+// 사이트 루트의 contacts.json 을 읽는다. 키는 법정동 자료의 "시도 시군구" 이름(예: "경기도 수원시 장안구", "경상북도 문경시").
+// 값이 비어 있으면 실사 자료(jorye.json)의 담당자 번호와 정부민원안내콜센터 110 안내로 대체한다.
+let CONTACTS_DATA = null;
+let contactsLoadPromise = null;
+async function loadContacts(){
+  if(contactsLoadPromise) return contactsLoadPromise;
+  contactsLoadPromise = fetch('./contacts.json')
+    .then(r => { if(!r.ok) throw new Error('contacts.json 로드 실패'); return r.json(); })
+    .then(json => { CONTACTS_DATA = json; })
+    .catch(err => { console.warn('담당부서 연락처 자료 로드 실패(무시):', err); CONTACTS_DATA = {}; });
+  return contactsLoadPromise;
+}
+function getContactsEntry(admin){
+  if(!CONTACTS_DATA || !admin) return null;
+  const cands = [];
+  if(admin.siText && admin.guText) cands.push(`${admin.do} ${admin.siText} ${admin.guText}`);
+  if(admin.siText) cands.push(`${admin.do} ${admin.siText}`);
+  if(admin.guText) cands.push(`${admin.do} ${admin.guText}`);
+  cands.push(admin.do);
+  for(const k of cands){
+    const e = CONTACTS_DATA[k];
+    if(e && Object.values(e).some(v => v && String(v).trim())) return { key: k, data: e };
+  }
+  return null;
+}
+function deptContactsHtml(admin){
+  const regionName = [admin.do, admin.siText, admin.guText].filter(Boolean).join(' ');
+  const q = encodeURIComponent(`${regionName} 개발행위허가 담당부서 전화번호`);
+  const e = getContactsEntry(admin);
+  const rows = [];
+  if(e){
+    const d = e.data;
+    if(d['발전사업허가']) rows.push(['발전사업허가', d['발전사업허가']]);
+    if(d['개발행위허가']) rows.push(['개발행위허가', d['개발행위허가']]);
+    if(d['건축허가']) rows.push(['건축허가', d['건축허가']]);
+    if(d['대표번호']) rows.push(['대표번호', d['대표번호']]);
+  }
+  const localData = getJoryeEntry(admin);
+  const fallback = [];
+  if(!rows.length){
+    if(localData && localData.contact) fallback.push(['실사 자료 담당자', localData.contact]);
+    fallback.push(['정부민원안내콜센터', '110 (관할 지자체 담당부서로 연결 요청 가능)']);
+  }
+  const list = (rows.length ? rows : fallback).map(([k,v]) => `<li style="display:flex;gap:10px;padding:3px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px;"><span style="flex:none;width:112px;color:var(--ink-soft);">${k}</span><span>${escLand(v)}</span></li>`).join('');
+  return `
+    <div class="keyline" style="margin-top:10px;background:var(--sky-tint);border-left-color:var(--sky);">
+      <b>☎ ${regionName} 담당부서 연락처</b>${e && e.data['확인일'] ? ` <span class="hint">(${escLand(e.data['확인일'])} 확인)</span>` : ''}
+      <ul style="list-style:none;margin:6px 0 0;padding:0;">${list}</ul>
+      ${rows.length ? '' : `<p class="hint" style="margin:6px 0 0;">이 지역의 발전사업허가·개발행위허가·건축허가 부서 번호는 아직 등록되지 않았습니다. <a href="https://search.naver.com/search.naver?query=${q}" target="_blank" rel="noopener">지자체 조직도에서 찾기 ↗</a> — 확인한 번호는 contacts.json에 적어두면 다음부터 여기에 표시됩니다.</p>`}
+    </div>`;
+}
 function contactHtml(admin){
   const localData = getJoryeEntry(admin);
+  const dept = deptContactsHtml(admin);
 
   if(localData){
-    return `
+    return dept + `
     <div class="keyline" style="margin-top:10px;background:var(--amber-tint);border-left-color:var(--amber);">
       <b>📋 ${admin.siText || admin.guText || admin.do} 실사 확인 자료 (사용자 제공 데이터, 방문 확인일 기준)</b>
       <p style="margin:8px 0 4px;font-size:13px;"><b>개발행위허가 규모/기준:</b> ${localData.devScale}</p>
@@ -3227,7 +3305,7 @@ function contactHtml(admin){
     </div>`;
   }
 
-  return `
+  return dept + `
     <div class="keyline" style="margin-top:10px;">
       <p style="margin:0;font-size:13px;">📋 <b>${admin.siText || admin.guText || admin.do}</b>의 실사 확인 자료가 아직 없습니다. 한전ON(online.kepco.co.kr) 또는 관할 지자체·한전지사에 직접 문의해주세요.</p>
       ${SETBACK_LAW_NOTICE}
@@ -3402,6 +3480,7 @@ async function checkKepcoCapacityInner(){
   try{
     await loadBjdong();
     await loadJorye();
+    await loadContacts();
     const parsed = parseAddressParts(addr);
     if(!parsed){
       // 지번이 없어도 행정구역(시·군·구)만 찾아 한전 문의처·실사 자료는 보여준다
@@ -3433,6 +3512,7 @@ async function checkKepcoCapacityInner(){
     }
 
     admin = splitAdminName(hit.name);
+    lastAdmin = admin;
     const jibun = (parsed.bubn && parsed.bubn !== '0') ? `${parsed.bobn}-${parsed.bubn}` : parsed.bobn;
     const target = { isMountain: !!parsed.isMountain, bobn: parseInt(parsed.bobn, 10), bubn: parsed.bubn ? parseInt(parsed.bubn, 10) : 0 };
 
@@ -3882,6 +3962,17 @@ function buildSummaryHtml(r){
         <div class="sum-row ${gridCls}"><span class="sum-k">계통</span><span class="sum-v">${gridText}</span></div>
         <div class="sum-row ${setbackCls}"><span class="sum-k">이격거리</span><span class="sum-v">${setbackText}</span></div>
         <div class="sum-row ${roadCls}"><span class="sum-k">진입로</span><span class="sum-v">${roadText}</span></div>
+        <div class="sum-row"><span class="sum-k">지자체 연락처</span><span class="sum-v">${(() => {
+          const e = lastAdmin ? getContactsEntry(lastAdmin) : null;
+          const regionName = lastAdmin ? [lastAdmin.do, lastAdmin.siText, lastAdmin.guText].filter(Boolean).join(' ') : '';
+          if(!e) return `<span class="sum-muted">${regionName ? regionName + ' — ' : ''}담당부서 번호 미등록 · 정부민원안내콜센터 110 (왼쪽 주소 카드의 연락처 참고)</span>`;
+          const d = e.data; const parts = [];
+          if(d['발전사업허가']) parts.push(`발전사업허가 <b>${escLand(d['발전사업허가']).split(' (')[0]}</b>`);
+          if(d['개발행위허가']) parts.push(`개발행위허가 <b>${escLand(d['개발행위허가'])}</b>`);
+          if(d['건축허가']) parts.push(`건축허가 <b>${escLand(d['건축허가'])}</b>`);
+          if(d['대표번호']) parts.push(`대표 ${escLand(d['대표번호'])}`);
+          return `${regionName} · ` + parts.join(' · ') + (d['확인일'] ? ` <span class="sum-muted">(${escLand(d['확인일'])} 확인)</span>` : '');
+        })()}</span></div>
         <div class="sum-row"><span class="sum-k">초기 비용</span><span class="sum-v">${costText}</span></div>
         <div class="sum-row"><span class="sum-k">수익 참고</span><span class="sum-v">${revenueText} <label class="sum-muted" style="white-space:nowrap;">일 발전시간 <input id="genHours" type="number" step="0.1" min="1" max="6" value="${(g('genHours') && g('genHours').value) || 3.6}" style="width:44px;padding:1px 3px;font-size:11px;" onchange="runAnalysis()">h</label></span></div>
       </div>
