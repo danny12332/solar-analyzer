@@ -1637,6 +1637,7 @@ function renderAddressLabel(pos, jibun, road){
   const map = ensureKakaoMap();
   if(jibun){ lastJibunAddress = jibun; }
   lastLatLng = pos;
+  try{ localStorage.setItem('solarLastSite', JSON.stringify({ lat: pos.getLat(), lng: pos.getLng(), addr: jibun || road || '', t: Date.now() })); }catch(e){}
   const esc = s => (s || '').replace(/'/g, "\\'");
   const content = `<div onmousedown="kakao.maps.event.preventMap();" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 16px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;">
     <div style="position:absolute;top:10px;right:10px;">${closeBtnHtml('closeAddressOverlay()')}</div>
@@ -4191,6 +4192,33 @@ function renderResults(r){
       g('mkJejuSub').innerHTML = `${kd(j.smpJeju.date)} 24h 평균 · ${fmt(j.smpJeju.min)}–${fmt(j.smpJeju.max)}`;
     } else { g('mkJeju').textContent = '—'; }
   }).catch(e => fail(e && e.message ? e.message : ''));
+})();
+
+// ===== 첫 화면: 지도를 바로 표시 (마지막으로 검색한 위치, 없으면 기본 위치). 지도를 클릭하면 그 지점 주소가 표시됨 =====
+const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역시청 부근(기본 위치)' };
+(function initMapOnLoad(){
+  const run = () => {
+    if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.Map){ return; }
+    let saved = null;
+    try{ saved = JSON.parse(localStorage.getItem('solarLastSite') || 'null'); }catch(e){}
+    const wrap = document.getElementById('mapEmbedWrap');
+    if(wrap && wrap.style.display !== 'block') wrap.style.display = 'block';
+    const map = ensureKakaoMap();
+    const st = document.getElementById('roadviewStatus');
+    if(saved && Number.isFinite(saved.lat) && Number.isFinite(saved.lng)){
+      map.setCenter(new kakao.maps.LatLng(saved.lat, saved.lng));
+      map.setLevel(4);
+      const input = document.getElementById('siteAddress');
+      if(input && !input.value && saved.addr) input.placeholder = `마지막 검색: ${saved.addr}`;
+      if(st && !st.textContent) st.textContent = `마지막으로 검색한 위치(${saved.addr || '좌표'}) 주변입니다. 지도에서 건물이나 땅을 클릭하면 그 지점의 지번·도로명 주소가 나오고, 위쪽에 주소를 넣어 검색하면 바로 분석이 시작됩니다.`;
+    } else {
+      map.setCenter(new kakao.maps.LatLng(DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng));
+      map.setLevel(5);
+      if(st && !st.textContent) st.textContent = `${DEFAULT_MAP_CENTER.label}을 표시했습니다. 지도에서 건물이나 땅을 클릭하면 그 지점의 지번·도로명 주소가 나오고, 위쪽에 주소를 넣어 검색하면 바로 분석이 시작됩니다.`;
+    }
+    setTimeout(() => { try{ map.relayout(); }catch(e){} }, 100);
+  };
+  if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', () => setTimeout(run, 50)); } else { setTimeout(run, 50); }
 })();
 </script>
 </body>
