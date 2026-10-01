@@ -3291,7 +3291,8 @@ function deptContactsHtml(admin){
 }
 function contactHtml(admin){
   const localData = getJoryeEntry(admin);
-  const dept = deptContactsHtml(admin);
+  // 담당부서 연락처는 주소 검색 시 주소 카드(#contactPanel)에 이미 표시되므로 여기서는 중복 표시하지 않음
+  const dept = '';
 
   if(localData){
     return dept + `
@@ -3513,6 +3514,7 @@ async function checkKepcoCapacityInner(){
 
     admin = splitAdminName(hit.name);
     lastAdmin = admin;
+    { const cp = document.getElementById('contactPanel'); if(cp && !cp.innerHTML.trim()) cp.innerHTML = deptContactsHtml(admin); }
     const jibun = (parsed.bubn && parsed.bubn !== '0') ? `${parsed.bobn}-${parsed.bubn}` : parsed.bobn;
     const target = { isMountain: !!parsed.isMountain, bobn: parseInt(parsed.bobn, 10), bubn: parsed.bubn ? parseInt(parsed.bubn, 10) : 0 };
 
