@@ -3253,41 +3253,49 @@ async function loadContacts(){
 }
 function getContactsEntry(admin){
   if(!CONTACTS_DATA || !admin) return null;
+  const has = e => e && ['대표번호','발전사업허가','개발행위허가','건축허가','에너지담당'].some(f => e[f] && String(e[f]).trim());
   const cands = [];
   if(admin.siText && admin.guText) cands.push(`${admin.do} ${admin.siText} ${admin.guText}`);
   if(admin.siText) cands.push(`${admin.do} ${admin.siText}`);
   if(admin.guText) cands.push(`${admin.do} ${admin.guText}`);
-  cands.push(admin.do);
-  for(const k of cands){
-    const e = CONTACTS_DATA[k];
-    if(e && Object.values(e).some(v => v && String(v).trim())) return { key: k, data: e };
-  }
+  for(const k of cands){ if(has(CONTACTS_DATA[k])) return { key: k, data: CONTACTS_DATA[k] }; }
   return null;
+}
+function getSidoContacts(admin){
+  if(!CONTACTS_DATA || !admin) return null;
+  const e = CONTACTS_DATA[admin.do];
+  return e && ['대표번호','발전사업허가','개발행위허가'].some(f => e[f]) ? e : null;
+}
+// 긴 항목(여러 담당자)을 " / " 기준으로 줄바꿈해 보여줌
+function contactLinesHtml(v){
+  return String(v).split(' / ').map(x => `<div style="padding:1px 0;">${escLand(x)}</div>`).join('');
 }
 function deptContactsHtml(admin){
   const regionName = [admin.do, admin.siText, admin.guText].filter(Boolean).join(' ');
   const q = encodeURIComponent(`${regionName} 개발행위허가 담당부서 전화번호`);
   const e = getContactsEntry(admin);
-  const rows = [];
-  if(e){
-    const d = e.data;
-    if(d['발전사업허가']) rows.push(['발전사업허가', d['발전사업허가']]);
-    if(d['개발행위허가']) rows.push(['개발행위허가', d['개발행위허가']]);
-    if(d['건축허가']) rows.push(['건축허가', d['건축허가']]);
-    if(d['대표번호']) rows.push(['대표번호', d['대표번호']]);
-  }
+  const sido = getSidoContacts(admin);
   const localData = getJoryeEntry(admin);
-  const fallback = [];
-  if(!rows.length){
-    if(localData && localData.contact) fallback.push(['실사 자료 담당자', localData.contact]);
-    fallback.push(['정부민원안내콜센터', '110 (관할 지자체 담당부서로 연결 요청 가능)']);
-  }
-  const list = (rows.length ? rows : fallback).map(([k,v]) => `<li style="display:flex;gap:10px;padding:3px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px;"><span style="flex:none;width:112px;color:var(--ink-soft);">${k}</span><span>${escLand(v)}</span></li>`).join('');
+  const d = e ? e.data : {};
+  const rows = [];
+  if(d['발전사업허가']) rows.push(['발전사업허가', d['발전사업허가']]);
+  else if(sido && sido['발전사업허가']) rows.push([`발전사업허가<br><span class="hint">(${escLand(admin.do)} 본청)</span>`, sido['발전사업허가']]);
+  if(!d['발전사업허가'] && d['에너지담당']) rows.push(['에너지 담당<br><span class="hint">(허가업무 미확인)</span>', d['에너지담당']]);
+  if(d['개발행위허가']) rows.push(['개발행위허가', d['개발행위허가']]);
+  if(d['건축허가']) rows.push(['건축허가', d['건축허가']]);
+  // 담당부서 번호가 빠진 항목은 기존 실사 자료 번호로 보충
+  const missingDept = !d['발전사업허가'] || !d['개발행위허가'];
+  if(missingDept && localData && localData.contact) rows.push(['실사 자료 담당자', localData.contact]);
+  if(d['대표번호']) rows.push(['대표번호', d['대표번호']]);
+  else if(sido && sido['대표번호']) rows.push([`대표번호<br><span class="hint">(${escLand(admin.do)})</span>`, sido['대표번호']]);
+  if(!rows.length) rows.push(['정부민원안내콜센터', '110 (관할 지자체 담당부서로 연결 요청 가능)']);
+  const list = rows.map(([k,v]) => `<li style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px;"><span style="flex:none;width:104px;color:var(--ink-soft);line-height:1.35;">${k}</span><span style="min-width:0;">${contactLinesHtml(v)}</span></li>`).join('');
+  const meta = e ? `${e.data['확인일'] ? escLand(e.data['확인일']) + ' 확인' : ''}${e.data['출처'] ? ` · <a href="${escLand(e.data['출처'])}" target="_blank" rel="noopener">출처</a>` : ''}` : '';
   return `
     <div class="keyline" style="margin-top:10px;background:var(--sky-tint);border-left-color:var(--sky);">
-      <b>☎ ${regionName} 담당부서 연락처</b>${e && e.data['확인일'] ? ` <span class="hint">(${escLand(e.data['확인일'])} 확인)</span>` : ''}
+      <b>☎ ${escLand(regionName)} 지자체 담당부서</b>${meta ? ` <span class="hint">(${meta})</span>` : ''}
       <ul style="list-style:none;margin:6px 0 0;padding:0;">${list}</ul>
-      ${rows.length ? '' : `<p class="hint" style="margin:6px 0 0;">이 지역의 발전사업허가·개발행위허가·건축허가 부서 번호는 아직 등록되지 않았습니다. <a href="https://search.naver.com/search.naver?query=${q}" target="_blank" rel="noopener">지자체 조직도에서 찾기 ↗</a> — 확인한 번호는 contacts.json에 적어두면 다음부터 여기에 표시됩니다.</p>`}
+      ${missingDept ? `<p class="hint" style="margin:6px 0 0;">발전사업허가·개발행위허가 중 확인되지 않은 항목은 실사 자료·대표번호로 대신 표시했습니다. <a href="https://search.naver.com/search.naver?query=${q}" target="_blank" rel="noopener">조직도에서 찾기 ↗</a></p>` : ''}
     </div>`;
 }
 function contactHtml(admin){
@@ -3495,7 +3503,7 @@ async function checkKepcoCapacityInner(){
         }
       }catch(e){ console.warn('region lookup', e); }
       resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ 주소 끝에서 지번을 찾지 못해 배전선로는 조회하지 못했습니다. "OO읍/OO리 123-4" 형식으로 입력하면 조회됩니다.</p>`
-        + (regionAdmin ? kepcoPhoneLine(regionAdmin) + contactHtml(regionAdmin) : '');
+        + (regionAdmin ? kepcoPhoneLine(regionAdmin) + deptContactsHtml(regionAdmin) + contactHtml(regionAdmin) : '');
       return;
     }
     const { hit } = findBjdongCode(parsed.dongText);
@@ -3509,13 +3517,14 @@ async function checkKepcoCapacityInner(){
         }
       }catch(e){}
       resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다.</p>`
-        + (regionAdmin ? kepcoPhoneLine(regionAdmin) + contactHtml(regionAdmin) : '');
+        + (regionAdmin ? kepcoPhoneLine(regionAdmin) + deptContactsHtml(regionAdmin) + contactHtml(regionAdmin) : '');
       return;
     }
 
     admin = splitAdminName(hit.name);
     lastAdmin = admin;
-    { const cp = document.getElementById('contactPanel'); if(cp && !cp.innerHTML.trim()) cp.innerHTML = deptContactsHtml(admin); }
+    // 지자체 담당부서는 한전ON 결과 안에 함께 표시하므로 주소 카드 쪽 표시는 비움(중복 방지)
+    { const cp = document.getElementById('contactPanel'); if(cp) cp.innerHTML = ''; }
     const jibun = (parsed.bubn && parsed.bubn !== '0') ? `${parsed.bobn}-${parsed.bubn}` : parsed.bobn;
     const target = { isMountain: !!parsed.isMountain, bobn: parseInt(parsed.bobn, 10), bubn: parsed.bubn ? parseInt(parsed.bubn, 10) : 0 };
 
@@ -3609,6 +3618,7 @@ async function checkKepcoCapacityInner(){
     if(!result){
       resultEl.innerHTML = `
         ${kepcoPhoneLine(admin)}
+        ${deptContactsHtml(admin)}
         <p class="hint" style="color:#b3402a;">❌ ${admin.lidong} 인근과 같은 구·시 안의 다른 동·읍·면까지 찾아봤지만 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>
         ${kepcoDebugHtml()}
         ${contactHtml(admin)}`;
@@ -3692,6 +3702,7 @@ async function checkKepcoCapacityInner(){
       <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;position:relative;">
         <span onclick="closeResultPanel('kepcoResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
         ${kepcoPhoneLine(admin)}
+        ${deptContactsHtml(admin)}
         ${reinforceNote}
         ${regionNote}
         ${levelNote}
@@ -3966,13 +3977,16 @@ function buildSummaryHtml(r){
         <div class="sum-row ${setbackCls}"><span class="sum-k">이격거리</span><span class="sum-v">${setbackText}</span></div>
         <div class="sum-row ${roadCls}"><span class="sum-k">진입로</span><span class="sum-v">${roadText}</span></div>
         <div class="sum-row"><span class="sum-k">지자체 연락처</span><span class="sum-v">${(() => {
-          const e = lastAdmin ? getContactsEntry(lastAdmin) : null;
+          const e0 = lastAdmin ? getContactsEntry(lastAdmin) : null;
+          const sd = lastAdmin ? getSidoContacts(lastAdmin) : null;
+          const e = e0 ? { key: e0.key, data: Object.assign({}, e0.data, (!e0.data['발전사업허가'] && sd && sd['발전사업허가']) ? { '발전사업허가': '(본청) ' + sd['발전사업허가'] } : {}) } : (sd ? { key: lastAdmin.do, data: sd } : null);
           const regionName = lastAdmin ? [lastAdmin.do, lastAdmin.siText, lastAdmin.guText].filter(Boolean).join(' ') : '';
           if(!e) return `<span class="sum-muted">${regionName ? regionName + ' — ' : ''}담당부서 번호 미등록 · 정부민원안내콜센터 110 (왼쪽 주소 카드의 연락처 참고)</span>`;
           const d = e.data; const parts = [];
-          if(d['발전사업허가']) parts.push(`발전사업허가 <b>${escLand(d['발전사업허가']).split(' (')[0]}</b>`);
-          if(d['개발행위허가']) parts.push(`개발행위허가 <b>${escLand(d['개발행위허가'])}</b>`);
-          if(d['건축허가']) parts.push(`건축허가 <b>${escLand(d['건축허가'])}</b>`);
+          const first = v => escLand(String(v).split(' / ')[0].split(' (')[0].split(' — ')[0]);
+          if(d['발전사업허가']) parts.push(`발전사업허가 <b>${first(d['발전사업허가'])}</b>`);
+          if(d['개발행위허가']) parts.push(`개발행위허가 <b>${first(d['개발행위허가'])}</b>${String(d['개발행위허가']).includes(' / ') ? ' 외' : ''}`);
+          if(d['건축허가']) parts.push(`건축허가 <b>${first(d['건축허가'])}</b>`);
           if(d['대표번호']) parts.push(`대표 ${escLand(d['대표번호'])}`);
           return `${regionName} · ` + parts.join(' · ') + (d['확인일'] ? ` <span class="sum-muted">(${escLand(d['확인일'])} 확인)</span>` : '');
         })()}</span></div>
