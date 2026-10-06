@@ -3280,7 +3280,8 @@ async function showRegionContacts(){
   try{ await loadBjdong(); await loadJorye(); await loadContacts(); }catch(e){}
   const admin = resolveAdminFromAddress(addr);
   lastAdmin = admin;
-  panel.innerHTML = admin ? deptContactsHtml(admin) : '';
+  // 지자체 담당부서는 한전ON 결과(배전선로 여유용량) 안에만 표시 — 주소 카드에는 표시하지 않음(중복 방지)
+  panel.innerHTML = '';
   if(document.querySelector('#resultsWrap .sum-card')) { try{ runAnalysis(); }catch(e){} }
 }
 // ===== 지자체 담당부서 연락처 (contacts.json: 대표번호·발전사업허가·개발행위허가·건축허가) =====
@@ -3511,6 +3512,22 @@ function kepcoGuideText(subst_nm, addr_do, subst_cd, dl_cd){
 }
 
 let kepcoRunning = false;
+// 한전ON 조회 실패를 결과칸 맨 위에 눈에 띄게 표시하고, 핵심 요약에도 "조회 실패"로 남김
+function markKepcoFailed(reason){
+  lastKepcoSummary = { failed: true, reason: reason, lines: [], guides: [], jibun: '', matchLevel: '' };
+  const el = document.getElementById('kepcoResult');
+  if(!el) return;
+  const box = `<div style="margin:0 0 8px;padding:10px 12px;border-radius:var(--r-sm);background:var(--coral-tint);border:1px solid #EBBFAF;">
+    <b style="color:var(--coral);">⚠ 한전ON 배전선로 조회 실패</b>
+    <p style="margin:4px 0 0;font-size:12.5px;">${reason}</p>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+      <a href="https://online.kepco.co.kr/EWM092D00" target="_blank" rel="noopener" class="run" style="width:auto;margin:0;padding:5px 10px;font-size:12px;text-decoration:none;display:inline-block;background:var(--sun);color:#2A1A00;">한전ON에서 직접 조회 ↗</a>
+      <button type="button" class="run" style="width:auto;margin:0;padding:5px 10px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="checkKepcoCapacity()">다시 조회</button>
+    </div>
+  </div>`;
+  el.insertAdjacentHTML('afterbegin', box);
+  if(document.querySelector('#resultsWrap .sum-card')){ try{ runAnalysis(); }catch(e){} }
+}
 let kepcoDebug = null; // 조회 과정 기록(전송값·단계별 지번 목록 건수) — 결과가 한전ON과 다를 때 원인 확인용
 function kepcoDebugHtml(){
   if(!kepcoDebug) return '';
@@ -3551,6 +3568,7 @@ async function checkKepcoCapacityInner(){
       }catch(e){ console.warn('region lookup', e); }
       resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ 주소 끝에서 지번을 찾지 못해 배전선로는 조회하지 못했습니다. "OO읍/OO리 123-4" 형식으로 입력하면 조회됩니다.</p>`
         + (regionAdmin ? kepcoPhoneLine(regionAdmin) + deptContactsHtml(regionAdmin) + contactHtml(regionAdmin) : '');
+      markKepcoFailed('주소에 지번이 없어 배전선로를 조회하지 못했습니다. 지번까지 입력하거나 지도에서 필지를 클릭한 뒤 다시 조회하세요.');
       return;
     }
     const { hit } = findBjdongCode(parsed.dongText);
@@ -3565,6 +3583,7 @@ async function checkKepcoCapacityInner(){
       }catch(e){}
       resultEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다.</p>`
         + (regionAdmin ? kepcoPhoneLine(regionAdmin) + deptContactsHtml(regionAdmin) + contactHtml(regionAdmin) : '');
+      markKepcoFailed(`"${parsed.dongText}"에 해당하는 법정동을 찾지 못해 한전ON에 보낼 주소를 만들 수 없었습니다.`);
       return;
     }
 
@@ -3669,6 +3688,7 @@ async function checkKepcoCapacityInner(){
         <p class="hint" style="color:#b3402a;">❌ ${admin.lidong} 인근과 같은 구·시 안의 다른 동·읍·면까지 찾아봤지만 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>
         ${kepcoDebugHtml()}
         ${contactHtml(admin)}`;
+      markKepcoFailed(`${admin.lidong} ${admin.li || ''} 인근과 같은 시·군·구의 다른 읍·면·동까지 찾아봤지만 한전ON에서 배전망 정보가 나오지 않았습니다.`);
       return;
     }
 
@@ -3763,7 +3783,8 @@ async function checkKepcoCapacityInner(){
     const timedOut = err && err.name === 'AbortError';
     resultEl.innerHTML = `
       <p class="hint" style="color:#b3402a;">❌ ${timedOut ? '40초 넘게 응답이 없어 조회를 중단했습니다. 한전 서버가 느리거나 일시적으로 응답하지 않는 상태일 수 있습니다.' : '조회 실패: ' + err.message + ' — 브라우저가 한전 서버 요청을 막았을 수 있습니다 (CORS).'} 아래 문의처를 이용해주세요.</p>
-      ${admin ? contactHtml(admin) : ''}`;
+      ${admin ? kepcoPhoneLine(admin) + deptContactsHtml(admin) : ''}`;
+    markKepcoFailed(timedOut ? '한전 서버가 오래 응답하지 않아 조회를 중단했습니다(일시적 지연일 수 있음).' : '조회 중 오류가 발생했습니다: ' + escLand(err && err.message ? err.message : String(err)));
   }finally{
     btn.disabled = false;
   }
@@ -3962,7 +3983,10 @@ function buildSummaryHtml(r){
   // 계통
   let gridText = '<span class="sum-muted">한전ON 미조회 — 왼쪽 "배전선로 여유용량" 버튼</span>';
   let gridCls = 'muted';
-  if(lastKepcoSummary && lastKepcoSummary.lines.length){
+  if(lastKepcoSummary && lastKepcoSummary.failed){
+    gridText = `<b style="color:var(--coral);">⚠ 한전ON 조회 실패</b> — ${lastKepcoSummary.reason} <a href="https://online.kepco.co.kr/EWM092D00" target="_blank" rel="noopener">한전ON에서 직접 확인 ↗</a>`;
+    gridCls = 'warn';
+  } else if(lastKepcoSummary && lastKepcoSummary.lines.length){
     const L = lastKepcoSummary.lines[0];
     const okAll = lastKepcoSummary.lines.some(x => x.ok);
     gridText = `${L.subst} 변전소 #${L.mtr} · ${L.dl} 선로 — 여유 변전소 <b>${L.vol1.toLocaleString('ko-KR')}</b> / 주변압기 <b>${L.vol2.toLocaleString('ko-KR')}</b> / 배전선로 <b>${L.vol3.toLocaleString('ko-KR')}</b> kW${lastKepcoSummary.lines.length > 1 ? ` (후보 ${lastKepcoSummary.lines.length}개 중 1)` : ''}${lastKepcoSummary.matchLevel !== 'exact' ? ` · 조회 지번 ${lastKepcoSummary.jibun}` : ''}`;
