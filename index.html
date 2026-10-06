@@ -3889,9 +3889,9 @@ async function checkKepcoCapacityInner(){
     if(!result){
       resultEl.innerHTML = `
         ${kepcoPhoneLine(admin)}
-        ${deptContactsHtml(admin)}
         <p class="hint" style="color:#b3402a;">❌ ${admin.lidong} 인근과 같은 구·시 안의 다른 동·읍·면까지 찾아봤지만 배전망 정보를 찾지 못했습니다. 한전ON(online.kepco.co.kr)에서 직접 확인해주세요.</p>
         ${kepcoDebugHtml()}
+        ${deptContactsHtml(admin)}
         ${contactHtml(admin)}`;
       markKepcoFailed(`${admin.lidong} ${admin.li || ''} 인근과 같은 시·군·구의 다른 읍·면·동까지 찾아봤지만 한전ON에서 배전망 정보가 나오지 않았습니다.`);
       return;
@@ -3974,7 +3974,6 @@ async function checkKepcoCapacityInner(){
       <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;position:relative;">
         <span onclick="closeResultPanel('kepcoResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
         ${kepcoPhoneLine(admin)}
-        ${deptContactsHtml(admin)}
         ${reinforceNote}
         ${regionNote}
         ${levelNote}
@@ -3982,6 +3981,7 @@ async function checkKepcoCapacityInner(){
         <p class="footnote">한전ON 배전망 여유용량 조회 결과를 그대로 옮긴 참고 자료이며, 접속 가능 여부를 최종 확정하는 것은 아닙니다. "실제 여유용량"이 세 항목 모두 0보다 커야 연계 가능성이 있고, 실제 신청 시점에 값이 달라질 수 있으니 반드시 한전ON에서 재확인하세요. (조회 지번: ${matched.jibun}, 소재지: ${admin.do} ${admin.siText} ${admin.guText} ${matched.lidong} ${matched.li}${list.length > 1 ? `, 배전선로 후보 ${list.length}개` : ''})</p>
         ${kepcoDebugHtml()}
       </div>
+      ${deptContactsHtml(admin)}
       ${contactHtml(admin)}`;
   }catch(err){
     console.error(err);
