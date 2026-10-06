@@ -335,7 +335,7 @@
         <h2>주소로 위치 확인</h2>
         <div class="row2" style="align-items:end;">
           <div class="field" style="margin-bottom:0;position:relative;">
-            <label for="siteAddress">지번 주소 또는 아파트·공장 등 장소명</label>
+            <label for="siteAddress">지번·도로명 주소, 면·리·길 이름, 또는 상호(공장·아파트 등)</label>
             <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1" autocomplete="off">
             <div id="addrSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--card-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
           </div>
@@ -2581,24 +2581,69 @@ function showKakaoMap(address){
   }
   const map = ensureKakaoMap();
   const geocoder = new kakao.maps.services.Geocoder();
+  const statusEl = document.getElementById('roadviewStatus');
+  const finish = () => setTimeout(() => { map.relayout(); if(kakaoMarker){ map.setCenter(kakaoMarker.getPosition()); } }, 50);
+  // 필지 단위 위치(지번·건물)를 찾은 경우: 마커 + 필지 경계 + 자동 분석
+  const goParcel = (lat, lng, jibun, road, note) => {
+    const pos = new kakao.maps.LatLng(lat, lng);
+    map.setCenter(pos); map.setLevel(3);
+    setMarkerPosition(pos, { jibun, road });
+    showParcelBoundary();
+    if(roadviewOn){ showRoadviewStage(); }
+    if(statusEl) statusEl.textContent = note || '';
+    finish();
+  };
+  // 면·리·도로명만 입력한 경우: 그 지역으로 이동만 하고, 필지는 지도에서 클릭해 고르게 함
+  const goRegion = (lat, lng, name, level) => {
+    const pos = new kakao.maps.LatLng(lat, lng);
+    map.setCenter(pos); map.setLevel(level || 6);
+    if(kakaoMarker){ kakaoMarker.setMap(null); kakaoMarker = null; }
+    if(statusEl) statusEl.textContent = `📍 "${name}" 지역으로 이동했습니다. 지번이 없어 필지를 특정할 수 없으니, 지도에서 원하는 땅이나 건물을 클릭하면 그 지점의 주소가 나옵니다. 그 주소를 위쪽에 넣어 "위치 확인"을 누르면 분석이 시작됩니다.`;
+    finish();
+  };
+  // 상호·건물명·장소 검색 (주소로 못 찾았을 때)
+  const tryPlace = () => {
+    if(!kakao.maps.services.Places){ if(statusEl) statusEl.textContent = `❌ "${address}"을(를) 찾지 못했습니다. 지번 주소(예: OO군 OO면 OO리 123-4)나 상호를 다시 확인해 주세요.`; return; }
+    const places = new kakao.maps.services.Places();
+    places.keywordSearch(address, function(res, st){
+      if(st === kakao.maps.services.Status.OK && res && res.length){
+        const p0 = res[0];
+        const more = res.length > 1 ? ` (검색 결과 ${res.length}건 중 첫 번째 — 다른 곳이면 입력칸 아래 자동완성 목록에서 고르세요)` : '';
+        goParcel(parseFloat(p0.y), parseFloat(p0.x), p0.address_name || '', p0.road_address_name || '',
+          `🏢 상호·장소 "${p0.place_name}"(${p0.address_name || p0.road_address_name})로 찾았습니다${more}.`);
+      } else {
+        if(statusEl) statusEl.textContent = `❌ "${address}"을(를) 주소·상호 어느 쪽으로도 찾지 못했습니다. 지번 주소(예: OO군 OO면 OO리 123-4)나 정확한 상호를 입력해 주세요.`;
+        console.warn('주소·장소 검색 실패 →', address, st);
+      }
+    }, { size: 5 });
+  };
 
   geocoder.addressSearch(address, function(result, status){
-    if(status === kakao.maps.services.Status.OK){
-      const pos = new kakao.maps.LatLng(result[0].y, result[0].x);
-      map.setCenter(pos);
-      map.setLevel(3);
-      const jibun = result[0].address ? result[0].address.address_name : '';
-      const road = result[0].road_address ? result[0].road_address.address_name : '';
-      setMarkerPosition(pos, { jibun, road });
-      // 주소 검색 시 필지 경계선 자동 표시 (버튼을 누른 것과 동일한 동작)
-      showParcelBoundary();
-      // 로드뷰가 열려있는 상태라면 새로 검색한 주소 위치로 바로 갱신
-      if(roadviewOn){ showRoadviewStage(); }
+    if(status === kakao.maps.services.Status.OK && result && result.length){
+      const r0 = result[0];
+      const type = r0.address_type; // REGION(지명) / ROAD(도로명) / REGION_ADDR(지번 주소) / ROAD_ADDR(도로명 주소)
+      if(type === 'REGION' || type === 'ROAD'){
+        // 면·리·도로명까지만 입력 → 같은 이름의 상호가 있으면 그쪽을 우선 시도, 없으면 지역으로 이동
+        if(kakao.maps.services.Places){
+          new kakao.maps.services.Places().keywordSearch(address, function(res, st){
+            const exactPlace = (st === kakao.maps.services.Status.OK && res && res.length) ? res.find(p => p.place_name && address.replace(/\s/g,'').includes(p.place_name.replace(/\s/g,''))) : null;
+            if(exactPlace){
+              goParcel(parseFloat(exactPlace.y), parseFloat(exactPlace.x), exactPlace.address_name || '', exactPlace.road_address_name || '', `🏢 상호·장소 "${exactPlace.place_name}"로 찾았습니다.`);
+            } else {
+              goRegion(parseFloat(r0.y), parseFloat(r0.x), r0.address_name, type === 'ROAD' ? 5 : (/(리|동)$/.test(r0.address_name) ? 5 : 7));
+            }
+          }, { size: 5 });
+        } else {
+          goRegion(parseFloat(r0.y), parseFloat(r0.x), r0.address_name);
+        }
+        return;
+      }
+      const jibun = r0.address ? r0.address.address_name : '';
+      const road = r0.road_address ? r0.road_address.address_name : '';
+      goParcel(parseFloat(r0.y), parseFloat(r0.x), jibun, road, '');
     } else {
-      console.warn('카카오 지오코더: 주소를 찾지 못했습니다 →', address, status);
+      tryPlace();
     }
-    // 지도 크기가 뒤늦게 표시되는 카드 안에 있을 수 있어 레이아웃 재계산
-    setTimeout(() => { map.relayout(); if(kakaoMarker){ map.setCenter(kakaoMarker.getPosition()); } }, 50);
   });
 }
 
@@ -3299,6 +3344,8 @@ function deptContactsHtml(admin){
     </div>`;
 }
 function contactHtml(admin){
+  // 실사 확인 자료 블록(개발행위허가 규모·이격거리 안내 등)은 핵심 요약에서 다루므로 화면에 따로 표시하지 않음
+  return '';
   const localData = getJoryeEntry(admin);
   // 담당부서 연락처는 주소 검색 시 주소 카드(#contactPanel)에 이미 표시되므로 여기서는 중복 표시하지 않음
   const dept = '';
