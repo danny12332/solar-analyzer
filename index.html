@@ -2738,6 +2738,98 @@ function addAreaPoint(latlng){
 // ===== 🏢 건물 선택: 지도에서 건물을 클릭하면 도로명주소 건물 자료(LT_C_SPBD)의 외곽선을 그대로 지붕 경계로 사용 =====
 // 면적재기로 꼭짓점을 일일이 찍지 않아도 되고, 경계가 공식 건물 외곽선이라 치수가 정확함. 변마다 길이(m)를 표시함.
 let bldPickGroupId = null;
+
+// ===== ✏ 테두리 조정: 건물 외곽선의 꼭짓점을 끌어서 위성사진의 건물 모양에 맞춤 (전체 이동 손잡이 포함) =====
+let bldEdit = null; // { poly, path:[LatLng], handles:[Marker], moveHandle, edgeLabels:[], label, groupShapes }
+const HANDLE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="6" fill="#fff" stroke="#C2148A" stroke-width="3"/></svg>');
+const MOVE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="12" fill="#C2148A" stroke="#fff" stroke-width="2"/><path d="M14 4l3 4h-2v4h-2V8H11zM14 24l-3-4h2v-4h2v4h2zM4 14l4-3v2h4v2H8v2zM24 14l-4 3v-2h-4v-2h4v-2z" fill="#fff"/></svg>');
+function startBuildingEdit(){
+  if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) return;
+  stopBuildingEdit();
+  const map = ensureKakaoMap();
+  const path = lastAreaPolygonPath.slice();
+  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 3, strokeColor: '#C2148A', strokeOpacity: 0.95, strokeStyle: 'shortdash', fillColor: '#C2148A', fillOpacity: 0.06 });
+  const mk = (pos, img, size) => new kakao.maps.Marker({ map, position: pos, draggable: true, image: new kakao.maps.MarkerImage(img, new kakao.maps.Size(size, size), { offset: new kakao.maps.Point(size / 2, size / 2) }), zIndex: 10 });
+  const edgeLabels = [];
+  const centroid = () => new kakao.maps.LatLng(path.reduce((s, p) => s + p.getLat(), 0) / path.length, path.reduce((s, p) => s + p.getLng(), 0) / path.length);
+  const refresh = () => {
+    poly.setPath(path);
+    edgeLabels.forEach(o => o.setMap(null)); edgeLabels.length = 0;
+    for(let i = 0; i < path.length; i++){
+      const a = path[i], b = path[(i + 1) % path.length], len = haversineMeters(a, b);
+      if(len < 1.5) continue;
+      const ov = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng((a.getLat() + b.getLat()) / 2, (a.getLng() + b.getLng()) / 2), content: `<div style="background:rgba(255,255,255,.92);color:#C2148A;border:1px solid #C2148A;padding:1px 5px;border-radius:3px;font-size:11px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${len.toFixed(1)} m</div>`, yAnchor: 0.5 });
+      ov.setMap(map); edgeLabels.push(ov);
+    }
+    lastAreaPolygonPath = path.slice();
+    const area = shoelaceArea(path);
+    bldEdit.label.setContent(`<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>✏ 테두리 조정 중 · ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)</span><button type="button" onclick="finishBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:2px 8px;cursor:pointer;font-size:12px;">완료</button></div>`);
+    bldEdit.label.setPosition(centroid());
+    if(bldEdit.moveHandle) bldEdit.moveHandle.setPosition(centroid());
+  };
+  const handles = path.map((pos, i) => {
+    const h = mk(pos, HANDLE_IMG, 16);
+    kakao.maps.event.addListener(h, 'drag', () => { path[i] = h.getPosition(); refresh(); });
+    kakao.maps.event.addListener(h, 'dragend', () => { path[i] = h.getPosition(); refresh(); });
+    return h;
+  });
+  const label = new kakao.maps.CustomOverlay({ position: centroid(), content: '', yAnchor: 1.8, clickable: true });
+  label.setMap(map);
+  bldEdit = { poly, path, handles, edgeLabels, label, moveHandle: null, lastCenter: null };
+  // 전체 이동 손잡이: 끌면 꼭짓점 전체가 같이 움직임
+  const mv = mk(centroid(), MOVE_IMG, 28);
+  bldEdit.moveHandle = mv; bldEdit.lastCenter = mv.getPosition();
+  const moveAll = () => {
+    const c = mv.getPosition(), prev = bldEdit.lastCenter;
+    const dLat = c.getLat() - prev.getLat(), dLng = c.getLng() - prev.getLng();
+    for(let i = 0; i < path.length; i++){ path[i] = new kakao.maps.LatLng(path[i].getLat() + dLat, path[i].getLng() + dLng); handles[i].setPosition(path[i]); }
+    bldEdit.lastCenter = c; refresh();
+  };
+  kakao.maps.event.addListener(mv, 'drag', moveAll);
+  kakao.maps.event.addListener(mv, 'dragend', moveAll);
+  refresh();
+  const st = document.getElementById('roadviewStatus');
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = '✏ 흰 점을 끌어 꼭짓점을 옮기고, 가운데 분홍 손잡이를 끌면 테두리 전체가 이동합니다. 위성사진의 지붕 모서리에 맞춘 뒤 "완료"를 누르세요.';
+}
+function stopBuildingEdit(){
+  if(!bldEdit) return;
+  bldEdit.poly.setMap(null); bldEdit.handles.forEach(h => h.setMap(null)); bldEdit.edgeLabels.forEach(o => o.setMap(null)); bldEdit.label.setMap(null);
+  if(bldEdit.moveHandle) bldEdit.moveHandle.setMap(null);
+  bldEdit = null;
+}
+function finishBuildingEdit(){
+  if(!bldEdit) return;
+  const path = bldEdit.path.slice();
+  stopBuildingEdit();
+  // 조정된 테두리를 확정선으로 다시 그림 (이전 건물 선택 표시는 지움)
+  if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  drawConfirmedOutline(path, '');
+  document.getElementById('panelAzimuth').value = suggestAzimuthFromPath(path);
+  const st = document.getElementById('roadviewStatus');
+  st.textContent = `✅ 조정한 테두리를 경계로 잡았습니다 — ${Math.round(shoelaceArea(path)).toLocaleString('ko-KR')}㎡ (${Math.round(shoelaceArea(path) / 3.305785).toLocaleString('ko-KR')}평). 배치 대상을 고르고 "배치 생성"을 누르세요.`;
+}
+// 확정 테두리 + 변 길이 + 라벨(조정 버튼 포함) 그리기 — 건물 선택과 조정 완료에서 공통 사용
+function drawConfirmedOutline(path, name, extra){
+  const map = ensureKakaoMap();
+  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 3, strokeColor: '#C2148A', strokeOpacity: 0.95, fillColor: '#C2148A', fillOpacity: 0.08 });
+  measureShapes.push(poly);
+  const shapes = [poly];
+  for(let i = 0; i < path.length; i++){
+    const a = path[i], b = path[(i + 1) % path.length], len = haversineMeters(a, b);
+    if(len < 2) continue;
+    const ov = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng((a.getLat() + b.getLat()) / 2, (a.getLng() + b.getLng()) / 2), content: `<div style="background:rgba(255,255,255,.92);color:#C2148A;border:1px solid #C2148A;padding:1px 5px;border-radius:3px;font-size:11px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${len.toFixed(1)} m</div>`, yAnchor: 0.5 });
+    ov.setMap(map); measureShapes.push(ov); shapes.push(ov);
+  }
+  const area = shoelaceArea(path);
+  const centerLat = path.reduce((s, p) => s + p.getLat(), 0) / path.length, centerLng = path.reduce((s, p) => s + p.getLng(), 0) / path.length;
+  const lab = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(centerLat, centerLng), content: '', yAnchor: 0.5, clickable: true });
+  lab.setMap(map); measureShapes.push(lab); shapes.push(lab);
+  bldPickGroupId = registerMeasureGroup(shapes);
+  lab.setContent(`<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' · ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><button type="button" onclick="startBuildingEdit()" title="꼭짓점을 끌어 위성사진의 건물에 맞춥니다" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:2px 8px;cursor:pointer;font-size:12px;">✏ 조정</button>${closeBtnHtml(`removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
+  lastAreaPolygonPath = path.slice();
+}
+
 function toggleBuildingPickMode(){
   if(mapMode === 'building'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
   setMode('building');
@@ -2769,33 +2861,17 @@ async function pickBuildingAt(latlng){
   const f = feats[0];
   const ring = parseVworldGeom(f.geometry || (f.properties && f.properties.ag_geom));
   if(!ring || ring.length < 3){ st.textContent = '❌ 건물 외곽선 좌표를 읽지 못했습니다.'; st.style.color = '#b3402a'; return; }
-  const map = ensureKakaoMap();
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  stopBuildingEdit();
   // 외곽선(연속된 중복점 제거)
   const path = [];
   ring.forEach(q => { const p = new kakao.maps.LatLng(q.lat, q.lng); const last = path[path.length - 1]; if(!last || haversineMeters(last, p) > 0.3) path.push(p); });
   if(path.length > 3 && haversineMeters(path[0], path[path.length - 1]) < 0.3) path.pop();
-  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 3, strokeColor: '#C2148A', strokeOpacity: 0.95, fillColor: '#C2148A', fillOpacity: 0.08 });
-  measureShapes.push(poly);
-  const shapes = [poly];
-  // 변 길이 라벨 (도면처럼)
-  for(let i = 0; i < path.length; i++){
-    const a = path[i], b = path[(i + 1) % path.length];
-    const len = haversineMeters(a, b);
-    if(len < 2) continue;
-    const mid = new kakao.maps.LatLng((a.getLat() + b.getLat()) / 2, (a.getLng() + b.getLng()) / 2);
-    const ov = new kakao.maps.CustomOverlay({ position: mid, content: `<div style="background:rgba(255,255,255,.92);color:#C2148A;border:1px solid #C2148A;padding:1px 5px;border-radius:3px;font-size:11px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${len.toFixed(1)} m</div>`, yAnchor: 0.5 });
-    ov.setMap(map); measureShapes.push(ov); shapes.push(ov);
-  }
   const area = shoelaceArea(path);
   const props = f.properties || {};
   const name = props.buld_nm || props.BULD_NM || '';
   const floors = props.gro_flo_co || props.GRO_FLO_CO;
-  const centerLat = path.reduce((s, p) => s + p.getLat(), 0) / path.length, centerLng = path.reduce((s, p) => s + p.getLng(), 0) / path.length;
-  const lab = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(centerLat, centerLng), content: `<div style="display:flex;align-items:center;gap:8px;background:#C2148A;color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' · ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${floors ? ' · 지상 ' + floors + '층' : ''}</span>${closeBtnHtml(`removeMeasureGroup(${'__GID__'}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`, yAnchor: 0.5, clickable: true });
-  lab.setMap(map); measureShapes.push(lab); shapes.push(lab);
-  bldPickGroupId = registerMeasureGroup(shapes);
-  lab.setContent(lab.getContent().replace('__GID__', bldPickGroupId));
+  drawConfirmedOutline(path, name, floors ? ' · 지상 ' + floors + '층' : '');
   // 배치용 경계로 등록 + 방위각 자동 + 지붕 유형 기본값
   lastAreaPolygonPath = path.slice();
   document.getElementById('panelAzimuth').value = suggestAzimuthFromPath(lastAreaPolygonPath);
@@ -2803,7 +2879,7 @@ async function pickBuildingAt(latlng){
   if(mt.value === 'ground'){ mt.value = 'slab'; onMountTypeChange(); }
   setMode('normal');
   st.style.color = 'var(--ink-soft)';
-  st.textContent = `✅ 건물 외곽선을 경계로 잡았습니다 — ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${name ? ', ' + name : ''}. 위 "배치 대상"에서 평슬라브·남북지붕·동서지붕 중 하나를 고르고 "배치 생성"을 누르세요. 건물이 여러 동으로 나뉘어 있으면 동마다 따로 클릭해 배치하면 됩니다.`;
+  st.textContent = `✅ 건물 외곽선을 경계로 잡았습니다 — ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${name ? ', ' + name : ''}. 위성사진과 어긋나면 라벨의 "✏ 조정"을 눌러 꼭짓점을 끌어 맞추세요. 그다음 배치 대상을 고르고 "배치 생성"을 누르세요.`;
 }
 
 function toggleAreaMode(){
