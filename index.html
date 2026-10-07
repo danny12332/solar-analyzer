@@ -1040,7 +1040,9 @@ function applyLandInfoToForm(info){
     zoneNote.className = 'auto-note warn'; zoneNote.textContent = '⚠ 토지이용계획에서 용도지역을 찾지 못했습니다. 2번 항목을 직접 골라주세요.'; allSet = false;
   }
   // 농지 구분 / 산지 구분 (토지이용계획 항목명 기준)
-  const names = info.uses.map(u => u.name).join(' | ');
+  // 농지·산지 구분은 이 필지에 실제로 걸린 항목(포함·저촉)만 보고 정함 — "접함"(경계만 닿음)은 제외
+  const names = info.uses.filter(u => !/접함/.test(u.rel)).map(u => u.name).join(' | ');
+  const touchNames = info.uses.filter(u => /접함/.test(u.rel)).map(u => u.name);
   if(/농업진흥구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'core'; s.dispatchEvent(new Event('change')); }
   else if(/농업보호구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'protect'; s.dispatchEvent(new Event('change')); }
   else { const s = document.getElementById('farmZone'); s.value = 'out'; s.dispatchEvent(new Event('change')); }
@@ -1048,6 +1050,11 @@ function applyLandInfoToForm(info){
   if(/산지전용.?일시사용제한지역/.test(names)){ const s = document.getElementById('forestType'); s.value = 'restrict'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
   else if(/보전산지|공익용산지|임업용산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'bo'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
   else if(/준보전산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'jun'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
+  const touchRestrict = touchNames.filter(n => /농업진흥구역|농업보호구역|보전산지|준보전산지|공익용산지|임업용산지|산지전용/.test(n));
+  if(touchRestrict.length){
+    const jn = document.getElementById('jimokNote');
+    if(jn){ jn.textContent += (jn.textContent ? ' ' : '') + `(경계에 접한 ${[...new Set(touchRestrict)].join('·')}은 이 필지에 해당하지 않아 판정에서 제외)`; }
+  }
   updateSiteSummary();
   return allSet;
 }
