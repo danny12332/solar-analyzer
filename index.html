@@ -537,9 +537,11 @@
           </label>
           <label style="font-size:11.5px;color:var(--ink-soft);">폭(m) <input id="panelW" type="number" value="1.134" step="0.001" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">길이(m) <input id="panelL" type="number" value="2.465" step="0.001" style="width:60px;padding:2px 4px;"></label>
-          <label id="tiltLabel" style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;"></label>
+          <label id="tiltLabel" style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="10" step="1" style="width:48px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="645" step="5" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
+          <label id="modOrientLabel" style="font-size:11.5px;color:var(--ink-soft);" title="가로(눕힘): 모듈 긴 변이 좌우, 짧은 변이 경사 방향으로 N단 쌓임 · 세로(세움): 모듈 긴 변이 경사 방향">모듈 방향 <select id="modOrient" style="padding:2px 4px;"><option value="landscape" selected>가로(눕힘)</option><option value="portrait">세로(세움)</option></select></label>
+          <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선과 'N단×M장' 라벨을 지도에 표시"><input id="showTables" type="checkbox" checked style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선·라벨</label>
           <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="3" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
           <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
           <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
@@ -548,15 +550,16 @@
           <label>배치 기준 <select id="densityRule" style="padding:2px 4px;"><option value="max" selected>전체 면적에 배치</option><option value="practice">실무 밀도 (건물 200평/100kW · 토지 300평/100kW)</option></select></label>
           <label>목표 용량(kW, 비우면 전체) <input id="roofTargetKw" type="number" min="0" step="1" placeholder="전체" style="width:70px;padding:2px 4px;"></label>
           <span id="groundOpts" style="display:none;gap:10px;flex-wrap:wrap;align-items:center;">
-            <label>어레이 세로 <input id="arrRows" type="number" value="2" step="1" min="1" max="6" style="width:40px;padding:2px 4px;"></label>
-            <label>× 가로 <input id="arrCols" type="number" value="20" step="1" min="1" max="60" style="width:44px;padding:2px 4px;"> 장</label>
+            <label title="테이블 하나에 경사 방향으로 쌓는 모듈 수">단 수 <select id="arrRows" style="padding:2px 4px;"><option value="1">1단</option><option value="2">2단</option><option value="3">3단</option><option value="4" selected>4단</option><option value="5">5단</option><option value="6">6단</option></select></label>
+            <label title="테이블 하나에 좌우로 늘어놓는 모듈 수">× 테이블당 가로 <input id="arrCols" type="number" value="20" step="1" min="1" max="60" style="width:44px;padding:2px 4px;"> 장</label>
             <label>좌우 이격(m) <input id="arrSideGap" type="number" value="0.5" step="0.1" min="0" style="width:48px;padding:2px 4px;"></label>
             <label>상하 이격(열간격, m) <input id="arrRowGap" type="number" placeholder="자동" step="0.1" min="0" style="width:52px;padding:2px 4px;" title="어레이 앞단에서 다음 어레이 앞단까지 거리. 비우면 어레이 깊이 + 동지 남중 그림자 길이로 자동 계산"></label>
             <label>주향 <select id="arrFacing" style="padding:2px 4px;"><option value="south" selected>정남향</option><option value="axis">부지 축(정남 ±45°)</option><option value="manual">방위각 직접 입력</option></select></label>
           </span>
           <span id="roofOpts" style="display:none;gap:10px;flex-wrap:wrap;align-items:center;">
             <label id="ridgeGapLabel">용마루 이격(m) <input id="roofRidgeGap" type="number" value="0.5" step="0.1" min="0" style="width:50px;padding:2px 4px;"></label>
-            <label>단 수(묶음 행 수) <select id="roofBlockRows" style="padding:2px 4px;"><option value="1">1단</option><option value="2" selected>2단</option><option value="3">3단</option><option value="4">4단</option></select></label>
+            <label>단 수(묶음 행 수) <select id="roofBlockRows" style="padding:2px 4px;"><option value="1">1단</option><option value="2" selected>2단</option><option value="3">3단</option><option value="4">4단</option><option value="5">5단</option><option value="6">6단</option></select></label>
+            <label id="slabColsLabel" title="평슬라브 테이블 하나에 좌우로 늘어놓는 모듈 수 (비우면 건물 폭만큼 한 줄)">테이블당 가로 <input id="slabCols" type="number" placeholder="전체" step="1" min="1" max="60" style="width:44px;padding:2px 4px;"> 장</label>
             <label>묶음 사이 최소 통로(m) <input id="roofAisle" type="number" value="0.6" step="0.1" min="0" style="width:50px;padding:2px 4px;"></label>
             <label id="ridgeFlipLabel"><input id="roofRidgeFlip" type="checkbox" style="vertical-align:middle;"> 용마루 방향 90° 바꾸기</label>
           </span>
@@ -1984,7 +1987,12 @@ function onMountTypeChange(){
     ? `지붕 물매 경사각(°) <input id="panelTilt" type="number" value="8" step="1" style="width:48px;padding:2px 4px;">`
     : isRoof
       ? `거치대 설치각도(°, 보통 5~10°) <input id="panelTilt" type="number" value="8" step="1" style="width:48px;padding:2px 4px;">`
-      : `경사각(°) <input id="panelTilt" type="number" value="30" step="1" style="width:48px;padding:2px 4px;">`;
+      : `경사각(°) <input id="panelTilt" type="number" value="10" step="1" style="width:48px;padding:2px 4px;">`;
+  // 모듈 방향: 지상 다단 배치는 가로(눕힘)가 기본, 건물 슬라브는 기존대로 세로(세움)가 기본. 경사지붕은 지붕 형태로 방향이 정해져 선택 숨김.
+  const orientEl = document.getElementById('modOrient');
+  if(orientEl){ orientEl.value = (mt === 'ground') ? 'landscape' : 'portrait'; }
+  document.getElementById('modOrientLabel').style.display = (mt === 'ground' || mt === 'slab') ? '' : 'none';
+  document.getElementById('slabColsLabel').style.display = (mt === 'slab') ? '' : 'none';
   document.getElementById('azimuthLabel').innerHTML = isGable
     ? `물매 방향(°, 경사 내려가는 쪽, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`
     : `방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="${curAzimuth || 0}" step="1" style="width:48px;padding:2px 4px;">`;
@@ -2021,7 +2029,73 @@ function replaceLayoutOnSameBoundary(boundary){
   }
   if(solarGroupId && !layoutByGroup(solarGroupId)) solarGroupId = null;
 }
-function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRoofEditLabel(ed); else updateGroundLabel(ed); }
+function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRoofEditLabel(ed); else updateGroundLabel(ed); updateTableLabels(ed); }
+
+// ===== 테이블(어레이 구조물) 오버레이: 같은 테이블에 속한 모듈을 묶어 외곽선 + "N단×M장" 라벨을 표시 =====
+// mods: [{poly, removed, table:'r-t', tier:k, ...}], rotToReal: 회전좌표→실좌표 함수, cornersRotOf: 모듈 → 회전좌표 모서리 4개
+function buildTableOverlays(ed, mods, cornersRotOf, rotToReal, opts){
+  const map = ensureKakaoMap();
+  const o = opts || {};
+  const byTable = {};
+  mods.forEach(m => { if(!m.table) return; (byTable[m.table] = byTable[m.table] || []).push(m); });
+  const show = tableOverlaysOn();
+  ed.tables = Object.keys(byTable).map(id => {
+    const list = byTable[id];
+    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+    const tiers = new Set(), cols = {};
+    list.forEach(m => {
+      cornersRotOf(m).forEach(c => { xmin = Math.min(xmin, c.x); xmax = Math.max(xmax, c.x); ymin = Math.min(ymin, c.y); ymax = Math.max(ymax, c.y); });
+      tiers.add(m.tier); cols[m.tier] = (cols[m.tier] || 0) + 1;
+    });
+    const pad = 0.15; // 외곽선을 모듈 바깥으로 살짝 띄움(m)
+    const rect = [{x: xmin - pad, y: ymin - pad}, {x: xmax + pad, y: ymin - pad}, {x: xmax + pad, y: ymax + pad}, {x: xmin - pad, y: ymax + pad}]
+      .map(c => rotToReal(c.x, c.y)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
+    const outline = new kakao.maps.Polygon({ map: show ? map : null, path: rect, strokeWeight: 2, strokeColor: o.stroke || '#FFD23F', strokeOpacity: 0.95, strokeStyle: 'solid', fillColor: '#FFFFFF', fillOpacity: 0, zIndex: 3 });
+    const ctr = rotToReal((xmin + xmax) / 2, (ymin + ymax) / 2);
+    const label = new kakao.maps.CustomOverlay({ position: solarToLatLng(ctr.x, ctr.y, ed.lat0Rad), content: '', xAnchor: 0.5, yAnchor: 0.5, clickable: false, zIndex: 4 });
+    const lvl = (map && typeof map.getLevel === 'function') ? map.getLevel() : 1;
+    if(show && lvl <= 3) label.setMap(map);
+    measureShapes.push(outline, label);
+    if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(outline, label);
+    const t = { id, mods: list, outline, label, tiers: tiers.size, cols: Math.max(...Object.values(cols)), width: xmax - xmin, depth: ymax - ymin };
+    return t;
+  });
+  ed.tables.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+  updateTableLabels(ed);
+}
+function updateTableLabels(ed){
+  if(!ed || !Array.isArray(ed.tables)) return;
+  ed.tables.forEach(t => {
+    const live = t.mods.filter(m => !m.removed).length;
+    const kw = live * ed.wattPerPanel / 1000;
+    const dead = live === 0;
+    t.label.setContent(`<div style="pointer-events:none;background:${dead ? 'rgba(120,120,120,.75)' : 'rgba(255,210,63,.92)'};color:${dead ? '#fff' : '#1b1b1b'};padding:1px 5px;border-radius:3px;font-size:10px;font-family:'IBM Plex Mono',monospace;line-height:1.3;white-space:nowrap;${dead ? 'text-decoration:line-through;' : ''}">${t.tiers}단×${t.cols}장${live < t.mods.length && !dead ? `(${live})` : ''} · ${kw.toLocaleString('ko-KR', {maximumFractionDigits:1})}kW</div>`);
+    try{ t.outline.setOptions({ strokeOpacity: dead ? 0.35 : 0.95, strokeColor: dead ? '#9A9A9A' : '#FFD23F' }); }catch(e){}
+  });
+}
+function tableOverlaysOn(){ const el = document.getElementById('showTables'); return !el || el.checked; }
+// 체크박스 토글: 모든 배치의 테이블 외곽선·라벨을 켜고 끔. 라벨은 지도를 충분히 확대했을 때(레벨 3 이하)만 보여 겹침을 막음.
+function toggleTableOverlays(){
+  const on = tableOverlaysOn();
+  let map = null; try{ map = ensureKakaoMap(); }catch(e){ return; }
+  const lvl = (map && typeof map.getLevel === 'function') ? map.getLevel() : 1;
+  layoutRegistry.forEach(ed => (ed.tables || []).forEach(t => {
+    t.outline.setMap(on ? map : null);
+    t.label.setMap(on && lvl <= 3 ? map : null);
+  }));
+}
+let tableZoomHooked = false;
+function hookTableZoom(map){
+  if(tableZoomHooked || !map) return;
+  tableZoomHooked = true;
+  try{ kakao.maps.event.addListener(map, 'zoom_changed', toggleTableOverlays); }catch(e){}
+}
+function tableSummaryText(ed){
+  if(!ed || !ed.tables || !ed.tables.length) return '';
+  const cnt = {};
+  ed.tables.forEach(t => { const k = `${t.tiers}단×${t.cols}장`; cnt[k] = (cnt[k] || 0) + 1; });
+  return Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).map(k => `${k} ${cnt[k]}개`).join(', ');
+}
 // 모듈 상태 반영
 function setModuleRemoved(m, removed){
   m.removed = removed;
@@ -2118,7 +2192,7 @@ function updateGroundLabel(ed){
   const util = Math.round(live * groundEdit.panelW * groundEdit.panelL / Math.max(groundEdit.siteAreaM2, 1) * 100);
   groundEdit.label.setContent(`<div style="background:rgba(15,42,68,.94);color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;font-family:'IBM Plex Mono',monospace;line-height:1.4;white-space:nowrap;">
     <div style="display:flex;align-items:center;gap:8px;"><b>${live.toLocaleString('ko-KR')}장 · ${kw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW</b>${closeBtnHtml(`removeSolarLayout(${groundEdit.groupId})`)}</div>
-    <div style="font-size:10.5px;opacity:.85;">부지이용률 ${util}% · 열간격 ${groundEdit.pitch.toFixed(2)}m${removed ? ` · 제외 ${removed}장` : ''}</div></div>`);
+    <div style="font-size:10.5px;opacity:.85;">${groundEdit.arrRows ? `${groundEdit.orient === 'landscape' ? '가로' : '세로'} ${groundEdit.arrRows}단 테이블 ${(groundEdit.tables || []).length}개 · ` : ''}부지이용률 ${util}% · 열간격 ${groundEdit.pitch.toFixed(2)}m${removed ? ` · 제외 ${removed}장` : ''}</div></div>`);
   lastSolarStats = Object.assign(lastSolarStats || {}, { panelCount: live, totalKw: kw, utilization: util });
 }
 // ---- 실무 밀도 기준: 건물 지붕 200평당 100kW, 토지 300평당 100kW (사용자 제공 실무 기준, 2026.09.29) ----
@@ -2220,6 +2294,12 @@ function generateBuildingRoofLayout(kind){
   const aisle = Math.max(num('roofAisle', 0.6), 0);
   const targetKw = num('roofTargetKw', 0);
   const cosP = Math.cos(pitchDeg * Math.PI / 180);
+  const slabOrient = kind === 'slab' ? (((document.getElementById('modOrient') || {}).value) || 'portrait') : 'portrait';
+  const slabLandscape = slabOrient === 'landscape';
+  const slabAlong = slabLandscape ? panelW : panelL;   // 경사(쌓는) 방향 치수
+  const slabAcross = slabLandscape ? panelL : panelW;  // 좌우 방향 치수
+  const slabColsIn = Math.round(num('slabCols', 0));
+  const slabCols = slabColsIn > 0 ? slabColsIn : 0; // 0 = 건물 폭만큼 한 줄이 테이블 하나
 
   const map = ensureKakaoMap();
   // 이전 배치는 유지(필지·건물마다 배치를 겹쳐 둘 수 있음). 같은 경계로 다시 만들면 그 경계의 이전 배치만 교체.
@@ -2242,8 +2322,9 @@ function generateBuildingRoofLayout(kind){
   // 용마루 기준 회전 좌표계: x' = 용마루 방향, y' = 경사 방향
   const rot = polyXY.map(p => rotateXY(p.x, p.y, -ridge));
   const xs = rot.map(p => p.x), ys = rot.map(p => p.y);
-  const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
-  const ymid = (ymin + ymax) / 2; // 용마루 위치(박공 대칭 가정)
+  // 격자는 건물 끝 이격만큼 안쪽에서 시작(모서리별 이격 판정은 그대로). 용마루 위치는 이격 전 외곽선 기준.
+  const xmin = Math.min(...xs) + setback, xmax = Math.max(...xs) - setback, ymin = Math.min(...ys) + setback, ymax = Math.max(...ys) - setback;
+  const ymid = (Math.min(...ys) + Math.max(...ys)) / 2; // 용마루 위치(박공 대칭 가정)
   const real = (x, y) => rotateXY(x, y, ridge);
   const inside = c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback);
 
@@ -2265,8 +2346,8 @@ function generateBuildingRoofLayout(kind){
     const tiltRad = pitchDeg * Math.PI / 180; // 평슬라브에서는 입력값이 거치대 설치각도
     const latAbsDeg = Math.abs(lat0Rad * 180 / Math.PI);
     const minSunAltDeg = Math.max(90 - latAbsDeg - 23.44, 5);
-    const tableDepth = blockRows * panelL * Math.cos(tiltRad) + (blockRows - 1) * gap;   // 테이블 투영 깊이
-    const tableHeight = blockRows * panelL * Math.sin(tiltRad);                            // 뒤쪽 높이
+    const tableDepth = blockRows * slabAlong * Math.cos(tiltRad) + (blockRows - 1) * gap;   // 테이블 투영 깊이
+    const tableHeight = blockRows * slabAlong * Math.sin(tiltRad);                            // 뒤쪽 높이
     const shadowLen = tableHeight / Math.tan(minSunAltDeg * Math.PI / 180);
     const tableGap = Math.max(shadowLen, aisle);
     slabInfo = { minSunAltDeg, shadowLen, tableGap, tableDepth };
@@ -2274,9 +2355,9 @@ function generateBuildingRoofLayout(kind){
     const southIsA = Math.abs(faces.a.az) <= 90; // 면 a 바깥(−y')이 남쪽 계열
     let y = southIsA ? ymin : ymax, r = 0;
     const dir = southIsA ? 1 : -1;
-    const modDepth = panelL * Math.cos(tiltRad);
+    const modDepth = slabAlong * Math.cos(tiltRad);
     const depthFor = rows => rows * modDepth + (rows - 1) * gap;
-    const gapFor = rows => Math.max((rows * panelL * Math.sin(tiltRad)) / Math.tan(minSunAltDeg * Math.PI / 180), aisle);
+    const gapFor = rows => Math.max((rows * slabAlong * Math.sin(tiltRad)) / Math.tan(minSunAltDeg * Math.PI / 180), aisle);
     let safety = 0;
     while(safety++ < 500){
       // 남은 깊이에 들어가는 가장 큰 단 수(설정 단 수 → 1단까지)로 테이블을 놓음. 뒤쪽에 1단 자리라도 남으면 채움.
@@ -2288,9 +2369,13 @@ function generateBuildingRoofLayout(kind){
           let n0 = cands.length;
           for(let k = 0; k < rows; k++){
             const ya = y0 + k * (modDepth + gap), yb = ya + modDepth;
-            for(let x = xmin; x + panelW <= xmax; x += panelW + gap){
-              const c = [real(x, ya), real(x + panelW, ya), real(x + panelW, yb), real(x, yb)];
-              if(c.every(inside)) cands.push({ corners: c, face: 'a', block: r, line: 's-' + r + '-' + k });
+            let ci = 0;
+            for(let x = xmin; x + slabAcross <= xmax; ci++){
+              const tIdx = slabCols > 0 ? Math.floor(ci / slabCols) : 0;
+              const c = [real(x, ya), real(x + slabAcross, ya), real(x + slabAcross, yb), real(x, yb)];
+              const cr = [{x, y: ya}, {x: x + slabAcross, y: ya}, {x: x + slabAcross, y: yb}, {x, y: yb}];
+              if(c.every(inside)) cands.push({ corners: c, cornersRot: cr, face: 'a', block: r, line: 's-' + r + '-' + tIdx, table: r + '-' + tIdx, tier: k });
+              x += slabAcross + ((slabCols > 0 && (ci + 1) % slabCols === 0) ? aisle : gap);
             }
           }
           if(cands.length > n0){ placed = true; r++; y += dir * (d + gapFor(rows)); }
@@ -2364,7 +2449,7 @@ function generateBuildingRoofLayout(kind){
   const modules = chosen.map(c => {
     const poly = new kakao.maps.Polygon({ map, path: c.corners.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad)), strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: (kind !== 'slab' && c.face === 'b') ? fillB : fill, fillOpacity: 0.62 });
     measureShapes.push(poly);
-    const m = { poly, face: c.face, removed: false, line: c.line, color: (kind !== 'slab' && c.face === 'b') ? fillB : fill };
+    const m = { poly, face: c.face, removed: false, line: c.line, table: c.table, tier: c.tier, cornersRot: c.cornersRot, color: (kind !== 'slab' && c.face === 'b') ? fillB : fill };
     try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
     return m;
   });
@@ -2380,9 +2465,13 @@ function generateBuildingRoofLayout(kind){
   label.setMap(map);
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
-  roofEdit = { type: 'roof', modules, label, wattPerPanel, faces, kind, geomCount: cands.length, projectedAreaM2, targetKw, groupId: solarGroupId, blockRows, tables: new Set(chosen.map(c => c.block)).size, tableGap: slabInfo ? slabInfo.tableGap : 0,
-    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: ridge, modW: kind === 'ew' ? panelL : panelW, modD: kind === 'ew' ? panelW * cosP : panelL * cosP, fill };
+  roofEdit = { type: 'roof', modules, label, wattPerPanel, faces, kind, geomCount: cands.length, projectedAreaM2, targetKw, groupId: solarGroupId, blockRows, tables: [], tableCount: new Set(chosen.map(c => c.block)).size, tableGap: slabInfo ? slabInfo.tableGap : 0,
+    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: ridge, modW: kind === 'ew' ? panelL : slabAcross, modD: kind === 'ew' ? panelW * cosP : (kind === 'slab' ? slabAlong * Math.cos(pitchDeg * Math.PI / 180) : panelL * cosP), fill, orient: slabOrient };
   registerLayout(roofEdit);
+  if(kind === 'slab'){
+    buildTableOverlays(roofEdit, modules, m => m.cornersRot, (x, y) => real(x, y));
+    hookTableZoom(map);
+  }
   updateRoofEditLabel(roofEdit);
 
   const illBtn = document.getElementById('solarIllustrationBtn');
@@ -2392,7 +2481,7 @@ function generateBuildingRoofLayout(kind){
   const practiceKw = densityTargetKw(projectedAreaM2, true);
   statusEl.style.color = 'var(--ink-soft)';
   statusEl.textContent = (kind === 'slab'
-    ? `✅ 평슬라브 배치 — 테이블이 ${compassName(faces.a.az <= 90 && faces.a.az >= -90 ? faces.a.az : faces.b.az)}(방위각 ${Math.round(Math.abs(faces.a.az) <= 90 ? faces.a.az : faces.b.az)}°, 정남 ±45° 안)을 보도록 건물 축에 맞춰 ${blockRows}단 테이블(설치각도 ${pitchDeg}°) ${roofEdit.tables}줄, 처마 끝 ${setback}m 이격. 테이블 사이 간격 ${slabInfo.tableGap.toFixed(2)}m = 동지 남중 태양고도 ${slabInfo.minSunAltDeg.toFixed(1)}° 기준 앞 테이블 그림자 ${slabInfo.shadowLen.toFixed(2)}m와 최소 통로 ${aisle}m 중 큰 값. `
+    ? `✅ 평슬라브 배치 — 테이블이 ${compassName(faces.a.az <= 90 && faces.a.az >= -90 ? faces.a.az : faces.b.az)}(방위각 ${Math.round(Math.abs(faces.a.az) <= 90 ? faces.a.az : faces.b.az)}°, 정남 ±45° 안)을 보도록 건물 축에 맞춰 모듈 ${slabLandscape ? '가로(눕힘)' : '세로(세움)'} ${blockRows}단 테이블(설치각도 ${pitchDeg}°) ${roofEdit.tables.length}개(${tableSummaryText(roofEdit)}${slabCols > 0 ? `; 테이블당 가로 ${slabCols}장, 테이블 사이 통로 ${aisle}m` : ''}), 처마 끝 ${setback}m 이격. 테이블 사이 간격 ${slabInfo.tableGap.toFixed(2)}m = 동지 남중 태양고도 ${slabInfo.minSunAltDeg.toFixed(1)}° 기준 앞 테이블 그림자 ${slabInfo.shadowLen.toFixed(2)}m와 최소 통로 ${aisle}m 중 큰 값. `
     : `✅ ${kindName} 배치 — 용마루 방향 ${ridgeDeg >= 0 ? '+' : ''}${Math.round(ridgeDeg)}°(건물 축 기준 자동), ${faces.a.name}·${faces.b.name}에 처마 끝 ${setback}m·용마루 ${ridgeGap}m 이격, ${blockRows}행 묶음마다 통로 ${aisle}m. `) +
     (targetKw > 0 && chosen.length < cands.length ? `목표 ${targetKw}kW에 맞춰 묶음 단위로 줄였습니다(전체 배치 시 ${cands.length.toLocaleString('ko-KR')}장). ` : '전체 면적에 배치했습니다. ') +
     `참고: 실무 밀도(건물 200평/100kW)로는 약 ${Math.round(practiceKw).toLocaleString('ko-KR')}kW입니다. 지도에서 모듈을 클릭하면 개별로 빼거나 다시 넣을 수 있습니다. ` + (kind === 'slab' ? '테이블끼리의 자기그늘만 계산했고, 옥탑·실외기·주변 건물의 그림자는 반영하지 않았습니다.' : `경사 방향 치수는 물매 ${pitchDeg}°로 보정했고, 주변 음영은 반영하지 않았습니다.`);
@@ -2406,7 +2495,7 @@ function updateRoofEditLabel(ed){
   const na = byFace('a'), nb = byFace('b'), n = live.length;
   const removed = roofEdit.modules.length - n;
   const sub = roofEdit.kind === 'slab'
-    ? `${roofEdit.blockRows}단 테이블 ${roofEdit.tables}줄 · 테이블 간격 ${roofEdit.tableGap.toFixed(2)}m${removed ? ` · 제외 ${removed}장` : ''}`
+    ? `${roofEdit.orient === 'landscape' ? '가로' : '세로'} ${roofEdit.blockRows}단 테이블 ${roofEdit.tables.length}개 · 테이블 간격 ${roofEdit.tableGap.toFixed(2)}m${removed ? ` · 제외 ${removed}장` : ''}`
     : `${roofEdit.faces.a.name} ${na}장(${kw(na)}kW) · ${roofEdit.faces.b.name} ${nb}장(${kw(nb)}kW)${removed ? ` · 제외 ${removed}장` : ''}`;
   roofEdit.label.setContent(`<div style="background:rgba(74,90,27,.94);color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;font-family:'IBM Plex Mono',monospace;line-height:1.4;white-space:nowrap;">
     <div style="display:flex;align-items:center;gap:8px;"><b>${n.toLocaleString('ko-KR')}장 · ${kw(n)} kW</b>${closeBtnHtml(`removeSolarLayout(${roofEdit.groupId})`)}</div>
@@ -2705,6 +2794,11 @@ function generateSolarLayout(){
   const arrSideGap = Math.max(parseFloat(document.getElementById('arrSideGap').value) || 0, 0);
   const arrRowGapIn = parseFloat(document.getElementById('arrRowGap').value);
   const facingMode = (document.getElementById('arrFacing') || {}).value || 'south';
+  const orient = ((document.getElementById('modOrient') || {}).value) || 'landscape';
+  const landscape = orient === 'landscape';
+  // 가로(눕힘): 모듈 짧은 변(폭)이 경사 방향, 긴 변(길이)이 좌우 / 세로(세움): 긴 변이 경사 방향
+  const modAlong = landscape ? panelW : panelL;   // 경사 방향 치수
+  const modAcross = landscape ? panelL : panelW;  // 좌우 방향 치수
   let azimuthDeg;
   if(facingMode === 'south') azimuthDeg = 0;
   else if(facingMode === 'axis') azimuthDeg = suggestAzimuthFromPath(lastAreaPolygonPath);
@@ -2724,20 +2818,21 @@ function generateSolarLayout(){
   const latAbsDeg = Math.abs(lat0Rad * 180/Math.PI);
   const minSunAltDeg = Math.max(90 - latAbsDeg - 23.44, 5); // 5도 하한(과도한 간격 방지)
   const minSunAltRad = minSunAltDeg * Math.PI/180;
-  const footprintNS = panelL * Math.cos(tiltRad); // 모듈 한 장의 지면 투영 길이(경사 방향)
+  const footprintNS = modAlong * Math.cos(tiltRad); // 모듈 한 장의 지면 투영 길이(경사 방향)
   const arrDepth = arrRows * footprintNS + (arrRows - 1) * gap;               // 어레이(테이블) 투영 깊이
-  const arrHeight = arrRows * panelL * Math.sin(tiltRad);                      // 어레이 뒤쪽 높이
+  const arrHeight = arrRows * modAlong * Math.sin(tiltRad);                    // 어레이 뒤쪽 높이
   const shadowLen = arrHeight / Math.tan(minSunAltRad);                        // 동지 남중 기준 앞 어레이 그림자
   // 상하 이격(열간격) = 어레이 앞단 ~ 다음 어레이 앞단 (솔라웍스의 "상하 이격거리"와 같은 기준). 입력 없으면 어레이 깊이 + 그림자
   const pitch = Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? arrRowGapIn : arrDepth + shadowLen;
   const rowGap = pitch - arrDepth;
-  const footprintEW = panelW;
+  const footprintEW = modAcross;
 
   // 방위각만큼 회전한 좌표계에서 격자를 생성(rows는 회전좌표계의 y축 방향) — 배치 방향을 부지 모양에 맞춰 돌릴 수 있게 함
   const polyRot = polyXY.map(p => rotateXY(p.x, p.y, -azimuthRad));
   const xs = polyRot.map(p=>p.x), ys = polyRot.map(p=>p.y);
-  const xmin = Math.min(...xs), xmax = Math.max(...xs);
-  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+  // 격자는 경계 이격만큼 안쪽에서 시작 — 이격 띠에 걸려 첫 줄이 1단짜리 자투리로 남는 것을 막음(모서리별 이격 판정은 그대로 수행)
+  const xmin = Math.min(...xs) + setback, xmax = Math.max(...xs) - setback;
+  const ymin = Math.min(...ys) + setback, ymax = Math.max(...ys) - setback;
 
   const cands = [];
   let rowIdx = 0;
@@ -2745,13 +2840,14 @@ function generateSolarLayout(){
   for(let y = ymin; y + footprintNS <= ymax; y += pitch, rowIdx++){
     let col = 0;
     for(let x = xmin; x + footprintEW <= xmax; ){
+      const tableIdx = Math.floor(col / arrCols); // 이 줄에서 몇 번째 테이블인지
       for(let k = 0; k < arrRows; k++){
         const y0 = y + k * (footprintNS + gap), y1 = y0 + footprintNS;
         if(y1 > ymax) break;
         const cornersRot = [ {x, y: y0}, {x: x+footprintEW, y: y0}, {x: x+footprintEW, y: y1}, {x, y: y1} ];
         const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad));
         const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
-        if(fits) cands.push({ cornersReal, row: rowIdx });
+        if(fits) cands.push({ cornersReal, cornersRot, row: rowIdx, table: rowIdx + '-' + tableIdx, tier: k });
       }
       col++;
       x += footprintEW + ((col % arrCols === 0) ? arrSideGap : gap);
@@ -2777,7 +2873,7 @@ function generateSolarLayout(){
     panelShapes.push(poly);
     panelCount++;
     rowCounts[c.row] = (rowCounts[c.row] || 0) + 1;
-    const m = { poly, removed: false, line: 'g-' + c.row, color: '#1B3A5C' };
+    const m = { poly, removed: false, line: 'g-' + c.table, table: c.table, tier: c.tier, cornersRot: c.cornersRot, color: '#1B3A5C' };
     groundMods.push(m);
     try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
   });
@@ -2810,13 +2906,16 @@ function generateSolarLayout(){
   label.setMap(map);
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
-  const thisGround = { type: 'ground', modules: groundMods, mods: groundMods, label, wattPerPanel, siteAreaM2, panelW, panelL, groupId: solarGroupId, pitch,
-    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: azimuthRad, modW: panelW, modD: footprintNS, fill: '#1B3A5C' };
+  const thisGround = { type: 'ground', modules: groundMods, mods: groundMods, label, wattPerPanel, siteAreaM2, panelW, panelL, groupId: solarGroupId, pitch, arrRows, arrCols, orient,
+    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: azimuthRad, modW: modAcross, modD: footprintNS, fill: '#1B3A5C' };
   groundEdit = thisGround;
   registerLayout(thisGround);
+  // 테이블(구조물) 외곽선 + 라벨
+  buildTableOverlays(thisGround, groundMods, m => m.cornersRot, (x, y) => rotateXY(x, y, azimuthRad));
+  hookTableZoom(map);
   updateGroundLabel(thisGround);
 
-  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 어레이 세로 ${arrRows}×가로 ${arrCols}장, 주향 ${facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '부지 축' : '직접 입력')}(방위각 ${azimuthDeg}°), 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈 ${landscape ? '가로(눕힘)' : '세로(세움)'} ${arrRows}단×테이블당 가로 ${arrCols}장, 설치각 ${tiltDeg}°, 테이블 ${thisGround.tables.length}개(${tableSummaryText(thisGround)}; 테이블 깊이 ${arrDepth.toFixed(2)}m·뒤쪽 높이 ${arrHeight.toFixed(2)}m), 주향 ${facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '부지 축' : '직접 입력')}(방위각 ${azimuthDeg}°), 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
