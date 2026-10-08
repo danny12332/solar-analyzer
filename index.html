@@ -547,6 +547,13 @@
           <label id="ewRackLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">동서지붕 남향 거치대 각도(°) <input id="panelRackTilt" type="number" value="10" step="1" min="0" style="width:48px;padding:2px 4px;"></label>
           <label>배치 기준 <select id="densityRule" style="padding:2px 4px;"><option value="max" selected>전체 면적에 배치</option><option value="practice">실무 밀도 (건물 200평/100kW · 토지 300평/100kW)</option></select></label>
           <label>목표 용량(kW, 비우면 전체) <input id="roofTargetKw" type="number" min="0" step="1" placeholder="전체" style="width:70px;padding:2px 4px;"></label>
+          <span id="groundOpts" style="display:none;gap:10px;flex-wrap:wrap;align-items:center;">
+            <label>어레이 세로 <input id="arrRows" type="number" value="2" step="1" min="1" max="6" style="width:40px;padding:2px 4px;"></label>
+            <label>× 가로 <input id="arrCols" type="number" value="20" step="1" min="1" max="60" style="width:44px;padding:2px 4px;"> 장</label>
+            <label>좌우 이격(m) <input id="arrSideGap" type="number" value="0.5" step="0.1" min="0" style="width:48px;padding:2px 4px;"></label>
+            <label>상하 이격(열간격, m) <input id="arrRowGap" type="number" placeholder="자동" step="0.1" min="0" style="width:52px;padding:2px 4px;" title="어레이 앞단에서 다음 어레이 앞단까지 거리. 비우면 어레이 깊이 + 동지 남중 그림자 길이로 자동 계산"></label>
+            <label>주향 <select id="arrFacing" style="padding:2px 4px;"><option value="south" selected>정남향</option><option value="axis">부지 축(정남 ±45°)</option><option value="manual">방위각 직접 입력</option></select></label>
+          </span>
           <span id="roofOpts" style="display:none;gap:10px;flex-wrap:wrap;align-items:center;">
             <label id="ridgeGapLabel">용마루 이격(m) <input id="roofRidgeGap" type="number" value="0.5" step="0.1" min="0" style="width:50px;padding:2px 4px;"></label>
             <label>단 수(묶음 행 수) <select id="roofBlockRows" style="padding:2px 4px;"><option value="1">1단</option><option value="2" selected>2단</option><option value="3">3단</option><option value="4">4단</option></select></label>
@@ -1978,9 +1985,11 @@ function onMountTypeChange(){
   document.getElementById('flipShadeLabel').style.display = 'none';
   document.getElementById('ewRackLabel').style.display = 'none';
   document.getElementById('roofOpts').style.display = (isNewGable || mt === 'slab') ? 'inline-flex' : 'none';
+  document.getElementById('groundOpts').style.display = mt === 'ground' ? 'inline-flex' : 'none';
   document.getElementById('ridgeGapLabel').style.display = isNewGable ? '' : 'none';
   document.getElementById('ridgeFlipLabel').style.display = isNewGable ? '' : 'none';
-  document.getElementById('azimuthLabel').style.display = (isNewGable || mt === 'slab') ? 'none' : '';
+  const facingSel = document.getElementById('arrFacing');
+  document.getElementById('azimuthLabel').style.display = (isNewGable || mt === 'slab' || (mt === 'ground' && facingSel && facingSel.value !== 'manual')) ? 'none' : '';
 }
 
 // 지상 배치 라벨(클릭으로 모듈을 빼면 즉시 갱신) — 음영 지는 자리·장애물 자리를 눌러 제외하는 용도
@@ -2554,7 +2563,17 @@ function generateSolarLayout(){
   const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 645;
   const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
   const setback = Math.max(parseFloat(document.getElementById('panelSetback').value) || 0, 0);
-  const azimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
+  // 어레이 구성(세로 R장 × 가로 C장), 좌우 이격, 상하 이격(비우면 그림자 자동), 주향
+  const arrRows = Math.max(1, Math.round(parseFloat(document.getElementById('arrRows').value) || 2));
+  const arrCols = Math.max(1, Math.round(parseFloat(document.getElementById('arrCols').value) || 20));
+  const arrSideGap = Math.max(parseFloat(document.getElementById('arrSideGap').value) || 0, 0);
+  const arrRowGapIn = parseFloat(document.getElementById('arrRowGap').value);
+  const facingMode = (document.getElementById('arrFacing') || {}).value || 'south';
+  let azimuthDeg;
+  if(facingMode === 'south') azimuthDeg = 0;
+  else if(facingMode === 'axis') azimuthDeg = suggestAzimuthFromPath(lastAreaPolygonPath);
+  else azimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
+  document.getElementById('panelAzimuth').value = azimuthDeg;
   const azimuthRad = azimuthDeg * Math.PI/180;
 
   const map = ensureKakaoMap();
@@ -2570,10 +2589,14 @@ function generateSolarLayout(){
   const latAbsDeg = Math.abs(lat0Rad * 180/Math.PI);
   const minSunAltDeg = Math.max(90 - latAbsDeg - 23.44, 5); // 5도 하한(과도한 간격 방지)
   const minSunAltRad = minSunAltDeg * Math.PI/180;
-  const footprintNS = panelL * Math.cos(tiltRad); // 패널의 지면 투영 길이(줄 진행 방향)
-  const shadowLen = (panelL * Math.sin(tiltRad)) / Math.tan(minSunAltRad);
-  const pitch = footprintNS + shadowLen; // 열간 간격(앞열 앞단 ~ 뒷열 앞단)
-  const footprintEW = panelW; // 패널 폭(줄 방향에 수직)
+  const footprintNS = panelL * Math.cos(tiltRad); // 모듈 한 장의 지면 투영 길이(경사 방향)
+  const arrDepth = arrRows * footprintNS + (arrRows - 1) * gap;               // 어레이(테이블) 투영 깊이
+  const arrHeight = arrRows * panelL * Math.sin(tiltRad);                      // 어레이 뒤쪽 높이
+  const shadowLen = arrHeight / Math.tan(minSunAltRad);                        // 동지 남중 기준 앞 어레이 그림자
+  // 상하 이격(열간격) = 어레이 앞단 ~ 다음 어레이 앞단 (솔라웍스의 "상하 이격거리"와 같은 기준). 입력 없으면 어레이 깊이 + 그림자
+  const pitch = Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? arrRowGapIn : arrDepth + shadowLen;
+  const rowGap = pitch - arrDepth;
+  const footprintEW = panelW;
 
   // 방위각만큼 회전한 좌표계에서 격자를 생성(rows는 회전좌표계의 y축 방향) — 배치 방향을 부지 모양에 맞춰 돌릴 수 있게 함
   const polyRot = polyXY.map(p => rotateXY(p.x, p.y, -azimuthRad));
@@ -2583,15 +2606,20 @@ function generateSolarLayout(){
 
   const cands = [];
   let rowIdx = 0;
+  // 어레이 줄(상하) × 어레이(좌우 C장씩, 사이에 좌우 이격). 모듈은 한 장씩 경계·이격 판정.
   for(let y = ymin; y + footprintNS <= ymax; y += pitch, rowIdx++){
-    for(let x = xmin; x + footprintEW <= xmax; x += (footprintEW + gap)){
-      const cornersRot = [
-        {x, y}, {x: x+footprintEW, y}, {x: x+footprintEW, y: y+footprintNS}, {x, y: y+footprintNS}
-      ];
-      // 회전 좌표계 → 실제 위치 좌표계로 되돌려서 경계·이격 판정(경계 자체는 회전하지 않으므로 실제 좌표에서 검사해야 함)
-      const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad));
-      const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
-      if(fits) cands.push({ cornersReal, row: rowIdx });
+    let col = 0;
+    for(let x = xmin; x + footprintEW <= xmax; ){
+      for(let k = 0; k < arrRows; k++){
+        const y0 = y + k * (footprintNS + gap), y1 = y0 + footprintNS;
+        if(y1 > ymax) break;
+        const cornersRot = [ {x, y: y0}, {x: x+footprintEW, y: y0}, {x: x+footprintEW, y: y1}, {x, y: y1} ];
+        const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad));
+        const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
+        if(fits) cands.push({ cornersReal, row: rowIdx });
+      }
+      col++;
+      x += footprintEW + ((col % arrCols === 0) ? arrSideGap : gap);
     }
   }
   // 실무 밀도 기준(토지 300평/100kW) 적용
@@ -2650,7 +2678,7 @@ function generateSolarLayout(){
   groundEdit = { mods: groundMods, label, wattPerPanel, siteAreaM2, panelW, panelL, groupId: solarGroupId, pitch };
   updateGroundLabel();
 
-  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 어레이 세로 ${arrRows}×가로 ${arrCols}장, 주향 ${facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '부지 축' : '직접 입력')}(방위각 ${azimuthDeg}°), 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
