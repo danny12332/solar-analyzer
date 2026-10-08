@@ -2230,7 +2230,7 @@ function generateBuildingRoofLayout(kind){
             const ya = y0 + k * (modDepth + gap), yb = ya + modDepth;
             for(let x = xmin; x + panelW <= xmax; x += panelW + gap){
               const c = [real(x, ya), real(x + panelW, ya), real(x + panelW, yb), real(x, yb)];
-              if(c.every(inside)) cands.push({ corners: c, face: 'a', block: r });
+              if(c.every(inside)) cands.push({ corners: c, face: 'a', block: r, line: 's-' + r + '-' + k });
             }
           }
           if(cands.length > n0){ placed = true; r++; y += dir * (d + gapFor(rows)); }
@@ -2254,7 +2254,7 @@ function generateBuildingRoofLayout(kind){
         const bid = blockId + Math.floor(r / blockRows);
         for(let x = xmin; x + colW <= xmax; x += colW + gap){
           const c = [real(x, y0), real(x + colW, y0), real(x + colW, y1), real(x, y1)];
-          if(c.every(inside)) cands.push({ corners: c, face: f, block: bid });
+          if(c.every(inside)) cands.push({ corners: c, face: f, block: bid, line: f + '-' + r });
         }
         r++;
         const endOfBlock = r % blockRows === 0;
@@ -2272,7 +2272,7 @@ function generateBuildingRoofLayout(kind){
         const bid = blockId + Math.floor(r / blockRows);
         for(let y = yLo; y + cellAcross <= yHi; y += cellAcross + gap){
           const c = [real(x, y), real(x + stripDepth, y), real(x + stripDepth, y + cellAcross), real(x, y + cellAcross)];
-          if(c.every(inside)) cands.push({ corners: c, face: f, block: bid });
+          if(c.every(inside)) cands.push({ corners: c, face: f, block: bid, line: f + '-' + r });
         }
         r++;
         x += stripDepth + ((r % blockRows === 0) ? aisle : gap);
@@ -2281,6 +2281,11 @@ function generateBuildingRoofLayout(kind){
     });
   }
 
+  // 줄(열)에 모듈이 한 장뿐이면 제거 — 끝에 외톨이로 남는 모듈은 실제로 설치하지 않음
+  {
+    const cnt = {}; cands.forEach(c => { cnt[c.line] = (cnt[c.line] || 0) + 1; });
+    for(let i = cands.length - 1; i >= 0; i--){ if(cnt[cands[i].line] < 2) cands.splice(i, 1); }
+  }
   if(!cands.length){
     statusEl.textContent = '❌ 이 경계·이격 조건으로는 모듈이 한 장도 들어가지 않습니다. 외곽선을 다시 그리거나 이격·통로 값을 줄여보세요.';
     statusEl.style.color = '#b3402a';
@@ -2295,20 +2300,27 @@ function generateBuildingRoofLayout(kind){
     }
   }
   const fill = '#4A5A1B';
+  const fillB = '#2F6B4F'; // 두 번째 면(북향·서향 면)은 다른 색으로 구분
   const modules = chosen.map(c => {
-    const poly = new kakao.maps.Polygon({ map, path: c.corners.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad)), strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: fill, fillOpacity: 0.62 });
+    const poly = new kakao.maps.Polygon({ map, path: c.corners.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad)), strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: (kind !== 'slab' && c.face === 'b') ? fillB : fill, fillOpacity: 0.62 });
     measureShapes.push(poly);
     const m = { poly, face: c.face, removed: false };
     try{
       kakao.maps.event.addListener(poly, 'click', () => {
         m.removed = !m.removed;
-        poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : fill, fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 });
+        poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : ((kind !== 'slab' && c.face === 'b') ? fillB : fill), fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 });
         updateRoofEditLabel(layoutByModule(m));
       });
     }catch(e){}
     return m;
   });
   solarGroupId = registerMeasureGroup(modules.map(m => m.poly));
+  // 용마루 선(흰 점선) 표시 — 남북·동서지붕 구분이 눈에 보이도록
+  if(kind !== 'slab'){
+    const rp1 = real(xmin, ymid), rp2 = real(xmax, ymid);
+    const ridgeLine = new kakao.maps.Polyline({ map, path: [solarToLatLng(rp1.x, rp1.y, lat0Rad), solarToLatLng(rp2.x, rp2.y, lat0Rad)], strokeWeight: 3, strokeColor: '#FFFFFF', strokeOpacity: 0.9, strokeStyle: 'shortdash' });
+    measureShapes.push(ridgeLine); measureGroups[solarGroupId].shapes.push(ridgeLine);
+  }
   const bottomPt = lastAreaPolygonPath.reduce((m, p) => (p.getLat() < m.getLat() ? p : m), lastAreaPolygonPath[0]);
   const label = new kakao.maps.CustomOverlay({ position: bottomPt, content: '', yAnchor: -0.3, clickable: true });
   label.setMap(map);
@@ -2352,7 +2364,12 @@ function updateRoofEditLabel(ed){
 function onGenerateLayoutClick(){
   const mtEl = document.getElementById('mountType');
   let mt = mtEl.value;
-  // 경계를 따로 그리지 않았으면 검색한 필지 경계(분홍 선)를 그대로 배치 경계로 사용 — 토지는 필지 모양대로 배치됨
+  // 경계를 따로 그리지 않았으면: 지상 배치만 검색한 필지 경계(분홍 선)를 그대로 사용. 지붕 배치는 건물 외곽선이 있어야 함.
+  if((!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) && mt !== 'ground'){
+    const st = document.getElementById('roadviewStatus');
+    if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 지붕 배치는 건물 외곽선이 필요합니다. "🏢 건물 선택"으로 건물을 클릭하거나 "📐 면적재기"로 지붕 범위를 그린 뒤 생성하세요. (필지 경계 전체에 배치하려면 배치 대상을 "지상"으로)'; }
+    return;
+  }
   if((!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) && lastParcelPath && lastParcelPath.length >= 3){
     lastAreaPolygonPath = lastParcelPath.slice();
     const st = document.getElementById('roadviewStatus');
