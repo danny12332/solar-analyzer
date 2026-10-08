@@ -561,7 +561,7 @@
             <label id="ridgeFlipLabel"><input id="roofRidgeFlip" type="checkbox" style="vertical-align:middle;"> 용마루 방향 90° 바꾸기</label>
           </span>
           <button type="button" class="run" onclick="onGenerateLayoutClick()">배치 생성</button>
-          <button type="button" class="run" id="solarIllustrationBtn" style="background:var(--forest-dim);color:var(--forest);display:none;" onclick="toggleSolarIllustration()">🎨 일러스트로 보기</button>
+          <button type="button" id="solarIllustrationBtn" style="display:none!important;" hidden></button>
         </div>
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
         <div class="map-stage" id="mapStage">
@@ -570,6 +570,7 @@
           <div class="layout-tools" id="layoutTools" style="display:none;">
             <button type="button" onclick="startBuildingEdit()" title="꼭짓점을 끌어 지붕·부지 모양에 맞춥니다 (주소 검색 시 필지 경계가 기본)">✏ 테두리 조정</button>
             <button type="button" class="primary" onclick="onGenerateLayoutClick()">🏗 배치 생성</button>
+            <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈 클릭 = 제외/복원)">➕ 모듈 추가</button>
             <button type="button" onclick="clearLayoutAndOutline()" title="테두리와 배치를 지웁니다">🧹 지우기</button>
           </div>
           <div id="kakaoRoadviewWrap">
@@ -816,8 +817,7 @@ const JIMOK_NOT_DEV = ['도','철','제','천','구','유','양','수','공','�
 function applyParcelToForm(props, kakaoPath){
   lastParcelPnu = String(props.pnu || '').trim();
   lastParcelPath = kakaoPath || null;
-  lastAreaPolygonPath = null; // 새 필지 검색 → 이전 배치 경계는 버리고 새 필지 경계를 기본으로 씀
-  if(solarGroupId){ try{ removeMeasureGroup(solarGroupId); }catch(e){} solarGroupId = null; roofEdit = null; groundEdit = null; }
+  lastAreaPolygonPath = null; // 새 필지 검색 → 배치 경계는 새 필지 경계를 기본으로 씀 (이미 만든 배치는 유지)
   ['landCategory','farmZone','forestType','useZone'].forEach(id => collapseSeg(id, false));
   lastKepcoSummary = null; lastLandInfo = null;
   showRegionContacts();
@@ -1597,6 +1597,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'area'){ addAreaPoint(mouseEvent.latLng); }
     else if(mapMode === 'radius'){ addRadiusPoint(mouseEvent.latLng); }
     else if(mapMode === 'building'){ pickBuildingAt(mouseEvent.latLng); }
+    else if(mapMode === 'addmod'){ addModuleAt(mouseEvent.latLng); }
     else {
       setMarkerPosition(mouseEvent.latLng);
       // 로드뷰가 열려있는 상태라면 새로 클릭한 지점으로 바로 갱신
@@ -1716,7 +1717,9 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', mode === 'distance' || mode === 'area' || mode === 'radius' || mode === 'building');
+    mapEl.classList.toggle('measuring', mode === 'distance' || mode === 'area' || mode === 'radius' || mode === 'building' || mode === 'addmod');
+    const ab = document.getElementById('addModBtn');
+    if(ab){ ab.style.background = mode === 'addmod' ? 'var(--ink)' : ''; ab.style.color = mode === 'addmod' ? '#F6F7F3' : ''; }
   }
 }
 
@@ -1948,6 +1951,7 @@ function suggestAzimuthFromPath(path){
 // X 버튼으로 태양광 배치를 지울 때, 진행중 그룹 id 상태도 함께 정리
 function removeSolarLayout(id){
   removeMeasureGroup(id);
+  const i = layoutRegistry.findIndex(ed => ed.groupId === id); if(i >= 0) layoutRegistry.splice(i, 1);
   if(solarGroupId === id){
     solarGroupId = null;
     lastSolarStats = null;
@@ -1994,9 +1998,59 @@ function onMountTypeChange(){
   document.getElementById('azimuthLabel').style.display = (isNewGable || mt === 'slab' || (mt === 'ground' && facingSel && facingSel.value !== 'manual')) ? 'none' : '';
 }
 
+// ===== 배치 레지스트리: 필지·건물마다 만든 배치를 모두 유지하고, 모듈 추가·제거를 배치별로 처리 =====
+const layoutRegistry = []; // [{type, groupId, modules:[{poly,removed}], label, boundary, lat0Rad, azRad, modW, modD, fill, ...}]
+function registerLayout(ed){ layoutRegistry.push(ed); }
+function layoutByModule(m){ return layoutRegistry.find(ed => ed.modules.includes(m)) || null; }
+function layoutByGroup(id){ return layoutRegistry.find(ed => ed.groupId === id) || null; }
+function sameBoundary(a, b){
+  if(!a || !b || a.length !== b.length) return false;
+  for(let i = 0; i < a.length; i++){ if(haversineMeters(a[i], b[i]) > 0.5) return false; }
+  return true;
+}
+function replaceLayoutOnSameBoundary(boundary){
+  for(let i = layoutRegistry.length - 1; i >= 0; i--){
+    const ed = layoutRegistry[i];
+    if(sameBoundary(ed.boundary, boundary)){ try{ removeMeasureGroup(ed.groupId); }catch(e){} layoutRegistry.splice(i, 1); }
+  }
+  if(solarGroupId && !layoutByGroup(solarGroupId)) solarGroupId = null;
+}
+function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRoofEditLabel(ed); else updateGroundLabel(ed); }
+// ➕ 모듈 추가 모드: 지도를 클릭하면 가장 가까운 배치의 방향·크기로 그 자리에 모듈 한 장을 추가
+function toggleAddModuleMode(){
+  if(mapMode === 'addmod'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
+  if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성한 뒤 모듈을 추가할 수 있습니다.'; return; }
+  setMode('addmod');
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = '➕ 지도를 클릭하면 그 자리에 모듈 한 장이 추가됩니다(가장 가까운 배치의 방향·크기). 모듈을 클릭하면 제외/복원됩니다. 끝내려면 버튼을 다시 누르세요.';
+}
+function addModuleAt(latlng){
+  if(!layoutRegistry.length) return;
+  // 가장 가까운 배치(경계 중심 거리) 선택
+  let best = null, bestD = Infinity;
+  layoutRegistry.forEach(ed => {
+    const c = ed.boundary; const cl = c.reduce((s, p) => s + p.getLat(), 0) / c.length, cg = c.reduce((s, p) => s + p.getLng(), 0) / c.length;
+    const d = haversineMeters(latlng, new kakao.maps.LatLng(cl, cg));
+    if(d < bestD){ bestD = d; best = ed; }
+  });
+  const ed = best;
+  const map = ensureKakaoMap();
+  const ctr = solarToXY(latlng, ed.lat0Rad);
+  const hw = ed.modW / 2, hd = ed.modD / 2;
+  const corners = [{x: -hw, y: -hd}, {x: hw, y: -hd}, {x: hw, y: hd}, {x: -hw, y: hd}].map(c => { const r = rotateXY(c.x, c.y, ed.azRad); return { x: ctr.x + r.x, y: ctr.y + r.y }; });
+  const path = corners.map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
+  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: ed.fill, fillOpacity: 0.62 });
+  measureShapes.push(poly);
+  if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(poly);
+  const m = { poly, removed: false, face: 'a', added: true };
+  ed.modules.push(m);
+  try{ kakao.maps.event.addListener(poly, 'click', () => { m.removed = !m.removed; poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : ed.fill, fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 }); refreshLayoutLabel(ed); }); }catch(e){}
+  refreshLayoutLabel(ed);
+}
 // 지상 배치 라벨(클릭으로 모듈을 빼면 즉시 갱신) — 음영 지는 자리·장애물 자리를 눌러 제외하는 용도
 let groundEdit = null;
-function updateGroundLabel(){
+function updateGroundLabel(ed){
+  const groundEdit = ed || null;
   if(!groundEdit) return;
   const live = groundEdit.mods.filter(m => !m.removed).length;
   const removed = groundEdit.mods.length - live;
@@ -2108,8 +2162,8 @@ function generateBuildingRoofLayout(kind){
   const cosP = Math.cos(pitchDeg * Math.PI / 180);
 
   const map = ensureKakaoMap();
-  if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; }
-  roofEdit = null;
+  // 이전 배치는 유지(필지·건물마다 배치를 겹쳐 둘 수 있음). 같은 경계로 다시 만들면 그 경계의 이전 배치만 교체.
+  replaceLayoutOnSameBoundary(lastAreaPolygonPath);
 
   const lat0Rad = lastAreaPolygonPath.reduce((s, p) => s + p.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180;
   const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad));
@@ -2249,7 +2303,7 @@ function generateBuildingRoofLayout(kind){
       kakao.maps.event.addListener(poly, 'click', () => {
         m.removed = !m.removed;
         poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : fill, fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 });
-        updateRoofEditLabel();
+        updateRoofEditLabel(layoutByModule(m));
       });
     }catch(e){}
     return m;
@@ -2260,11 +2314,13 @@ function generateBuildingRoofLayout(kind){
   label.setMap(map);
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
-  roofEdit = { modules, label, wattPerPanel, faces, kind, geomCount: cands.length, projectedAreaM2, targetKw, groupId: solarGroupId, blockRows, tables: new Set(chosen.map(c => c.block)).size, tableGap: slabInfo ? slabInfo.tableGap : 0 };
-  updateRoofEditLabel();
+  roofEdit = { type: 'roof', modules, label, wattPerPanel, faces, kind, geomCount: cands.length, projectedAreaM2, targetKw, groupId: solarGroupId, blockRows, tables: new Set(chosen.map(c => c.block)).size, tableGap: slabInfo ? slabInfo.tableGap : 0,
+    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: ridge, modW: kind === 'ew' ? panelL : panelW, modD: kind === 'ew' ? panelW * cosP : panelL * cosP, fill };
+  registerLayout(roofEdit);
+  updateRoofEditLabel(roofEdit);
 
   const illBtn = document.getElementById('solarIllustrationBtn');
-  if(illBtn){ illBtn.style.display = 'inline-block'; document.getElementById('solarIllustrationWrap').style.display = 'none'; illBtn.textContent = '🎨 일러스트로 보기'; }
+  if(illBtn){ illBtn.style.display = 'none'; document.getElementById('solarIllustrationWrap').style.display = 'none'; illBtn.textContent = '🎨 일러스트로 보기'; }
   const ridgeDeg = normAxis(ridge);
   const kindName = kind === 'slab' ? '평슬라브' : (kind === 'ns' ? '남북지붕(용마루 동서 방향)' : '동서지붕(용마루 남북 방향)');
   const practiceKw = densityTargetKw(projectedAreaM2, true);
@@ -2275,7 +2331,8 @@ function generateBuildingRoofLayout(kind){
     (targetKw > 0 && chosen.length < cands.length ? `목표 ${targetKw}kW에 맞춰 묶음 단위로 줄였습니다(전체 배치 시 ${cands.length.toLocaleString('ko-KR')}장). ` : '전체 면적에 배치했습니다. ') +
     `참고: 실무 밀도(건물 200평/100kW)로는 약 ${Math.round(practiceKw).toLocaleString('ko-KR')}kW입니다. 지도에서 모듈을 클릭하면 개별로 빼거나 다시 넣을 수 있습니다. ` + (kind === 'slab' ? '테이블끼리의 자기그늘만 계산했고, 옥탑·실외기·주변 건물의 그림자는 반영하지 않았습니다.' : `경사 방향 치수는 물매 ${pitchDeg}°로 보정했고, 주변 음영은 반영하지 않았습니다.`);
 }
-function updateRoofEditLabel(){
+function updateRoofEditLabel(ed){
+  const roofEdit = ed || null;
   if(!roofEdit) return;
   const live = roofEdit.modules.filter(m => !m.removed);
   const byFace = f => live.filter(m => m.face === f).length;
@@ -2419,7 +2476,7 @@ function generateRoofLayout(mountMode){
 
   lastSolarStats = { rows: rowsUsed, cols: maxCols, panelCount, totalKw, utilization };
   const illBtn = document.getElementById('solarIllustrationBtn');
-  illBtn.style.display = 'inline-block';
+  illBtn.style.display = 'none';
   document.getElementById('solarIllustrationWrap').style.display = 'none';
   illBtn.textContent = '🎨 일러스트로 보기';
 
@@ -2539,7 +2596,7 @@ function generateEastWestRoofLayout(){
 
   lastSolarStats = { rows: rowsUsed, cols: maxCols, panelCount, totalKw, utilization };
   const illBtn = document.getElementById('solarIllustrationBtn');
-  illBtn.style.display = 'inline-block';
+  illBtn.style.display = 'none';
   document.getElementById('solarIllustrationWrap').style.display = 'none';
   illBtn.textContent = '🎨 일러스트로 보기';
 
@@ -2585,8 +2642,7 @@ function generateSolarLayout(){
   const azimuthRad = azimuthDeg * Math.PI/180;
 
   const map = ensureKakaoMap();
-  // 이전 배치가 있으면 지우고 새로 생성
-  if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; }
+  replaceLayoutOnSameBoundary(lastAreaPolygonPath);
 
   const lat0Rad = lastAreaPolygonPath.reduce((s,p)=>s+p.getLat(),0) / lastAreaPolygonPath.length * Math.PI/180;
   const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad)); // 실제 위치 기준(경계 이격 판정용)
@@ -2652,7 +2708,7 @@ function generateSolarLayout(){
     rowCounts[c.row] = (rowCounts[c.row] || 0) + 1;
     const m = { poly, removed: false };
     groundMods.push(m);
-    try{ kakao.maps.event.addListener(poly, 'click', () => { m.removed = !m.removed; poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : '#1B3A5C', fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 }); updateGroundLabel(); }); }catch(e){}
+    try{ kakao.maps.event.addListener(poly, 'click', () => { m.removed = !m.removed; poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : '#1B3A5C', fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 }); updateGroundLabel(layoutByModule(m)); }); }catch(e){}
   });
   rowsUsed = Object.keys(rowCounts).length;
   colsPerRowMax.count = Math.max(0, ...Object.values(rowCounts));
@@ -2671,7 +2727,7 @@ function generateSolarLayout(){
   // 🎨 일러스트 버튼용으로 이번 배치의 요약 통계 저장
   lastSolarStats = { rows: rowsUsed, cols: colsPerRowMax.count, panelCount, totalKw, utilization };
   const illBtn = document.getElementById('solarIllustrationBtn');
-  illBtn.style.display = 'inline-block';
+  illBtn.style.display = 'none';
   document.getElementById('solarIllustrationWrap').style.display = 'none';
   illBtn.textContent = '🎨 일러스트로 보기';
 
@@ -2683,8 +2739,11 @@ function generateSolarLayout(){
   label.setMap(map);
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
-  groundEdit = { mods: groundMods, label, wattPerPanel, siteAreaM2, panelW, panelL, groupId: solarGroupId, pitch };
-  updateGroundLabel();
+  const thisGround = { type: 'ground', modules: groundMods, mods: groundMods, label, wattPerPanel, siteAreaM2, panelW, panelL, groupId: solarGroupId, pitch,
+    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: azimuthRad, modW: panelW, modD: footprintNS, fill: '#1B3A5C' };
+  groundEdit = thisGround;
+  registerLayout(thisGround);
+  updateGroundLabel(thisGround);
 
   statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 어레이 세로 ${arrRows}×가로 ${arrCols}장, 주향 ${facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '부지 축' : '직접 입력')}(방위각 ${azimuthDeg}°), 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
@@ -2823,7 +2882,7 @@ const HANDLE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="
 const MOVE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="12" fill="#C2148A" stroke="#fff" stroke-width="2"/><path d="M14 4l3 4h-2v4h-2V8H11zM14 24l-3-4h2v-4h2v4h2zM4 14l4-3v2h4v2H8v2zM24 14l-4 3v-2h-4v-2h4v-2z" fill="#fff"/></svg>');
 function clearLayoutAndOutline(){
   stopBuildingEdit();
-  if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; roofEdit = null; }
+  replaceLayoutOnSameBoundary(lastAreaPolygonPath);
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
   lastAreaPolygonPath = null;
   const st = document.getElementById('roadviewStatus'); if(st) st.textContent = '';
@@ -2832,7 +2891,7 @@ function clearLayoutAndOutline(){
 setInterval(() => {
   const t = document.getElementById('layoutTools');
   if(!t) return;
-  const show = (!!(lastAreaPolygonPath && lastAreaPolygonPath.length >= 3) || !!(lastParcelPath && lastParcelPath.length >= 3)) && !bldEdit && !roadviewOn;
+  const show = (!!(lastAreaPolygonPath && lastAreaPolygonPath.length >= 3) || !!(lastParcelPath && lastParcelPath.length >= 3) || layoutRegistry.length > 0) && !bldEdit && !roadviewOn;
   t.style.display = show ? 'flex' : 'none';
 }, 400);
 function startBuildingEdit(){
@@ -2840,7 +2899,7 @@ function startBuildingEdit(){
   if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) return;
   stopBuildingEdit();
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
-  if(solarGroupId){ removeMeasureGroup(solarGroupId); solarGroupId = null; roofEdit = null; }
+  replaceLayoutOnSameBoundary(lastAreaPolygonPath);
   const map = ensureKakaoMap();
   const path = lastAreaPolygonPath.slice();
   const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 3, strokeColor: '#C2148A', strokeOpacity: 0.95, strokeStyle: 'shortdash', fillColor: '#C2148A', fillOpacity: 0.06 });
