@@ -570,7 +570,9 @@
           <div class="layout-tools" id="layoutTools" style="display:none;">
             <button type="button" onclick="startBuildingEdit()" title="꼭짓점을 끌어 지붕·부지 모양에 맞춥니다 (주소 검색 시 필지 경계가 기본)">✏ 테두리 조정</button>
             <button type="button" class="primary" onclick="onGenerateLayoutClick()">🏗 배치 생성</button>
-            <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈 클릭 = 제외/복원)">➕ 모듈 추가</button>
+            <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가">➕ 추가</button>
+            <button type="button" id="delLineBtn" onclick="toggleLineDeleteMode()" title="모듈을 클릭하면 그 줄(열·테이블) 전체 제외/복원">🗑 줄 제거</button>
+            <button type="button" id="delRectBtn" onclick="toggleRectDeleteMode()" title="두 모서리를 클릭한 사각형 안의 모듈을 모두 제외">⬚ 영역 제거</button>
             <button type="button" onclick="clearLayoutAndOutline()" title="테두리와 배치를 지웁니다">🧹 지우기</button>
           </div>
           <div id="kakaoRoadviewWrap">
@@ -1598,6 +1600,8 @@ function ensureKakaoMap(){
     else if(mapMode === 'radius'){ addRadiusPoint(mouseEvent.latLng); }
     else if(mapMode === 'building'){ pickBuildingAt(mouseEvent.latLng); }
     else if(mapMode === 'addmod'){ addModuleAt(mouseEvent.latLng); }
+    else if(mapMode === 'delrect'){ rectDeleteClick(mouseEvent.latLng); }
+    else if(mapMode === 'delline'){ /* 모듈 클릭으로만 동작 */ }
     else {
       setMarkerPosition(mouseEvent.latLng);
       // 로드뷰가 열려있는 상태라면 새로 클릭한 지점으로 바로 갱신
@@ -1717,9 +1721,11 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', mode === 'distance' || mode === 'area' || mode === 'radius' || mode === 'building' || mode === 'addmod');
-    const ab = document.getElementById('addModBtn');
-    if(ab){ ab.style.background = mode === 'addmod' ? 'var(--ink)' : ''; ab.style.color = mode === 'addmod' ? '#F6F7F3' : ''; }
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','delrect','delline'].includes(mode));
+    [['addModBtn','addmod'],['delLineBtn','delline'],['delRectBtn','delrect']].forEach(([id, md]) => {
+      const el = document.getElementById(id); if(!el) return;
+      el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
+    });
   }
 }
 
@@ -2016,6 +2022,60 @@ function replaceLayoutOnSameBoundary(boundary){
   if(solarGroupId && !layoutByGroup(solarGroupId)) solarGroupId = null;
 }
 function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRoofEditLabel(ed); else updateGroundLabel(ed); }
+// 모듈 상태 반영
+function setModuleRemoved(m, removed){
+  m.removed = removed;
+  m.poly.setOptions({ fillColor: removed ? '#B0B0B0' : m.color, fillOpacity: removed ? 0.25 : 0.62, strokeOpacity: removed ? 0.3 : 0.7 });
+}
+// 모듈 클릭: 기본 = 한 장 제외/복원, "줄 단위" 모드 = 같은 줄(열·테이블) 전체 제외/복원
+function moduleClicked(m){
+  const ed = layoutByModule(m);
+  if(!ed) return;
+  if(mapMode === 'delline'){
+    const target = !m.removed;
+    ed.modules.filter(x => x.line === m.line).forEach(x => setModuleRemoved(x, target));
+  } else if(mapMode === 'delrect'){
+    // 모듈 위를 클릭해도 사각형 모서리로 인정
+    const p = m.poly.getPath(); const cl = p.reduce((s, q) => s + q.getLat(), 0) / p.length, cg = p.reduce((s, q) => s + q.getLng(), 0) / p.length;
+    rectDeleteClick(new kakao.maps.LatLng(cl, cg)); return;
+  } else if(mapMode === 'addmod'){
+    return;
+  } else {
+    setModuleRemoved(m, !m.removed);
+  }
+  refreshLayoutLabel(ed);
+}
+function toggleLineDeleteMode(){
+  if(mapMode === 'delline'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
+  if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성하세요.'; return; }
+  setMode('delline');
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = '🗑 줄 단위 제거: 모듈을 클릭하면 그 모듈이 속한 줄(열·테이블) 전체가 제외됩니다. 제외된 줄을 다시 클릭하면 복원됩니다. 끝내려면 버튼을 다시 누르세요.';
+}
+// ⬚ 영역 제거: 지도에서 두 점을 클릭해 사각형을 지정하면 그 안의 모듈이 모두 제외됨 (그늘 지는 구역을 한 번에)
+let delRectFirst = null, delRectPreview = null;
+function toggleRectDeleteMode(){
+  if(mapMode === 'delrect'){ setMode('normal'); delRectFirst = null; if(delRectPreview){ delRectPreview.setMap(null); delRectPreview = null; } document.getElementById('roadviewStatus').textContent = ''; return; }
+  if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성하세요.'; return; }
+  setMode('delrect'); delRectFirst = null;
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = '⬚ 영역 제거: 지도에서 사각형의 두 모서리를 차례로 클릭하면 그 안의 모듈이 모두 제외됩니다(이미 제외된 모듈만 있으면 복원). 끝내려면 버튼을 다시 누르세요.';
+}
+function rectDeleteClick(latlng){
+  const map = ensureKakaoMap();
+  if(!delRectFirst){ delRectFirst = latlng; return; }
+  const a = delRectFirst, b = latlng; delRectFirst = null;
+  const latLo = Math.min(a.getLat(), b.getLat()), latHi = Math.max(a.getLat(), b.getLat());
+  const lngLo = Math.min(a.getLng(), b.getLng()), lngHi = Math.max(a.getLng(), b.getLng());
+  const insideRect = m => { const p = m.poly.getPath(); const cl = p.reduce((s, q) => s + q.getLat(), 0) / p.length, cg = p.reduce((s, q) => s + q.getLng(), 0) / p.length; return cl >= latLo && cl <= latHi && cg >= lngLo && cg <= lngHi; };
+  let hit = [];
+  layoutRegistry.forEach(ed => { ed.modules.forEach(m => { if(insideRect(m)) hit.push({ ed, m }); }); });
+  if(!hit.length){ document.getElementById('roadviewStatus').textContent = '⬚ 지정한 영역 안에 모듈이 없습니다. 다시 두 모서리를 클릭하세요.'; return; }
+  const allRemoved = hit.every(h => h.m.removed);
+  hit.forEach(h => setModuleRemoved(h.m, !allRemoved));
+  new Set(hit.map(h => h.ed)).forEach(ed => refreshLayoutLabel(ed));
+  document.getElementById('roadviewStatus').textContent = `⬚ 영역 안 모듈 ${hit.length}장을 ${allRemoved ? '복원' : '제외'}했습니다. 계속 두 모서리를 클릭하거나 버튼을 눌러 끝내세요.`;
+}
 // ➕ 모듈 추가 모드: 지도를 클릭하면 가장 가까운 배치의 방향·크기로 그 자리에 모듈 한 장을 추가
 function toggleAddModuleMode(){
   if(mapMode === 'addmod'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
@@ -2042,9 +2102,9 @@ function addModuleAt(latlng){
   const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: ed.fill, fillOpacity: 0.62 });
   measureShapes.push(poly);
   if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(poly);
-  const m = { poly, removed: false, face: 'a', added: true };
+  const m = { poly, removed: false, face: 'a', added: true, line: 'added', color: ed.fill };
   ed.modules.push(m);
-  try{ kakao.maps.event.addListener(poly, 'click', () => { m.removed = !m.removed; poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : ed.fill, fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 }); refreshLayoutLabel(ed); }); }catch(e){}
+  try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
   refreshLayoutLabel(ed);
 }
 // 지상 배치 라벨(클릭으로 모듈을 빼면 즉시 갱신) — 음영 지는 자리·장애물 자리를 눌러 제외하는 용도
@@ -2304,14 +2364,8 @@ function generateBuildingRoofLayout(kind){
   const modules = chosen.map(c => {
     const poly = new kakao.maps.Polygon({ map, path: c.corners.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad)), strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: (kind !== 'slab' && c.face === 'b') ? fillB : fill, fillOpacity: 0.62 });
     measureShapes.push(poly);
-    const m = { poly, face: c.face, removed: false };
-    try{
-      kakao.maps.event.addListener(poly, 'click', () => {
-        m.removed = !m.removed;
-        poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : ((kind !== 'slab' && c.face === 'b') ? fillB : fill), fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 });
-        updateRoofEditLabel(layoutByModule(m));
-      });
-    }catch(e){}
+    const m = { poly, face: c.face, removed: false, line: c.line, color: (kind !== 'slab' && c.face === 'b') ? fillB : fill };
+    try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
     return m;
   });
   solarGroupId = registerMeasureGroup(modules.map(m => m.poly));
@@ -2723,9 +2777,9 @@ function generateSolarLayout(){
     panelShapes.push(poly);
     panelCount++;
     rowCounts[c.row] = (rowCounts[c.row] || 0) + 1;
-    const m = { poly, removed: false };
+    const m = { poly, removed: false, line: 'g-' + c.row, color: '#1B3A5C' };
     groundMods.push(m);
-    try{ kakao.maps.event.addListener(poly, 'click', () => { m.removed = !m.removed; poly.setOptions({ fillColor: m.removed ? '#B0B0B0' : '#1B3A5C', fillOpacity: m.removed ? 0.25 : 0.62, strokeOpacity: m.removed ? 0.3 : 0.7 }); updateGroundLabel(layoutByModule(m)); }); }catch(e){}
+    try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
   });
   rowsUsed = Object.keys(rowCounts).length;
   colsPerRowMax.count = Math.max(0, ...Object.values(rowCounts));
