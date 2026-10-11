@@ -541,6 +541,7 @@
           <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="645" step="5" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
           <label id="modOrientLabel" style="font-size:11.5px;color:var(--ink-soft);" title="가로(눕힘): 모듈 긴 변이 좌우, 짧은 변이 경사 방향으로 N단 쌓임 · 세로(세움): 모듈 긴 변이 경사 방향">모듈 방향 <select id="modOrient" style="padding:2px 4px;"><option value="landscape" selected>가로(눕힘)</option><option value="portrait">세로(세움)</option></select></label>
+          <label id="alignEdgeLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(줄)을 어느 경계 변과 나란히 놓을지. 자동 = 지상은 주향 설정, 건물은 긴 변 기준. 변 길이는 지도에 표시된 변 길이(m)와 같습니다">방향 기준 변 <select id="alignEdge" style="padding:2px 4px;" onfocus="refreshAlignEdgeOptions()" onmousedown="refreshAlignEdgeOptions()"><option value="auto" selected>자동</option></select></label>
           <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선과 'N단×M장' 라벨을 지도에 표시"><input id="showTables" type="checkbox" checked style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선·라벨</label>
           <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="3" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
           <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
@@ -1374,6 +1375,7 @@ applySlopeDefaults();
 function lookupAddress(autoOpen){
   const addr = document.getElementById('siteAddress').value.trim();
   if(!addr){ return; }
+  if(typeof window.hideAddrSuggest === 'function') window.hideAddrSuggest(); // 주소 추천 목록 닫기
   const enc = encodeURIComponent(addr);
   const kakaoUrl = `https://map.kakao.com/link/search/${enc}`;
 
@@ -1937,6 +1939,39 @@ function rotateXY(x, y, angleRad){
 // 부지/지붕 경계의 "가장 긴 변" 방향을 계산해서, 배치 열(row)이 건물·경계 모양에 맞춰
 // 자동으로 정렬되도록 방위각 기본값을 제안한다. (rotateXY(-azimuthRad)로 회전했을 때
 // 이 변이 x축과 나란해지도록 역산: azimuthRad = atan2(dy, dx))
+// ===== 방향 기준 변: 현재 배치 경계(건물 외곽선·면적재기·필지)의 변 목록을 선택창에 채우고, 고른 변의 방향각을 돌려줌 =====
+function refreshAlignEdgeOptions(){
+  const sel = document.getElementById('alignEdge'); if(!sel) return;
+  const path = (lastAreaPolygonPath && lastAreaPolygonPath.length >= 3) ? lastAreaPolygonPath : ((lastParcelPath && lastParcelPath.length >= 3) ? lastParcelPath : null);
+  const cur = sel.value;
+  const n = path ? path.length : 0;
+  if(sel.dataset.n === String(n) && sel.options.length === n + 1 && n > 0) return; // 같은 경계면 그대로
+  sel.innerHTML = '<option value="auto">자동</option>';
+  if(!path){ sel.dataset.n = '0'; sel.value = 'auto'; return; }
+  for(let i = 0; i < n; i++){
+    const a = path[i], b = path[(i + 1) % n];
+    const len = haversineMeters(a, b);
+    if(len < 0.5) continue; // 닫는 점 등 길이 0 변은 제외
+    const o = document.createElement('option');
+    o.value = 'e:' + i; o.textContent = `변 ${i + 1} (${len.toFixed(1)} m)`;
+    sel.appendChild(o);
+  }
+  sel.dataset.n = String(n);
+  sel.value = Array.from(sel.options).some(o => o.value === cur) ? cur : 'auto';
+}
+// 선택한 변의 방향각(도, x=동쪽 기준 반시계, -90~90로 정규화). 자동이거나 변이 없으면 null
+function alignEdgeAngleDeg(path){
+  const sel = document.getElementById('alignEdge');
+  if(!sel || !/^e:\d+$/.test(sel.value) || !path || path.length < 3) return null;
+  const i = parseInt(sel.value.slice(2), 10);
+  if(!(i >= 0 && i < path.length)) return null;
+  const lat0Rad = path.reduce((s, q) => s + q.getLat(), 0) / path.length * Math.PI / 180;
+  const a = solarToXY(path[i], lat0Rad), b = solarToXY(path[(i + 1) % path.length], lat0Rad);
+  let deg = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  while(deg > 90) deg -= 180;
+  while(deg <= -90) deg += 180;
+  return deg;
+}
 function suggestAzimuthFromPath(path){
   if(!path || path.length < 3) return 0;
   const lat0Rad = path.reduce((s,p)=>s+p.getLat(),0) / path.length * Math.PI/180;
@@ -2317,6 +2352,8 @@ function generateBuildingRoofLayout(kind){
   // 평슬라브: 건물의 두 축 중 테이블이 정남 ±45° 안에서 남쪽을 보게 되는 축(동서에 가까운 축)을 열 방향으로 씀
   let ridge = (kind === 'slab' || kind === 'ns') ? (dist(a1) <= dist(a2) ? a1 : a2) : (dist(a1) <= dist(a2) ? a1 : a2);
   ridge = normAxis(ridge) * Math.PI / 180;
+  const edgeDeg = alignEdgeAngleDeg(lastAreaPolygonPath);
+  if(edgeDeg !== null) ridge = edgeDeg * Math.PI / 180; // 선택한 건물 변과 나란히(테이블 줄·용마루가 그 변을 따라감)
   if(document.getElementById('roofRidgeFlip') && document.getElementById('roofRidgeFlip').checked) ridge += Math.PI / 2;
 
   // 용마루 기준 회전 좌표계: x' = 용마루 방향, y' = 경사 방향
@@ -2480,7 +2517,7 @@ function generateBuildingRoofLayout(kind){
   const kindName = kind === 'slab' ? '평슬라브' : (kind === 'ns' ? '남북지붕(용마루 동서 방향)' : '동서지붕(용마루 남북 방향)');
   const practiceKw = densityTargetKw(projectedAreaM2, true);
   statusEl.style.color = 'var(--ink-soft)';
-  statusEl.textContent = (kind === 'slab'
+  statusEl.textContent = (edgeDeg !== null ? `(선택한 '${document.getElementById('alignEdge').selectedOptions[0].textContent}'과 나란히 배치) ` : '') + (kind === 'slab'
     ? `✅ 평슬라브 배치 — 테이블이 ${compassName(faces.a.az <= 90 && faces.a.az >= -90 ? faces.a.az : faces.b.az)}(방위각 ${Math.round(Math.abs(faces.a.az) <= 90 ? faces.a.az : faces.b.az)}°, 정남 ±45° 안)을 보도록 건물 축에 맞춰 모듈 ${slabLandscape ? '가로(눕힘)' : '세로(세움)'} ${blockRows}단 테이블(설치각도 ${pitchDeg}°) ${roofEdit.tables.length}개(${tableSummaryText(roofEdit)}${slabCols > 0 ? `; 테이블당 가로 ${slabCols}장, 테이블 사이 통로 ${aisle}m` : ''}), 처마 끝 ${setback}m 이격. 테이블 사이 간격 ${slabInfo.tableGap.toFixed(2)}m = 동지 남중 태양고도 ${slabInfo.minSunAltDeg.toFixed(1)}° 기준 앞 테이블 그림자 ${slabInfo.shadowLen.toFixed(2)}m와 최소 통로 ${aisle}m 중 큰 값. `
     : `✅ ${kindName} 배치 — 용마루 방향 ${ridgeDeg >= 0 ? '+' : ''}${Math.round(ridgeDeg)}°(건물 축 기준 자동), ${faces.a.name}·${faces.b.name}에 처마 끝 ${setback}m·용마루 ${ridgeGap}m 이격, ${blockRows}행 묶음마다 통로 ${aisle}m. `) +
     (targetKw > 0 && chosen.length < cands.length ? `목표 ${targetKw}kW에 맞춰 묶음 단위로 줄였습니다(전체 배치 시 ${cands.length.toLocaleString('ko-KR')}장). ` : '전체 면적에 배치했습니다. ') +
@@ -2800,7 +2837,9 @@ function generateSolarLayout(){
   const modAlong = landscape ? panelW : panelL;   // 경사 방향 치수
   const modAcross = landscape ? panelL : panelW;  // 좌우 방향 치수
   let azimuthDeg;
-  if(facingMode === 'south') azimuthDeg = 0;
+  const edgeDeg = alignEdgeAngleDeg(lastAreaPolygonPath);
+  if(edgeDeg !== null) azimuthDeg = Math.round(edgeDeg * 10) / 10; // 선택한 경계 변과 나란히(줄이 그 변을 따라감)
+  else if(facingMode === 'south') azimuthDeg = 0;
   else if(facingMode === 'axis') azimuthDeg = suggestAzimuthFromPath(lastAreaPolygonPath);
   else azimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
   document.getElementById('panelAzimuth').value = azimuthDeg;
@@ -2915,7 +2954,7 @@ function generateSolarLayout(){
   hookTableZoom(map);
   updateGroundLabel(thisGround);
 
-  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈 ${landscape ? '가로(눕힘)' : '세로(세움)'} ${arrRows}단×테이블당 가로 ${arrCols}장, 설치각 ${tiltDeg}°, 테이블 ${thisGround.tables.length}개(${tableSummaryText(thisGround)}; 테이블 깊이 ${arrDepth.toFixed(2)}m·뒤쪽 높이 ${arrHeight.toFixed(2)}m), 주향 ${facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '부지 축' : '직접 입력')}(방위각 ${azimuthDeg}°), 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈 ${landscape ? '가로(눕힘)' : '세로(세움)'} ${arrRows}단×테이블당 가로 ${arrCols}장, 설치각 ${tiltDeg}°, 테이블 ${thisGround.tables.length}개(${tableSummaryText(thisGround)}; 테이블 깊이 ${arrDepth.toFixed(2)}m·뒤쪽 높이 ${arrHeight.toFixed(2)}m), 주향 ${edgeDeg !== null ? '선택한 경계 변과 나란히' : (facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '부지 축' : '직접 입력'))}(방위각 ${azimuthDeg}°), 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
@@ -4877,6 +4916,9 @@ function renderResults(r){
     let timer = null, seq = 0, items = [], active = -1;
     const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const hide = () => { box.style.display = 'none'; box.innerHTML = ''; items = []; active = -1; };
+    // 목록을 닫고, 아직 진행 중인(늦게 도착할) 검색 결과도 무시 — "위치 확인" 뒤에 목록이 다시 떠오르는 문제 방지
+    const cancelAndHide = () => { clearTimeout(timer); seq++; hide(); };
+    window.hideAddrSuggest = cancelAndHide;
     const highlight = () => {
       Array.from(box.children).forEach((el, i) => { el.style.background = (i === active) ? 'var(--forest-dim)' : '#fff'; });
       if(active >= 0 && box.children[active]) box.children[active].scrollIntoView({ block:'nearest' });
@@ -4963,7 +5005,7 @@ function renderResults(r){
       }
       if(e.key === 'Enter'){ e.preventDefault(); clearTimeout(timer); seq++; hide(); lookupAddress(true); }
     });
-    input.addEventListener('blur', () => { setTimeout(hide, 150); });
+    input.addEventListener('blur', () => { setTimeout(cancelAndHide, 150); });
   };
   if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', setup); } else { setup(); }
 })();
