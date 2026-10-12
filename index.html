@@ -1668,8 +1668,11 @@ async function toggleClickedParcel(latlng){
   measureShapes.push(poly, label);
   const groupId = registerMeasureGroup([poly, label]);
   clickedParcels[pnu] = { groupId, path: kakaoPath, area };
+  // 클릭한 필지를 "☀️ 태양광 배치"의 경계로 설정 → 바로 "배치 생성"을 누르면 이 필지에 배치됨 (다른 필지의 기존 배치는 유지)
+  lastAreaPolygonPath = kakaoPath.slice();
+  try{ refreshAlignEdgeOptions(); }catch(e){}
   const st = document.getElementById('roadviewStatus');
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📐 ${props.addr || props.jibun || ''} — 연속지적도 경계 기준 약 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평). 다른 필지를 클릭하면 함께 표시되고, 같은 필지를 다시 클릭하거나 ✕를 누르면 사라집니다. 토지대장 공부면적과는 소수점 차이가 있을 수 있습니다.`; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📐 ${props.addr || props.jibun || ''} — 연속지적도 경계 기준 약 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평). 이 필지가 배치 경계로 잡혔습니다 — "배치 생성"을 누르면 여기에 모듈이 배치됩니다(다른 필지의 배치는 그대로 유지). 같은 필지를 다시 클릭하거나 ✕를 누르면 표시가 사라집니다. 면적은 토지대장 공부면적과 소수점 차이가 있을 수 있습니다.`; }
 }
 function removeClickedParcel(pnu){
   const c = clickedParcels[pnu]; if(!c) return;
@@ -2312,7 +2315,28 @@ function toggleAddModuleMode(){
   if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성한 뒤 모듈을 추가할 수 있습니다.'; return; }
   setMode('addmod');
   const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
-  st.textContent = '➕ 지도를 클릭하면 그 자리에 모듈 한 장이 추가됩니다(가장 가까운 배치의 방향·크기). 모듈을 클릭하면 제외/복원됩니다. 끝내려면 버튼을 다시 누르세요.';
+  st.textContent = '➕ 지도를 클릭하면 가장 가까운 모듈의 격자(모듈 크기 + 모듈간격)에 맞춰 그 자리에 모듈 한 장이 끼워집니다. 제외된 자리를 클릭하면 복원됩니다. 끝내려면 버튼을 다시 누르세요.';
+}
+// 모듈의 회전좌표계(배치 기준 x=줄 방향, y=경사 방향) 모서리 — 격자 모듈은 저장된 값, 없으면(경사지붕 등) 폴리곤 좌표에서 계산
+function modCornersRot(ed, m){
+  if(m.cornersRot && m.cornersRot.length === 4) return m.cornersRot;
+  const path = m.poly.getPath();
+  return path.map(q => { const xy = solarToXY(q, ed.lat0Rad); return rotateXY(xy.x, xy.y, -ed.azRad); });
+}
+function modCenterRot(ed, m){
+  const c = modCornersRot(ed, m);
+  return { x: c.reduce((a, q) => a + q.x, 0) / c.length, y: c.reduce((a, q) => a + q.y, 0) / c.length };
+}
+// 테이블 외곽선을 현재 소속 모듈 범위로 다시 계산(모듈을 끼워 넣어 테이블이 늘어났을 때)
+function recomputeTableOutline(ed, t){
+  let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+  t.mods.forEach(m => modCornersRot(ed, m).forEach(c => { xmin = Math.min(xmin, c.x); xmax = Math.max(xmax, c.x); ymin = Math.min(ymin, c.y); ymax = Math.max(ymax, c.y); }));
+  const pad = 0.15;
+  const rect = [{x: xmin - pad, y: ymin - pad}, {x: xmax + pad, y: ymin - pad}, {x: xmax + pad, y: ymax + pad}, {x: xmin - pad, y: ymax + pad}]
+    .map(c => rotateXY(c.x, c.y, ed.azRad)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
+  try{ t.outline.setPath(rect); }catch(e){}
+  const tiers = new Set(t.mods.map(m => m.tier)); t.tiers = tiers.size || t.tiers;
+  t.width = xmax - xmin; t.depth = ymax - ymin;
 }
 function addModuleAt(latlng){
   if(!layoutRegistry.length) return;
@@ -2325,17 +2349,50 @@ function addModuleAt(latlng){
   });
   const ed = best;
   const map = ensureKakaoMap();
-  const ctr = solarToXY(latlng, ed.lat0Rad);
+  const gap = Math.max(parseFloat((document.getElementById('panelGap') || {}).value) || 0.02, 0);
+  const stepX = ed.modW + gap, stepY = ed.modD + gap;
+  const click = solarToXY(latlng, ed.lat0Rad);
+  const clickRot = rotateXY(click.x, click.y, -ed.azRad);
+  // 근처 기존 모듈(제외된 모듈 포함)들을 기준점으로 삼아 "모듈 크기 + 모듈간격" 격자 위의 자리 후보를 만들고,
+  // 클릭 지점에 가장 가까운 후보를 고름 (테이블 사이 간격이 격자 배수가 아니어도 클릭한 쪽 테이블의 격자에 맞게 끼워짐)
+  const reach = Math.max(stepX, stepY) * 4;
+  let ref = null, refC = null, cx = clickRot.x, cy = clickRot.y, snapped = false, bestCand = Infinity;
+  ed.modules.forEach(m => {
+    const c = modCenterRot(ed, m); const d = Math.hypot(c.x - clickRot.x, c.y - clickRot.y);
+    if(d > reach) return;
+    const nx = Math.round((clickRot.x - c.x) / stepX), ny = Math.round((clickRot.y - c.y) / stepY);
+    const px = c.x + nx * stepX, py = c.y + ny * stepY;
+    const cd = Math.hypot(px - clickRot.x, py - clickRot.y) + d * 0.01; // 후보 거리 같으면 더 가까운 기준 모듈 우선
+    if(cd < bestCand){ bestCand = cd; ref = m; refC = c; cx = px; cy = py; snapped = true; }
+  });
+  const st = document.getElementById('roadviewStatus');
+  // 그 자리에 이미 모듈이 있으면: 제외된 모듈이면 복원, 살아 있으면 중복 추가하지 않음
+  const dup = ed.modules.find(m => { const c = modCenterRot(ed, m); return Math.abs(c.x - cx) < 0.05 && Math.abs(c.y - cy) < 0.05; });
+  if(dup){
+    if(dup.removed){ setModuleRemoved(dup, false); refreshLayoutLabel(ed); if(st) st.textContent = '➕ 그 자리에 제외돼 있던 모듈을 복원했습니다.'; }
+    else if(st) st.textContent = '그 자리에는 이미 모듈이 있습니다. 빈 칸을 클릭하세요.';
+    return;
+  }
   const hw = ed.modW / 2, hd = ed.modD / 2;
-  const corners = [{x: -hw, y: -hd}, {x: hw, y: -hd}, {x: hw, y: hd}, {x: -hw, y: hd}].map(c => { const r = rotateXY(c.x, c.y, ed.azRad); return { x: ctr.x + r.x, y: ctr.y + r.y }; });
-  const path = corners.map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
+  const cr = [{x: cx - hw, y: cy - hd}, {x: cx + hw, y: cy - hd}, {x: cx + hw, y: cy + hd}, {x: cx - hw, y: cy + hd}];
+  const path = cr.map(c => rotateXY(c.x, c.y, ed.azRad)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
   const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: ed.fill, fillOpacity: 0.62 });
   measureShapes.push(poly);
   if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(poly);
-  const m = { poly, removed: false, face: 'a', added: true, line: 'added', color: ed.fill };
+  // 격자에 맞춘 경우: 기준 모듈과 같은 테이블·같은 단(y가 같으면)으로 편입 → 테이블 외곽선이 늘어남. 아니면 'added'
+  let table = null, tier = 0;
+  if(snapped && ref && ref.table){
+    table = ref.table; tier = (ref.tier || 0) + Math.round((cy - refC.y) / stepY);
+  }
+  const m = { poly, removed: false, face: (ref && ref.face) || 'a', added: true, line: table ? 'g-' + table : 'added', table, tier, cornersRot: cr, color: ed.fill };
   ed.modules.push(m); if(ed.mods && ed.mods !== ed.modules) ed.mods.push(m);
   try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
+  if(table && Array.isArray(ed.tables)){
+    const t = ed.tables.find(x => x.id === table);
+    if(t){ t.mods.push(m); recomputeTableOutline(ed, t); }
+  }
   refreshLayoutLabel(ed);
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = snapped ? '➕ 가장 가까운 모듈의 격자(모듈 크기 + 모듈간격)에 맞춰 한 장을 끼워 넣었습니다. 계속 클릭해 추가하거나 버튼을 눌러 끝내세요.' : '➕ 근처에 기준 모듈이 없어 클릭한 자리에 그대로 놓았습니다(방향·크기는 배치와 동일).'; }
 }
 // 지상 배치 라벨(클릭으로 모듈을 빼면 즉시 갱신) — 음영 지는 자리·장애물 자리를 눌러 제외하는 용도
 let groundEdit = null;
