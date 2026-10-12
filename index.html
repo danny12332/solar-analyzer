@@ -542,7 +542,7 @@
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
           <label id="modOrientLabel" style="font-size:11.5px;color:var(--ink-soft);" title="가로(눕힘): 모듈 긴 변이 좌우, 짧은 변이 경사 방향으로 N단 쌓임 · 세로(세움): 모듈 긴 변이 경사 방향">모듈 방향 <select id="modOrient" style="padding:2px 4px;"><option value="landscape" selected>가로(눕힘)</option><option value="portrait">세로(세움)</option></select></label>
           <label id="alignEdgeLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(줄)을 어느 경계 변과 나란히 놓을지. 자동 = 지상은 주향 설정, 건물은 긴 변 기준. 변 길이는 지도에 표시된 변 길이(m)와 같습니다">방향 기준 변 <select id="alignEdge" style="padding:2px 4px;" onfocus="refreshAlignEdgeOptions()" onmousedown="refreshAlignEdgeOptions()"><option value="auto" selected>자동</option></select></label>
-          <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선과 'N단×M장' 라벨을 지도에 표시"><input id="showTables" type="checkbox" checked style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선·라벨</label>
+          <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선을 지도에 표시"><input id="showTables" type="checkbox" checked style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선</label>
           <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="3" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
           <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
           <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
@@ -574,8 +574,13 @@
           <div class="layout-tools" id="layoutTools" style="display:none;">
             <button type="button" onclick="startBuildingEdit()" title="꼭짓점을 끌어 지붕·부지 모양에 맞춥니다 (주소 검색 시 필지 경계가 기본)">✏ 테두리 조정</button>
             <button type="button" class="primary" onclick="onGenerateLayoutClick()">🏗 배치 생성</button>
-            <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가">➕ 추가</button>
-            <button type="button" id="delLineBtn" onclick="toggleLineDeleteMode()" title="모듈을 클릭하면 그 줄(열·테이블) 전체 제외/복원">🗑 줄 제거</button>
+            <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈을 클릭하면 한 장씩 제외/복원)">➕ 모듈 추가</button>
+            <span id="addTableWrap" style="display:inline-flex;align-items:center;gap:3px;">
+              <button type="button" id="addTableBtn" onclick="toggleAddTableMode()" title="단 수와 가로 장수를 고른 뒤 지도를 클릭하면 그 자리에 테이블 하나가 놓입니다 (기존 배치와 같은 방향·모듈 크기)">➕ 테이블 추가</button>
+              <select id="addTableRows" title="추가할 테이블의 단 수" style="padding:2px 3px;font-size:11.5px;"><option value="1">1단</option><option value="2" selected>2단</option><option value="3">3단</option><option value="4">4단</option><option value="5">5단</option><option value="6">6단</option></select>
+              <span style="font-size:11.5px;">×</span><input id="addTableCols" type="number" value="10" min="1" max="60" step="1" title="추가할 테이블의 가로 장수" style="width:40px;padding:2px 3px;font-size:11.5px;"><span style="font-size:11.5px;">장</span>
+            </span>
+            <button type="button" id="delLineBtn" onclick="toggleLineDeleteMode()" title="모듈을 클릭하면 그 모듈이 속한 테이블(줄) 전체 제외/복원">🗑 테이블 제거</button>
             <button type="button" id="delRectBtn" onclick="toggleRectDeleteMode()" title="두 모서리를 클릭한 사각형 안의 모듈을 모두 제외">⬚ 영역 제거</button>
             <button type="button" onclick="clearLayoutAndOutline()" title="테두리와 배치를 지웁니다">🧹 지우기</button>
           </div>
@@ -1605,6 +1610,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'radius'){ addRadiusPoint(mouseEvent.latLng); }
     else if(mapMode === 'building'){ pickBuildingAt(mouseEvent.latLng); }
     else if(mapMode === 'addmod'){ addModuleAt(mouseEvent.latLng); }
+    else if(mapMode === 'addtable'){ addTableAt(mouseEvent.latLng); }
     else if(mapMode === 'delrect'){ rectDeleteClick(mouseEvent.latLng); }
     else if(mapMode === 'delline'){ /* 모듈 클릭으로만 동작 */ }
     else {
@@ -1726,8 +1732,8 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','delrect','delline'].includes(mode));
-    [['addModBtn','addmod'],['delLineBtn','delline'],['delRectBtn','delrect']].forEach(([id, md]) => {
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline'].includes(mode));
+    [['addModBtn','addmod'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
     });
@@ -2069,42 +2075,35 @@ function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRo
 // ===== 테이블(어레이 구조물) 오버레이: 같은 테이블에 속한 모듈을 묶어 외곽선 + "N단×M장" 라벨을 표시 =====
 // mods: [{poly, removed, table:'r-t', tier:k, ...}], rotToReal: 회전좌표→실좌표 함수, cornersRotOf: 모듈 → 회전좌표 모서리 4개
 function buildTableOverlays(ed, mods, cornersRotOf, rotToReal, opts){
-  const map = ensureKakaoMap();
-  const o = opts || {};
   const byTable = {};
   mods.forEach(m => { if(!m.table) return; (byTable[m.table] = byTable[m.table] || []).push(m); });
-  const show = tableOverlaysOn();
-  ed.tables = Object.keys(byTable).map(id => {
-    const list = byTable[id];
-    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
-    const tiers = new Set(), cols = {};
-    list.forEach(m => {
-      cornersRotOf(m).forEach(c => { xmin = Math.min(xmin, c.x); xmax = Math.max(xmax, c.x); ymin = Math.min(ymin, c.y); ymax = Math.max(ymax, c.y); });
-      tiers.add(m.tier); cols[m.tier] = (cols[m.tier] || 0) + 1;
-    });
-    const pad = 0.15; // 외곽선을 모듈 바깥으로 살짝 띄움(m)
-    const rect = [{x: xmin - pad, y: ymin - pad}, {x: xmax + pad, y: ymin - pad}, {x: xmax + pad, y: ymax + pad}, {x: xmin - pad, y: ymax + pad}]
-      .map(c => rotToReal(c.x, c.y)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
-    const outline = new kakao.maps.Polygon({ map: show ? map : null, path: rect, strokeWeight: 2, strokeColor: o.stroke || '#FFD23F', strokeOpacity: 0.95, strokeStyle: 'solid', fillColor: '#FFFFFF', fillOpacity: 0, zIndex: 3 });
-    const ctr = rotToReal((xmin + xmax) / 2, (ymin + ymax) / 2);
-    const label = new kakao.maps.CustomOverlay({ position: solarToLatLng(ctr.x, ctr.y, ed.lat0Rad), content: '', xAnchor: 0.5, yAnchor: 0.5, clickable: false, zIndex: 4 });
-    const lvl = (map && typeof map.getLevel === 'function') ? map.getLevel() : 1;
-    if(show && lvl <= 3) label.setMap(map);
-    measureShapes.push(outline, label);
-    if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(outline, label);
-    const t = { id, mods: list, outline, label, tiers: tiers.size, cols: Math.max(...Object.values(cols)), width: xmax - xmin, depth: ymax - ymin };
-    return t;
-  });
+  ed.tables = Object.keys(byTable).map(id => makeTableOverlay(ed, id, byTable[id], rotToReal, opts));
   ed.tables.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
   updateTableLabels(ed);
 }
+// 테이블 하나의 외곽선(노란 선)을 만들어 등록. 모듈 수·용량 라벨은 표시하지 않음(사용자 요청: 줄마다 표기 불필요)
+function makeTableOverlay(ed, id, list, rotToReal, opts){
+  const map = ensureKakaoMap();
+  const o = opts || {};
+  let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+  const tiers = new Set(), cols = {};
+  list.forEach(m => {
+    (m.cornersRot || []).forEach(c => { xmin = Math.min(xmin, c.x); xmax = Math.max(xmax, c.x); ymin = Math.min(ymin, c.y); ymax = Math.max(ymax, c.y); });
+    tiers.add(m.tier); cols[m.tier] = (cols[m.tier] || 0) + 1;
+  });
+  const pad = 0.15; // 외곽선을 모듈 바깥으로 살짝 띄움(m)
+  const rect = [{x: xmin - pad, y: ymin - pad}, {x: xmax + pad, y: ymin - pad}, {x: xmax + pad, y: ymax + pad}, {x: xmin - pad, y: ymax + pad}]
+    .map(c => rotToReal(c.x, c.y)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
+  const outline = new kakao.maps.Polygon({ map: tableOverlaysOn() ? map : null, path: rect, strokeWeight: 2, strokeColor: o.stroke || '#FFD23F', strokeOpacity: 0.95, strokeStyle: 'solid', fillColor: '#FFFFFF', fillOpacity: 0, zIndex: 3 });
+  measureShapes.push(outline);
+  if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(outline);
+  return { id, mods: list, outline, tiers: tiers.size, cols: Math.max(...Object.values(cols)), width: xmax - xmin, depth: ymax - ymin };
+}
+// 테이블 상태 반영: 모듈이 모두 제외된 테이블은 외곽선을 회색으로
 function updateTableLabels(ed){
   if(!ed || !Array.isArray(ed.tables)) return;
   ed.tables.forEach(t => {
-    const live = t.mods.filter(m => !m.removed).length;
-    const kw = live * ed.wattPerPanel / 1000;
-    const dead = live === 0;
-    t.label.setContent(`<div style="pointer-events:none;background:${dead ? 'rgba(120,120,120,.75)' : 'rgba(255,210,63,.92)'};color:${dead ? '#fff' : '#1b1b1b'};padding:1px 5px;border-radius:3px;font-size:10px;font-family:'IBM Plex Mono',monospace;line-height:1.3;white-space:nowrap;${dead ? 'text-decoration:line-through;' : ''}">${t.tiers}단×${t.cols}장${live < t.mods.length && !dead ? `(${live})` : ''} · ${kw.toLocaleString('ko-KR', {maximumFractionDigits:1})}kW</div>`);
+    const dead = t.mods.every(m => m.removed);
     try{ t.outline.setOptions({ strokeOpacity: dead ? 0.35 : 0.95, strokeColor: dead ? '#9A9A9A' : '#FFD23F' }); }catch(e){}
   });
 }
@@ -2113,17 +2112,57 @@ function tableOverlaysOn(){ const el = document.getElementById('showTables'); re
 function toggleTableOverlays(){
   const on = tableOverlaysOn();
   let map = null; try{ map = ensureKakaoMap(); }catch(e){ return; }
-  const lvl = (map && typeof map.getLevel === 'function') ? map.getLevel() : 1;
-  layoutRegistry.forEach(ed => (ed.tables || []).forEach(t => {
-    t.outline.setMap(on ? map : null);
-    t.label.setMap(on && lvl <= 3 ? map : null);
-  }));
+  layoutRegistry.forEach(ed => (ed.tables || []).forEach(t => { t.outline.setMap(on ? map : null); }));
 }
-let tableZoomHooked = false;
-function hookTableZoom(map){
-  if(tableZoomHooked || !map) return;
-  tableZoomHooked = true;
-  try{ kakao.maps.event.addListener(map, 'zoom_changed', toggleTableOverlays); }catch(e){}
+function hookTableZoom(map){ /* 라벨을 표시하지 않으므로 줌 연동 불필요 */ }
+
+// ===== ➕ 테이블 추가: 단 수·가로 장수를 고르고 지도를 클릭하면 그 자리에 테이블 하나를 놓음 (가장 가까운 배치의 방향·모듈 크기 사용) =====
+let addTableSeq = 0;
+function toggleAddTableMode(){
+  if(mapMode === 'addtable'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
+  if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 "배치 생성"으로 배치를 만든 뒤 테이블을 추가할 수 있습니다(방향·모듈 크기를 그 배치에서 가져옵니다).'; return; }
+  setMode('addtable');
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = '➕ 테이블 추가: 옆의 단 수·가로 장수를 고른 뒤 지도를 클릭하면 클릭한 자리를 중심으로 테이블 하나가 놓입니다. 끝내려면 버튼을 다시 누르세요.';
+}
+function addTableAt(latlng){
+  if(!layoutRegistry.length) return;
+  let best = null, bestD = Infinity;
+  layoutRegistry.forEach(ed => {
+    const c = ed.boundary; const cl = c.reduce((s, p) => s + p.getLat(), 0) / c.length, cg = c.reduce((s, p) => s + p.getLng(), 0) / c.length;
+    const d = haversineMeters(latlng, new kakao.maps.LatLng(cl, cg));
+    if(d < bestD){ bestD = d; best = ed; }
+  });
+  const ed = best;
+  const map = ensureKakaoMap();
+  const rows = Math.max(1, parseInt((document.getElementById('addTableRows') || {}).value, 10) || 2);
+  const cols = Math.max(1, parseInt((document.getElementById('addTableCols') || {}).value, 10) || 10);
+  const gap = Math.max(parseFloat((document.getElementById('panelGap') || {}).value) || 0.02, 0);
+  const ctr = solarToXY(latlng, ed.lat0Rad);
+  const ctrRot = rotateXY(ctr.x, ctr.y, -ed.azRad); // 배치의 회전 좌표계(x=줄 방향, y=경사 방향)
+  const W = cols * ed.modW + (cols - 1) * gap, D = rows * ed.modD + (rows - 1) * gap;
+  const x0 = ctrRot.x - W / 2, y0 = ctrRot.y - D / 2;
+  const id = 'add-' + (++addTableSeq);
+  const list = [];
+  for(let k = 0; k < rows; k++){
+    for(let i = 0; i < cols; i++){
+      const xa = x0 + i * (ed.modW + gap), ya = y0 + k * (ed.modD + gap);
+      const cr = [{x: xa, y: ya}, {x: xa + ed.modW, y: ya}, {x: xa + ed.modW, y: ya + ed.modD}, {x: xa, y: ya + ed.modD}];
+      const path = cr.map(c => rotateXY(c.x, c.y, ed.azRad)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
+      const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: ed.fill, fillOpacity: 0.62 });
+      measureShapes.push(poly);
+      if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(poly);
+      const m = { poly, removed: false, face: 'a', added: true, line: 'g-' + id, table: id, tier: k, cornersRot: cr, color: ed.fill };
+      ed.modules.push(m); if(ed.mods && ed.mods !== ed.modules) ed.mods.push(m);
+      try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
+      list.push(m);
+    }
+  }
+  if(!Array.isArray(ed.tables)) ed.tables = [];
+  ed.tables.push(makeTableOverlay(ed, id, list, (x, y) => rotateXY(x, y, ed.azRad)));
+  refreshLayoutLabel(ed);
+  const st = document.getElementById('roadviewStatus');
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `➕ ${rows}단×${cols}장 테이블(${(rows * cols * ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits:1})}kW)을 추가했습니다. 계속 클릭해 추가하거나 버튼을 눌러 끝내세요. 잘못 놓았으면 "🗑 테이블 제거"로 그 테이블을 클릭해 빼세요.`; }
 }
 function tableSummaryText(ed){
   if(!ed || !ed.tables || !ed.tables.length) return '';
@@ -2147,7 +2186,7 @@ function moduleClicked(m){
     // 모듈 위를 클릭해도 사각형 모서리로 인정
     const p = m.poly.getPath(); const cl = p.reduce((s, q) => s + q.getLat(), 0) / p.length, cg = p.reduce((s, q) => s + q.getLng(), 0) / p.length;
     rectDeleteClick(new kakao.maps.LatLng(cl, cg)); return;
-  } else if(mapMode === 'addmod'){
+  } else if(mapMode === 'addmod' || mapMode === 'addtable'){
     return;
   } else {
     setModuleRemoved(m, !m.removed);
@@ -2159,7 +2198,7 @@ function toggleLineDeleteMode(){
   if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성하세요.'; return; }
   setMode('delline');
   const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
-  st.textContent = '🗑 줄 단위 제거: 모듈을 클릭하면 그 모듈이 속한 줄(열·테이블) 전체가 제외됩니다. 제외된 줄을 다시 클릭하면 복원됩니다. 끝내려면 버튼을 다시 누르세요.';
+  st.textContent = '🗑 테이블 제거: 모듈을 클릭하면 그 모듈이 속한 테이블(줄) 전체가 제외됩니다. 제외된 테이블을 다시 클릭하면 복원됩니다. 한 장씩 빼려면 이 모드를 끄고 모듈을 바로 클릭하세요. 끝내려면 버튼을 다시 누르세요.';
 }
 // ⬚ 영역 제거: 지도에서 두 점을 클릭해 사각형을 지정하면 그 안의 모듈이 모두 제외됨 (그늘 지는 구역을 한 번에)
 let delRectFirst = null, delRectPreview = null;
@@ -2212,7 +2251,7 @@ function addModuleAt(latlng){
   measureShapes.push(poly);
   if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(poly);
   const m = { poly, removed: false, face: 'a', added: true, line: 'added', color: ed.fill };
-  ed.modules.push(m);
+  ed.modules.push(m); if(ed.mods && ed.mods !== ed.modules) ed.mods.push(m);
   try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
   refreshLayoutLabel(ed);
 }
@@ -5048,6 +5087,7 @@ function renderResults(r){
 const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역시청 부근(기본 위치)' };
 (function initMapOnLoad(){
   const run = () => {
+    try{ onMountTypeChange(); }catch(e){ console.warn('mount opts init', e); } // 단 수·테이블당 가로 등 배치 대상별 옵션을 첫 화면부터 표시
     if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.Map){ return; }
     let saved = null;
     try{ saved = JSON.parse(localStorage.getItem('solarLastSite') || 'null'); }catch(e){}
