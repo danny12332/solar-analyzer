@@ -994,6 +994,43 @@ const JIMOK_NAME_TO_CAT = { '전':'farm','답':'farm','과수원':'farm','목장
 const JIMOK_NAME_NOT_DEV = ['도로','철도용지','제방','하천','구거','유지','양어장','수도용지','공원','체육용지','유원지','종교용지','사적지','묘지'];
 const LANDUSE_BLOCKERS = ['농업진흥구역','보전산지','공익용산지','임업용산지','산지전용·일시사용제한지역','개발제한구역','자연공원','국립공원','도립공원','군립공원','상수원보호구역','백두대간보호지역','문화재보호구역','생태·경관보전지역','생태경관보전지역','습지보호지역','수변구역','군사기지 및 군사시설 보호구역','군사시설보호구역'];
 function escLand(t){ return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ===== 토지이용계획 규제 판정: 조회된 "토지이용계획" 항목 중 태양광 입지에 걸리는 구역을 찾아 판정·설명을 만든다 =====
+// level: 'block' = 원칙적 불허(핵심 요약 도장이 "원칙적 불허"로 바뀜), 'check' = 확인 필요. 관계(포함/저촉/접함)별로 구분.
+//   포함 = 필지 전체가 구역 안 → block / 저촉 = 일부가 구역 안 → 저촉 부분 제외 검토(block 아님, need) / 접함 = 경계만 닿음 → 정보 표시만
+const LANDUSE_RULES = [
+  { match: ['개발제한구역'], title: '개발제한구역',
+    short: '개발제한구역 — 노지(토지) 태양광 발전시설 설치가 원칙적으로 불가합니다.',
+    desc: '「개발제한구역의 지정 및 관리에 관한 특별조치법」 제12조에 따라 개발제한구역에서는 건축물 건축·공작물 설치·토지 형질변경이 원칙적으로 금지되고, 같은 법 시행령 [별표 1]에 열거된 행위만 허가(일부 신고)로 할 수 있습니다. 태양에너지 설비는 [별표 1] 제2호 자목의 전기공급설비(기반시설)로 분류되어 원칙적으로 도시·군계획시설로 결정된 경우에만 설치할 수 있고, 기존 건축물(그 대지 포함)·공작물·도시·군계획시설 부지에 설치하는 경우에만 도시·군계획시설 결정 없이 허가로 설치할 수 있습니다(같은 목 다목). 따라서 토지 위에 발전소를 짓는 노지 태양광은 사실상 불가하며, 기존 건물의 지붕·옥상 설치만 검토할 수 있습니다(주택 지붕·옥상에 수평투영면적 50㎡ 이하로 설치하는 경우는 2025.3. 시행령 개정으로 신고 대상 — 국토교통부 보도자료 기준). 관할 구청 개발제한구역 담당부서에 최종 확인하세요.' },
+  { match: ['농업진흥구역'], title: '농업진흥구역',
+    short: '농업진흥구역 — 노지 태양광 발전시설 설치가 원칙적으로 불허됩니다.',
+    desc: '「농지법」 제32조에 따라 농업진흥구역에서는 농업 생산·농지 개량과 직접 관련되지 않은 행위가 제한되어, 발전사업용 노지 태양광은 원칙적으로 설치할 수 없습니다. 농업보호구역이나 진흥지역 밖 농지와 달리 전용 자체가 허용되지 않으므로, 진흥구역 해제 여부나 영농형 등 예외 요건을 관할 농지 담당부서에 확인하세요.' },
+  { match: ['보전산지', '공익용산지', '임업용산지'], title: '보전산지(임업용·공익용)',
+    short: '보전산지 — 태양광 발전시설 설치가 원칙적으로 불허됩니다.',
+    desc: '「산지관리법」상 보전산지(임업용산지·공익용산지)에서는 태양에너지 발전시설 설치가 허용행위에 포함되지 않아 산지전용·일시사용허가를 받을 수 없습니다(준보전산지에서만 산지일시사용허가 가능). 필지 중 보전산지 부분을 제외한 준보전산지 범위만 검토 대상입니다.' },
+  { match: ['자연공원', '국립공원', '도립공원', '군립공원'], title: '자연공원', short: '자연공원구역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '「자연공원법」에 따라 공원구역 안에서는 공원계획에 포함되지 않은 시설 설치가 제한됩니다. 공원관리청에 확인이 필요합니다.' },
+  { match: ['상수원보호구역'], title: '상수원보호구역', short: '상수원보호구역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '「수도법」 제7조에 따라 상수원보호구역에서는 건축물·공작물 설치와 토지 형질변경이 제한됩니다. 관할 환경·수도 담당부서에 허용 여부를 확인하세요.' },
+  { match: ['백두대간보호지역'], title: '백두대간보호지역', short: '백두대간보호지역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '「백두대간 보호에 관한 법률」에 따라 보호지역 안의 개발행위가 제한됩니다. 산림청·관할 지자체 확인이 필요합니다.' },
+  { match: ['군사기지 및 군사시설 보호구역', '군사시설보호구역'], title: '군사시설 보호구역', level: 'check', short: '군사시설 보호구역 — 군부대 협의 필요', desc: '「군사기지 및 군사시설 보호법」에 따라 건축·공작물 설치 시 관할부대 협의(동의)가 필요합니다. 협의 결과에 따라 불허될 수 있습니다.' },
+  { match: ['문화재보호구역', '역사문화환경보존지역'], title: '문화재(역사문화환경) 구역', level: 'check', short: '문화재·역사문화환경 구역 — 현상변경 허가/영향 검토 필요', desc: '문화유산 관련 법령에 따라 현상변경 허가 또는 영향검토 대상이 될 수 있습니다. 관할 문화재 담당부서에 확인하세요.' },
+  { match: ['생태·경관보전지역', '생태경관보전지역', '습지보호지역', '수변구역'], title: '생태·경관·습지·수변 보전구역', short: '생태·경관보전지역/습지보호지역/수변구역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '해당 법령(자연환경보전법·습지보전법·수계 물관리법 등)에 따라 건축물·공작물 설치와 형질변경이 제한됩니다. 관할 환경청·지자체 확인이 필요합니다.' },
+];
+function landUseRegulationFlags(){
+  const out = [];
+  if(!lastLandInfo || !Array.isArray(lastLandInfo.uses)) return out;
+  lastLandInfo.uses.forEach(u => {
+    const rule = LANDUSE_RULES.find(r => r.match.some(m => u.name.includes(m)));
+    if(!rule) return;
+    const rel = /포함/.test(u.rel) ? 'incl' : (/저촉/.test(u.rel) ? 'part' : 'touch');
+    const baseLevel = rule.level || 'block';
+    let level, title, desc;
+    if(rel === 'incl'){ level = baseLevel; title = `${u.name} 포함 — ${rule.short.split(' — ')[1] || rule.short}`; desc = rule.desc; }
+    else if(rel === 'part'){ level = baseLevel === 'block' ? 'need' : 'check'; title = `${u.name} 저촉 — 저촉 부분은 ${baseLevel === 'block' ? '설치 불가, 나머지 부분만' : '협의 대상,'} 검토`; desc = `필지 일부가 ${u.name}에 걸립니다(저촉). ` + rule.desc + ' 저촉 범위는 토지이음 도면에서 확인하세요.'; }
+    else { level = 'info'; title = `${u.name} 접함 — 경계만 닿음`; desc = `필지 경계가 ${u.name}에 접해 있습니다(필지 자체는 구역 밖). 구역 경계 인접에 따른 협의·이격 요건이 있는지 관할 부서에 확인하세요.`; }
+    out.push({ name: u.name, rel, level, title, desc, short: rule.short });
+  });
+  return out;
+}
 function renderLandInfoPanel(info, pnu){
   const wrap = document.getElementById('landInfoPanel');
   if(!wrap) return;
@@ -1596,6 +1633,49 @@ async function showParcelBoundary(){
 
 lookupAddress(false);
 
+// ===== 필지 클릭 면적 표시: 클릭한 지점의 필지(브이월드 연속지적도)를 주황 테두리로 그리고 지번·면적(㎡)·평수를 라벨로 표시 =====
+// 면적은 경계 좌표로 계산한 값(연속지적도 기준)이라 토지대장 공부면적과 소수점 차이가 날 수 있음.
+const clickedParcels = {}; // pnu → { groupId, path }
+let clickedParcelSeq = 0;
+async function toggleClickedParcel(latlng){
+  if(mapMode !== 'normal') return;
+  const seq = ++clickedParcelSeq;
+  const data = await vworldJsonp({
+    service: 'data', version: '2.0', request: 'GetFeature', format: 'json', errorformat: 'json', size: '1', page: '1',
+    data: 'LP_PA_CBND_BUBUN', geomFilter: `POINT(${latlng.getLng()} ${latlng.getLat()})`,
+    columns: 'pnu,jibun,ag_geom,addr', geometry: 'true', attribute: 'true', crs: 'EPSG:4326', domain: VWORLD_DOMAIN, key: VWORLD_KEY
+  });
+  if(seq !== clickedParcelSeq) return; // 그 사이 다른 곳을 클릭했으면 무시
+  const resp = data && data.response;
+  const feat = resp && resp.status === 'OK' && resp.result && resp.result.featureCollection && resp.result.featureCollection.features && resp.result.featureCollection.features[0];
+  if(!feat) return;
+  const props = feat.properties || {};
+  const path = parseVworldGeom(feat.geometry) || parseVworldGeom(props.ag_geom);
+  if(!path || path.length < 3) return;
+  const pnu = props.pnu || (props.addr || props.jibun || '') || String(seq);
+  if(clickedParcels[pnu]){ removeClickedParcel(pnu); return; } // 같은 필지 다시 클릭 → 숨김
+  const map = ensureKakaoMap();
+  const kakaoPath = path.map(q => new kakao.maps.LatLng(q.lat, q.lng));
+  const area = shoelaceArea(kakaoPath);
+  const pyeong = area / PYEONG_M2;
+  const poly = new kakao.maps.Polygon({ map, path: kakaoPath, strokeWeight: 2.5, strokeColor: '#E8702A', strokeOpacity: 0.95, strokeStyle: 'solid', fillColor: '#E8702A', fillOpacity: 0.10, zIndex: 2 });
+  // 라벨 위치: 필지 중심
+  const cl = kakaoPath.reduce((s, q) => s + q.getLat(), 0) / kakaoPath.length, cg = kakaoPath.reduce((s, q) => s + q.getLng(), 0) / kakaoPath.length;
+  const jibunShort = (props.addr || props.jibun || '').split(' ').slice(-2).join(' ');
+  const content = `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:7px;background:rgba(232,112,42,.95);color:#fff;padding:4px 9px;border-radius:5px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);"><span>${escLand(jibunShort)} · <b>${Math.round(area).toLocaleString('ko-KR')}㎡</b> (${Math.round(pyeong).toLocaleString('ko-KR')}평)</span>${closeBtnHtml(`removeClickedParcel('${String(pnu).replace(/'/g, '')}')`)}</div>`;
+  const label = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(cl, cg), content, xAnchor: 0.5, yAnchor: 0.5, zIndex: 30, clickable: true });
+  label.setMap(map);
+  measureShapes.push(poly, label);
+  const groupId = registerMeasureGroup([poly, label]);
+  clickedParcels[pnu] = { groupId, path: kakaoPath, area };
+  const st = document.getElementById('roadviewStatus');
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📐 ${props.addr || props.jibun || ''} — 연속지적도 경계 기준 약 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평). 다른 필지를 클릭하면 함께 표시되고, 같은 필지를 다시 클릭하거나 ✕를 누르면 사라집니다. 토지대장 공부면적과는 소수점 차이가 있을 수 있습니다.`; }
+}
+function removeClickedParcel(pnu){
+  const c = clickedParcels[pnu]; if(!c) return;
+  removeMeasureGroup(c.groupId); delete clickedParcels[pnu];
+}
+
 function ensureKakaoMap(){
   if(kakaoMapObj) return kakaoMapObj;
   const container = document.getElementById('kakaoMap');
@@ -1617,6 +1697,8 @@ function ensureKakaoMap(){
       setMarkerPosition(mouseEvent.latLng);
       // 로드뷰가 열려있는 상태라면 새로 클릭한 지점으로 바로 갱신
       if(roadviewOn){ showRoadviewStage(); }
+      // 클릭한 필지의 경계와 면적(㎡·평)을 표시 (여러 필지를 차례로 클릭해 비교 가능, 같은 필지를 다시 클릭하면 숨김)
+      try{ toggleClickedParcel(mouseEvent.latLng); }catch(e){ console.warn('clicked parcel', e); }
     }
   });
   // 오른쪽 클릭으로 거리재기·면적재기·반경재기 종료 (버튼을 다시 누르지 않아도 됨)
@@ -3305,6 +3387,7 @@ function clearMeasurements(){
   clearPreview();
   measureShapes.forEach(s => s.setMap(null));
   measureShapes = [];
+  for(const k in clickedParcels){ delete clickedParcels[k]; }
   for(const id in measureGroups){ delete measureGroups[id]; }
   distancePoints = []; distancePolyline = null; distanceLabel = null; currentDistanceGroupId = null;
   distanceVertexMarkers = [];
@@ -4615,6 +4698,9 @@ function runAnalysis(){
   if(cat === 'farm' && farmZone === 'core') absoluteBlock = '농업진흥구역(절대농지) — 노지 태양광 발전시설 설치가 원칙적으로 불허됩니다 (지붕형 등 예외 있음).';
   if(cat === 'forest' && forestType === 'bo') absoluteBlock = '보전산지 — 발전시설 설치가 원칙적으로 불허됩니다.';
   if(zone.restrict) absoluteBlock = absoluteBlock || `${zone.label} — 발전시설 설치가 원칙적으로 제한됩니다.`;
+  // 토지이용계획(토지이음 조회 결과)에 개발제한구역 등이 "포함"이면 원칙적 불허로 판정
+  const landFlags = landUseRegulationFlags();
+  landFlags.filter(f => f.level === 'block').forEach(f => { if(!absoluteBlock) absoluteBlock = f.short; });
 
   // 부담금 계산
   let chargeRows = [];
@@ -4656,9 +4742,16 @@ function runAnalysis(){
   else if(eiaTarget || disasterTarget){ stampClass='warn'; stampText='조건부\n검토'; }
 
   const checklist = [];
-  if(absoluteBlock){
+  if(absoluteBlock && !landFlags.some(f => f.level === 'block' && f.short === absoluteBlock)){
     checklist.push({ tag:'need', title:'절대/원칙적 제한 지역', desc:absoluteBlock });
   }
+  // 토지이용계획 규제 항목(개발제한구역 등): 포함 → 불허(⛔), 저촉 → 일부 제외 검토, 접함 → 참고
+  landFlags.forEach(f => {
+    if(f.level === 'info') return;
+    checklist.push({ tag: (f.level === 'block' || f.level === 'need') ? 'need' : 'check', title: f.title, desc: f.desc, landuse: true });
+  });
+  const touchFlags = landFlags.filter(f => f.level === 'info');
+  if(touchFlags.length) checklist.push({ tag:'check', title: touchFlags.map(f => f.name).join(', ') + ' 접함 — 경계만 닿음', desc: touchFlags.map(f => f.desc).join(' '), landuse: true });
   checklist.push({
     tag: overScale ? 'need' : 'clear',
     title: `개발행위허가 (${useLocal ? '지자체 조례 기준' : '국토계획법 기준'})`,
@@ -4691,6 +4784,7 @@ function runAnalysis(){
 
   const reco = [];
   if(absoluteBlock) reco.push('현재 조건으로는 원칙적으로 설치가 어렵습니다. 지붕형 등 예외 규정이나 부지 변경을 검토하세요.');
+  if(landFlags.some(f => f.name.includes('개발제한구역') && f.level === 'block')) reco.push('개발제한구역 필지는 노지 발전소 대신 구역 내 기존 건물(공장·창고·주택) 지붕·옥상 설치로 방향을 바꾸거나, 구역 밖 필지로 부지를 변경하는 것이 현실적입니다.');
   if(overScale) reco.push('면적을 허가 규모 상한 이내로 조정하거나, 도시계획위원회 심의 등 규모 제한 예외 절차를 검토하세요.');
   if(eiaTarget) reco.push('소규모환경영향평가 협의 절차(통상 3~6개월)를 사업 일정에 반영하고, 인접 필지 합산 여부도 함께 확인하세요.');
   if(cat === 'forest' && forestType === 'jun') reco.push('준보전산지는 산지일시사용허가(최대 20년) 대상이며, 만료 후 원상복구 의무와 지목변경 불가 조건을 지주에게 미리 설명하는 것이 좋습니다.');
@@ -4832,7 +4926,7 @@ function buildSummaryHtml(r){
   }
 
   // 핵심 결론: 체크리스트에서 불허/확인필요 항목
-  const flags = r.checklist.filter(c => c.tag !== 'clear').map(c => `<li class="sum-flag ${c.tag}">${c.tag === 'need' ? '⛔' : '⚠'} ${c.title}</li>`).join('');
+  const flags = r.checklist.filter(c => c.tag !== 'clear').map(c => `<li class="sum-flag ${c.tag}"${c.landuse ? ' style="border-radius:8px;white-space:normal;line-height:1.45;"' : ''}>${c.tag === 'need' ? '⛔' : '⚠'} <b>${c.title}</b>${c.landuse ? `<div style="font-weight:400;font-size:11.5px;margin-top:3px;">${c.desc}</div>` : ''}</li>`).join('');
 
   return `
     <div class="card sum-card">
@@ -4843,7 +4937,7 @@ function buildSummaryHtml(r){
       <div class="sum-grid">
         <div class="sum-row"><span class="sum-k">위치</span><span class="sum-v">${addr}${pnu ? ` <span class="sum-muted">PNU ${pnu}</span>` : ''}</span></div>
         <div class="sum-row"><span class="sum-k">토지</span><span class="sum-v">지목 <b>${jimok}</b> · <b>${r.area.toLocaleString('ko-KR')}㎡</b> (약 ${py.toLocaleString('ko-KR')}평, ${areaSrc}) · <b>${r.zone.label}</b> · 공시지가 ${price.toLocaleString('ko-KR')}원/㎡ (${priceSrc})</span></div>
-        <div class="sum-row"><span class="sum-k">인허가</span><span class="sum-v">개발행위허가 규모 상한 ${fmtArea(r.effectiveLimit)} → <b>${r.area > r.effectiveLimit ? '규모 초과' : '상한 이내'}</b>${r.absoluteBlock ? ' · <b style="color:var(--coral);">즉시 탈락 사유 있음</b>' : ''}</span></div>
+        <div class="sum-row${r.absoluteBlock ? ' warn' : ''}"><span class="sum-k">인허가</span><span class="sum-v">개발행위허가 규모 상한 ${fmtArea(r.effectiveLimit)} → <b>${r.area > r.effectiveLimit ? '규모 초과' : '상한 이내'}</b>${r.absoluteBlock ? `<div style="margin-top:4px;"><b style="color:var(--coral);">⛔ 원칙적 불허: ${r.absoluteBlock}</b></div>` : ''}</span></div>
         <div class="sum-row"><span class="sum-k">예상 용량</span><span class="sum-v">${capText} <span class="sum-muted">— 실무 밀도 기준 개략치</span></span></div>
         <div class="sum-row ${gridCls}"><span class="sum-k">계통</span><span class="sum-v">${gridText}</span></div>
         <div class="sum-row ${setbackCls}"><span class="sum-k">이격거리</span><span class="sum-v">${setbackText}</span></div>
