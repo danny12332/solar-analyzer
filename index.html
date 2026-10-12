@@ -341,7 +341,6 @@
           <div class="field" style="margin-bottom:0;position:relative;">
             <label for="siteAddress">지번·도로명 주소, 면·리·길 이름, 또는 상호(공장·아파트 등)</label>
             <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1" autocomplete="off">
-            <div id="addrAlt" style="display:none;margin-top:5px;font-size:12px;color:var(--ink-soft);line-height:1.45;"></div>
             <div id="addrSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--card-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
           </div>
           <button class="run sun" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
@@ -1770,22 +1769,11 @@ function closeAddressOverlay(){
   if(addressOverlay){ addressOverlay.setMap(null); addressOverlay = null; }
 }
 
-// 입력칸 아래에 도로명·지번을 함께 보여주고, 버튼으로 입력칸 값을 도로명 ↔ 지번으로 바꿈 (분석은 항상 지번 기준으로 진행)
 let lastRoadAddress = null;
-function renderAddrAlt(jibun, road){
-  const el = document.getElementById('addrAlt'); if(!el) return;
-  if(!jibun && !road){ el.style.display = 'none'; el.innerHTML = ''; return; }
-  const btn = (label, val) => `<button type="button" onclick="setAddrInput(this.dataset.v)" data-v="${String(val).replace(/"/g, '&quot;')}" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;color:var(--ink-soft);margin-left:4px;">${label}</button>`;
-  el.innerHTML = (road ? `<div><b style="color:var(--ink);">도로명</b> ${escLand(road)}${btn('도로명으로 바꾸기', road)}</div>` : '')
-    + (jibun ? `<div><b style="color:var(--ink);">지번</b> ${escLand(jibun)}${btn('지번으로 바꾸기', jibun)}</div>` : '');
-  el.style.display = 'block';
-}
-function setAddrInput(v){ const i = document.getElementById('siteAddress'); if(i && v){ i.value = v; } }
 function renderAddressLabel(pos, jibun, road){
   const map = ensureKakaoMap();
   if(jibun){ lastJibunAddress = jibun; }
   lastRoadAddress = road || null;
-  try{ renderAddrAlt(jibun, road); }catch(e){}
   lastLatLng = pos;
   try{ localStorage.setItem('solarLastSite', JSON.stringify({ lat: pos.getLat(), lng: pos.getLng(), addr: jibun || road || '', t: Date.now() })); }catch(e){}
   const esc = s => (s || '').replace(/'/g, "\\'");
