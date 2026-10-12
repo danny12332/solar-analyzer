@@ -341,6 +341,7 @@
           <div class="field" style="margin-bottom:0;position:relative;">
             <label for="siteAddress">지번·도로명 주소, 면·리·길 이름, 또는 상호(공장·아파트 등)</label>
             <input type="text" id="siteAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1" autocomplete="off">
+            <div id="addrAlt" style="display:none;margin-top:5px;font-size:12px;color:var(--ink-soft);line-height:1.45;"></div>
             <div id="addrSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--card-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
           </div>
           <button class="run sun" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
@@ -1769,19 +1770,32 @@ function closeAddressOverlay(){
   if(addressOverlay){ addressOverlay.setMap(null); addressOverlay = null; }
 }
 
+// 입력칸 아래에 도로명·지번을 함께 보여주고, 버튼으로 입력칸 값을 도로명 ↔ 지번으로 바꿈 (분석은 항상 지번 기준으로 진행)
+let lastRoadAddress = null;
+function renderAddrAlt(jibun, road){
+  const el = document.getElementById('addrAlt'); if(!el) return;
+  if(!jibun && !road){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  const btn = (label, val) => `<button type="button" onclick="setAddrInput(this.dataset.v)" data-v="${String(val).replace(/"/g, '&quot;')}" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;color:var(--ink-soft);margin-left:4px;">${label}</button>`;
+  el.innerHTML = (road ? `<div><b style="color:var(--ink);">도로명</b> ${escLand(road)}${btn('도로명으로 바꾸기', road)}</div>` : '')
+    + (jibun ? `<div><b style="color:var(--ink);">지번</b> ${escLand(jibun)}${btn('지번으로 바꾸기', jibun)}</div>` : '');
+  el.style.display = 'block';
+}
+function setAddrInput(v){ const i = document.getElementById('siteAddress'); if(i && v){ i.value = v; } }
 function renderAddressLabel(pos, jibun, road){
   const map = ensureKakaoMap();
   if(jibun){ lastJibunAddress = jibun; }
+  lastRoadAddress = road || null;
+  try{ renderAddrAlt(jibun, road); }catch(e){}
   lastLatLng = pos;
   try{ localStorage.setItem('solarLastSite', JSON.stringify({ lat: pos.getLat(), lng: pos.getLng(), addr: jibun || road || '', t: Date.now() })); }catch(e){}
   const esc = s => (s || '').replace(/'/g, "\\'");
   const content = `<div onmousedown="kakao.maps.event.preventMap();" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 16px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;">
     <div style="position:absolute;top:10px;right:10px;">${closeBtnHtml('closeAddressOverlay()')}</div>
-    <div style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.4;white-space:nowrap;">${jibun || '지번 주소 정보 없음'}</div>
-    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;">(도로명) ${road || '이 위치엔 도로명주소 없음'}</div>
+    <div style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.4;white-space:nowrap;">${road || jibun || '주소 정보 없음'}</div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;">${road ? `(지번) ${jibun || '지번 정보 없음'}` : '(이 위치엔 도로명주소 없음 — 위 주소는 지번)'}</div>
     <div style="display:flex;gap:6px;margin-top:9px;">
-      ${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--ink-soft);">지번 복사</button>` : ''}
       ${road ? `<button onclick="copyAddressText('${esc(road)}', this)" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--ink-soft);">도로명 복사</button>` : ''}
+      ${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--ink-soft);">지번 복사</button>` : ''}
     </div>
   </div>`;
   if(!addressOverlay){
@@ -5115,7 +5129,7 @@ function renderResults(r){
     };
     const choose = (i) => {
       const it = items[i]; if(!it) return;
-      input.value = it.jibun || it.road;
+      input.value = it.road || it.jibun;
       hide();
       lookupAddress(true);
     };
@@ -5124,9 +5138,9 @@ function renderResults(r){
       box.innerHTML = items.map((it, i) => `<div data-i="${i}" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--card-line);font-size:13px;line-height:1.4;">`
         + (it.place
             ? `<div style="color:var(--ink);"><span style="font-size:10.5px;background:var(--forest-dim);color:var(--forest);padding:1px 5px;border-radius:3px;margin-right:5px;">장소</span>${esc(it.place)}${it.category ? ` <span style="font-size:11px;color:var(--ink-soft);">· ${esc(it.category)}</span>` : ''}</div>`
-              + `<div style="font-size:11.5px;color:var(--ink-soft);">${esc(it.jibun || it.road)}</div>`
-            : `<div style="color:var(--ink);">${esc(it.jibun || it.road)}</div>`
-              + (it.jibun && it.road ? `<div style="font-size:11.5px;color:var(--ink-soft);">(도로명) ${esc(it.road)}</div>` : ''))
+              + `<div style="font-size:11.5px;color:var(--ink-soft);">${esc(it.road || it.jibun)}${it.road && it.jibun ? `<br>(지번) ${esc(it.jibun)}` : ''}</div>`
+            : `<div style="color:var(--ink);">${esc(it.road || it.jibun)}</div>`
+              + (it.jibun && it.road ? `<div style="font-size:11.5px;color:var(--ink-soft);">(지번) ${esc(it.jibun)}</div>` : ''))
         + `</div>`).join('');
       box.style.display = 'block';
       Array.from(box.children).forEach(el => {
