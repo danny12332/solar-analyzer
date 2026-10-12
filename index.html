@@ -126,6 +126,9 @@
   .checkrow input{width:auto;}
 
   /* 버튼: 기본은 해 색, 큰 실행 버튼은 짙은 하늘 */
+  .preset-btn{padding:4px 9px;border:1px solid var(--card-line);border-radius:6px;background:var(--surface-2);color:var(--ink);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .preset-btn:hover{filter:brightness(.95);}
+  .preset-btn.on{background:var(--sun);color:#2A1A00;border-color:var(--sun);}
   button.run{width:100%;padding:12px 16px;margin-top:6px;background:var(--ink);color:#F6F9FC;border:none;border-radius:var(--r-md);font-family:inherit;font-weight:700;font-size:14px;letter-spacing:.01em;cursor:pointer;transition:filter .15s, transform .1s;}
   button.run:hover{filter:brightness(1.12);}
   button.run:active{transform:scale(.99);}
@@ -525,6 +528,21 @@
             <button type="button" class="run" style="background:var(--surface-2);color:var(--ink-soft);" onclick="clearMeasurements()">🧹 측정 지우기</button>
           </div>
         </div>
+        <div class="panel-bar" id="presetBar" style="gap:6px;">
+          <span>🧩 배치 유형</span>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan')" title="경사지붕 위 연속 배치 · 10° · 지붕 끝 500mm · 20장마다 1m 이격+통풍로 2개">원단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan_barn')" title="축사 지붕 · 지붕 끝 1,000mm 이격">원단(축사)</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insam1')" title="인삼밭 1단 · 세로 · 10° · 열 간격 3,500mm · 지붕 끝 700 · 용마루 300">인삼밭 1단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insam2')" title="인삼밭 2단 · 세로 · 10° · 열 간격 7,000mm (10-0617 나동·가동 실측)">인삼밭 2단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insamflat2')" title="인삼밭 플랫 2단 · 용마루 넘어 폭 전체 · 지붕 끝 500 · 열 간격 7,000mm (10-0617 가동 46.44kW 실측)">인삼밭 플랫 2단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('zero')" title="징크판넬·제로솔루션 · 가로배치 · 열 간격 1,700mm · 지붕 끝 700">제로솔루션</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('slab')" title="평슬라브 경사거치 · 세로 2단 · 8°">평슬라브</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('parking')" title="주차면 5,000×2,500 · 2칸마다 기둥 600 · 통로 6m">주차장</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 가로 4단 · 10° · 경계 3m">토지 노지 4단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 가로 2단 · 10° · 경계 3m">토지 노지 2단</button>
+          <span style="flex:1;"></span>
+          <button type="button" class="preset-btn" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
+        </div>
         <div class="panel-bar">
           <span>☀️ 태양광 패널 배치</span>
           <label style="font-size:11.5px;color:var(--ink-soft);">배치 대상
@@ -533,13 +551,19 @@
               <option value="slab">건물 평슬라브</option>
               <option value="roof_ns">건물 남북지붕 (용마루 동서 방향)</option>
               <option value="roof_ew">건물 동서지붕 (용마루 남북 방향)</option>
+              <option value="wondan">[설치기준] 원단 — 경사지붕 위 연속 배치</option>
+              <option value="wondan_barn">[설치기준] 원단(축사) — 지붕 끝 1m 이격</option>
+              <option value="insam">[설치기준] 인삼밭 — 지붕 면마다 열 배치</option>
+              <option value="insam_flat">[설치기준] 인삼밭 플랫 — 용마루 넘어 건물 폭 전체 열 배치</option>
+              <option value="zero">[설치기준] 징크판넬·제로솔루션 — 가로배치 열</option>
+              <option value="parking">[설치기준] 주차장 캐노피</option>
             </select>
           </label>
           <label style="font-size:11.5px;color:var(--ink-soft);">폭(m) <input id="panelW" type="number" value="1.134" step="0.001" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">길이(m) <input id="panelL" type="number" value="2.465" step="0.001" style="width:60px;padding:2px 4px;"></label>
           <label id="tiltLabel" style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="10" step="1" style="width:48px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="645" step="5" style="width:60px;padding:2px 4px;"></label>
-          <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.02" step="0.01" style="width:50px;padding:2px 4px;"></label>
+          <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.01" step="0.005" style="width:50px;padding:2px 4px;" title="그랜드썬 배치도 실측: 모듈 사이 10mm"></label>
           <label id="modOrientLabel" style="font-size:11.5px;color:var(--ink-soft);" title="가로(눕힘): 모듈 긴 변이 좌우, 짧은 변이 경사 방향으로 N단 쌓임 · 세로(세움): 모듈 긴 변이 경사 방향">모듈 방향 <select id="modOrient" style="padding:2px 4px;"><option value="landscape" selected>가로(눕힘)</option><option value="portrait">세로(세움)</option></select></label>
           <label id="alignEdgeLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(줄)을 어느 경계 변과 나란히 놓을지. 자동 = 지상은 주향 설정, 건물은 긴 변 기준. 변 길이는 지도에 표시된 변 길이(m)와 같습니다">방향 기준 변 <select id="alignEdge" style="padding:2px 4px;" onfocus="refreshAlignEdgeOptions()" onmousedown="refreshAlignEdgeOptions()"><option value="auto" selected>자동</option></select></label>
           <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선을 지도에 표시"><input id="showTables" type="checkbox" checked style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선</label>
@@ -556,6 +580,15 @@
             <label>좌우 이격(m) <input id="arrSideGap" type="number" value="0.5" step="0.1" min="0" style="width:48px;padding:2px 4px;"></label>
             <label>상하 이격(열간격, m) <input id="arrRowGap" type="number" placeholder="자동" step="0.1" min="0" style="width:52px;padding:2px 4px;" title="어레이 앞단에서 다음 어레이 앞단까지 거리. 비우면 어레이 깊이 + 동지 남중 그림자 길이로 자동 계산"></label>
             <label>주향 <select id="arrFacing" style="padding:2px 4px;"><option value="south" selected>정남향</option><option value="axis">부지 축(정남 ±45°)</option><option value="manual">방위각 직접 입력</option></select></label>
+          </span>
+          <span id="stdOpts" style="display:none;gap:10px;flex-wrap:wrap;align-items:center;">
+            <label id="stdRowsLabel">단 수 <select id="stdRows" style="padding:2px 4px;"><option value="1">1단</option><option value="2" selected>2단</option><option value="3">3단</option><option value="4">4단</option></select></label>
+            <label id="stdRidgeLabel">용마루 이격(m, 한쪽) <input id="stdRidge" type="number" value="0.3" step="0.1" min="0" style="width:50px;padding:2px 4px;"></label>
+            <label id="stdPitchLabel" title="열 앞단에서 다음 열 앞단까지. 비우면 설치기준 표(10°/15° · 세로/가로)로 자동">열 간격(m) <input id="stdPitch" type="number" placeholder="기준표" step="0.05" min="0" style="width:60px;padding:2px 4px;"></label>
+            <label id="stdBlockLabel" title="원단: 모듈 N장마다 1,000mm 이격 + 통풍로 2개(모듈 2장 자리 비움)">모듈 <input id="stdBlock" type="number" value="20" step="1" min="2" style="width:40px;padding:2px 4px;">장마다 1m 이격·통풍로 2개</label>
+            <label id="stdParkLabel">주차열 <select id="stdPark" style="padding:2px 4px;"><option value="double" selected>마주보는 2열(10m) + 통로 6m</option><option value="single">1열(5m) + 통로 6m</option></select></label>
+            <label id="stdFlipLabel"><input id="stdFlip" type="checkbox" style="vertical-align:middle;"> 축 90° 바꾸기</label>
+            <span id="stdNote" class="hint" style="font-size:11px;"></span>
           </span>
           <span id="roofOpts" style="display:none;gap:10px;flex-wrap:wrap;align-items:center;">
             <label id="ridgeGapLabel">용마루 이격(m) <input id="roofRidgeGap" type="number" value="0.5" step="0.1" min="0" style="width:50px;padding:2px 4px;"></label>
@@ -2097,6 +2130,114 @@ function removeSolarLayout(id){
   }
 }
 
+// ===== 배치 유형 프리셋: 배치 대상·모듈 방향·단 수·각도·이격을 한 번에 설정 (값은 실무 기본값이며 설정 줄에서 바로 수정 가능) =====
+const LAYOUT_PRESETS = {
+  ground4:  { mount: 'ground',  orient: 'landscape', rows: 4, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 4단' },
+  ground2:  { mount: 'ground',  orient: 'landscape', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
+  slab:     { mount: 'slab',    orient: 'portrait',  rows: 2, tilt: 8,  setback: 0.5, aisle: 0.6, label: '평슬라브 경사거치' },
+  wondan:      { mount: 'wondan', std: true, label: '원단' },
+  wondan_barn: { mount: 'wondan_barn', std: true, label: '원단(축사)' },
+  insam1:      { mount: 'insam', std: true, rows: 1, orient: 'portrait', label: '인삼밭 1단' },
+  insam2:      { mount: 'insam', std: true, rows: 2, orient: 'portrait', label: '인삼밭 2단' },
+  insamflat2:  { mount: 'insam_flat', std: true, rows: 2, orient: 'portrait', label: '인삼밭 플랫 2단' },
+  zero:        { mount: 'zero', std: true, label: '제로솔루션' },
+  parking:     { mount: 'parking', std: true, label: '주차장' },
+};
+let activePreset = null;
+function applyLayoutPreset(key){
+  const P = LAYOUT_PRESETS[key]; if(!P) return;
+  const g = id => document.getElementById(id);
+  g('mountType').value = P.mount; onMountTypeChange();
+  if(P.std){
+    if(P.rows) g('stdRows').value = String(P.rows);
+    if(P.orient) g('modOrient').value = P.orient;
+    activePreset = key;
+    document.querySelectorAll('#presetBar .preset-btn').forEach(b => b.classList.toggle('on', (b.getAttribute('onclick') || '').includes("'" + key + "'")));
+    const st = g('roadviewStatus');
+    if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧩 "${P.label}" — ${STD_DEFAULTS[P.mount].note}. ${lastAreaPolygonPath && lastAreaPolygonPath.length >= 3 ? '' : '건물을 선택하거나 범위를 그린 뒤 '}"배치 생성"을 누르세요.`; }
+    if(lastAreaPolygonPath && lastAreaPolygonPath.length >= 3){ try{ onGenerateLayoutClick(); }catch(e){ console.warn('preset generate', e); } }
+    return;
+  }
+  if(P.orient && g('modOrient')) g('modOrient').value = P.orient;
+  if(g('panelTilt')) g('panelTilt').value = P.tilt;
+  if(g('panelSetback')) g('panelSetback').value = P.setback;
+  if(P.mount === 'ground'){ g('arrRows').value = String(P.rows); if(P.cols) g('arrCols').value = P.cols; }
+  else { g('roofBlockRows').value = String(P.rows); if(P.aisle != null) g('roofAisle').value = P.aisle; if(P.ridgeGap != null) g('roofRidgeGap').value = P.ridgeGap; if(g('slabCols')) g('slabCols').value = ''; }
+  activePreset = key;
+  document.querySelectorAll('#presetBar .preset-btn').forEach(b => b.classList.toggle('on', (b.getAttribute('onclick') || '').includes("'" + key + "'")));
+  const st = g('roadviewStatus');
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧩 "${P.label}" 설정을 적용했습니다 — ${P.mount === 'ground' ? '지상' : (P.mount === 'slab' ? '평슬라브' : (P.mount === 'roof_ns' ? '남북지붕' : '동서지붕'))}${P.orient ? ' · 모듈 ' + (P.orient === 'landscape' ? '가로' : '세로') : ''} · ${P.rows}단 · ${P.tilt}° · 이격 ${P.setback}m. ${key === 'canopy' ? '주차 구획 범위를 "📐 면적재기"로 그린 뒤 ' : ''}"배치 생성"을 누르세요. 값은 설정 줄에서 바꿀 수 있습니다.`; }
+  // 경계가 이미 있으면 바로 생성
+  if(lastAreaPolygonPath && lastAreaPolygonPath.length >= 3){ try{ onGenerateLayoutClick(); }catch(e){ console.warn('preset generate', e); } }
+}
+
+// ===== CAD(DXF) 내보내기: 지도 위 모든 배치를 m 단위 평면좌표(AutoCAD R12 호환 POLYLINE/TEXT)로 저장 =====
+// 좌표계: 첫 배치 경계의 중심 위도 기준 등장방형 근사(solarToXY) → 전체 도형의 좌하단이 (0,0)이 되게 평행이동. 1 단위 = 1 m. X=동, Y=북.
+function exportLayoutDxf(){
+  const st = document.getElementById('roadviewStatus');
+  const items = []; // { layer, color, path:[{x,y}] , closed, text? }
+  const lat0Rad = layoutRegistry.length ? layoutRegistry[0].lat0Rad
+    : ((lastAreaPolygonPath && lastAreaPolygonPath.length) ? lastAreaPolygonPath.reduce((a, p) => a + p.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180 : null);
+  if(lat0Rad === null){ if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 내보낼 배치나 경계가 없습니다. 배치를 먼저 생성하세요.'; } return; }
+  const xy = ll => solarToXY(ll, lat0Rad);
+  const pathOf = poly => { const p = poly.getPath(); return (Array.isArray(p) ? p : []).map(xy); };
+  // 경계(필지·건물·면적재기)
+  const seenB = [];
+  const addBoundary = (path, layer) => { if(!path || path.length < 3) return; if(seenB.some(b => sameBoundary(b, path))) return; seenB.push(path); items.push({ layer, path: path.map(xy), closed: true }); };
+  layoutRegistry.forEach(ed => addBoundary(ed.boundary, 'BOUNDARY'));
+  if(lastParcelPath) addBoundary(lastParcelPath, 'PARCEL');
+  Object.values(clickedParcels || {}).forEach(c => addBoundary(c.path, 'PARCEL'));
+  if(lastAreaPolygonPath) addBoundary(lastAreaPolygonPath, 'BOUNDARY');
+  // 모듈·테이블·라벨
+  let modCount = 0, kwTotal = 0;
+  layoutRegistry.forEach((ed, i) => {
+    const live = ed.modules.filter(m => !m.removed);
+    live.forEach(m => { items.push({ layer: 'MODULE', path: pathOf(m.poly), closed: true }); modCount++; });
+    ed.modules.filter(m => m.vent && m.removed).forEach(m => { const q = pathOf(m.poly); if(q.length === 4){ items.push({ layer: 'VENT', path: [q[0], q[2]], closed: false }, { layer: 'VENT', path: [q[1], q[3]], closed: false }, { layer: 'VENT', path: q, closed: true }); } });
+    (ed.tables || []).forEach(t => { if(t.mods.some(m => !m.removed)) items.push({ layer: 'TABLE', path: pathOf(t.outline), closed: true }); });
+    const kw = live.length * ed.wattPerPanel / 1000; kwTotal += kw;
+    const b = ed.boundary.map(xy); const cx = b.reduce((a, q) => a + q.x, 0) / b.length, cy = Math.max(...b.map(q => q.y)) + 2;
+    items.push({ layer: 'TEXT', text: `${live.length}EA x ${ed.wattPerPanel}W = ${kw.toFixed(2)}kW`, x: cx, y: cy, h: 1.2 });
+  });
+  if(!items.length){ if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 내보낼 도형이 없습니다.'; } return; }
+  // 좌하단을 원점으로 평행이동
+  let minX = Infinity, minY = Infinity;
+  items.forEach(it => { if(it.path) it.path.forEach(q => { minX = Math.min(minX, q.x); minY = Math.min(minY, q.y); }); else { minX = Math.min(minX, it.x); minY = Math.min(minY, it.y); } });
+  // 단위: 그랜드썬 기본도면과 같은 mm (1 unit = 1 mm) — 기존 도면에 그대로 붙여넣기 가능
+  const U = 1000;
+  const f = n => (Math.round(n * U * 10) / 10).toFixed(1);
+  // 레이어 이름은 R12 DXF 호환을 위해 영문(한글 레이어명은 CAD 버전에 따라 깨짐)
+  const LN = { MODULE: 'GS-MODULE', TABLE: 'GS-TABLE', BOUNDARY: 'GS-BOUNDARY', PARCEL: 'GS-PARCEL', TEXT: 'GS-TEXT', VENT: 'GS-VENT' };
+  const layers = { [LN.BOUNDARY]: 6, [LN.PARCEL]: 30, [LN.MODULE]: 6, [LN.TABLE]: 2, [LN.TEXT]: 7, [LN.VENT]: 8 };
+  items.forEach(it => { it.layer = LN[it.layer] || it.layer; }); // AutoCAD 색 번호(6 자홍, 30 주황, 5 파랑, 2 노랑, 7 흰/검)
+  const L = [];
+  const push = (...a) => L.push(...a);
+  push('0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', '4', '0', 'ENDSEC');
+  push('0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', String(Object.keys(layers).length));
+  Object.keys(layers).forEach(nm => push('0', 'LAYER', '2', nm, '70', '0', '62', String(layers[nm]), '6', 'CONTINUOUS'));
+  push('0', 'ENDTAB', '0', 'ENDSEC');
+  push('0', 'SECTION', '2', 'ENTITIES');
+  items.forEach(it => {
+    if(it.text){
+      push('0', 'TEXT', '8', it.layer, '10', f(it.x - minX), '20', f(it.y - minY), '30', '0', '40', f(it.h || 1), '1', it.text.replace(/[^\x20-\x7E]/g, ''));
+      return;
+    }
+    push('0', 'POLYLINE', '8', it.layer, '66', '1', '70', it.closed ? '1' : '0');
+    it.path.forEach(q => push('0', 'VERTEX', '8', it.layer, '10', f(q.x - minX), '20', f(q.y - minY), '30', '0'));
+    push('0', 'SEQEND');
+  });
+  push('0', 'ENDSEC', '0', 'EOF');
+  const dxf = L.join('\r\n') + '\r\n';
+  const name = ((lastJibunAddress || document.getElementById('siteAddress').value || 'solar-layout').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_layout.dxf';
+  try{
+    const blob = new Blob([dxf], { type: 'application/dxf' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }catch(e){ console.error(e); if(st){ st.style.color = '#b3402a'; st.textContent = '❌ DXF 저장 실패: ' + e.message; } return; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📐 DXF 저장: ${name} — 모듈 ${modCount.toLocaleString('ko-KR')}장(${kwTotal.toFixed(2)}kW), 레이어 GS-MODULE/GS-TABLE/GS-BOUNDARY/GS-PARCEL/GS-VENT/GS-TEXT, 단위 mm(기본도면과 동일), 원점 = 도형 좌하단, X=동·Y=북. 위성사진 기준 위치라 실측 좌표와는 차이가 있을 수 있습니다.`; }
+  return dxf;
+}
+
 function onMountTypeChange(){
   const mt = document.getElementById('mountType').value;
   const isRoof = (mt === 'gable' || mt === 'slab' || mt === 'roof_ns' || mt === 'roof_ew'); // 지붕 계열 공통: 밀착 설치, 낮은 각도
@@ -2138,6 +2279,40 @@ function onMountTypeChange(){
   document.getElementById('ridgeFlipLabel').style.display = isNewGable ? '' : 'none';
   const facingSel = document.getElementById('arrFacing');
   document.getElementById('azimuthLabel').style.display = (isNewGable || mt === 'slab' || (mt === 'ground' && facingSel && facingSel.value !== 'manual')) ? 'none' : '';
+  applyStdMountUi(mt);
+}
+// 그랜드썬 설치기준(기본도면_건물.dwg "설치기준" 시트) 유형별 기본값과 표시 항목
+const STD_TYPES = ['wondan', 'wondan_barn', 'insam', 'insam_flat', 'zero', 'parking'];
+const STD_DEFAULTS = {
+  wondan:      { tilt: 10, setback: 0.5, ridge: 0.3, orient: 'portrait', note: '원단: 모듈 경사 10° · 지붕 끝 500mm 이격 · 모듈 20장마다 1,000mm 이격 및 통풍로 2개 · 높이 남쪽 ≥1,000 / 북쪽 ≥500 / 최대 4m' },
+  wondan_barn: { tilt: 10, setback: 1.0, ridge: 0.3, orient: 'portrait', note: '원단(축사): 축사 지붕 끝 1,000mm 이격 · 모듈 경사 10° · 20장마다 1,000mm 이격·통풍로 2개' },
+  insam:       { tilt: 10, setback: 0.7, ridge: 0.3, orient: 'portrait', rows: 2, note: '인삼밭: 모듈 경사 10° · 지붕 끝 700mm · 용마루 끝단 한쪽 300mm · 모듈간격(열 피치) 10° 세로 3,500 / 가로 1,750, 15° 세로 4,000 / 가로 2,000 (단 수 배)' },
+  insam_flat:  { tilt: 10, setback: 0.5, ridge: 0, orient: 'portrait', rows: 2, note: '인삼밭 플랫: 지붕 끝 500mm · 용마루를 넘어 건물 폭 전체에 열 배치 · 높이 최대 4m, 용마루 위 500mm(벤츄레이터 있으면 그 위 200mm) · 열 간격 10° 세로 3,500mm × 단 수 (2단 7,000mm = 10-0617 가동 실측)' },
+  zero:        { tilt: 10, setback: 0.7, ridge: 0.3, orient: 'landscape', rows: 1, pitch: 1.7, note: '징크판넬·제로솔루션: 가로배치 · 남쪽지붕 = 지붕경사+7° / 북쪽 5° / 동서지붕 10° · 지붕 끝 700mm · 모듈간격 1,700mm · 추가비 전기 1만원/kW' },
+  parking:     { tilt: 10, setback: 0, ridge: 0, orient: 'portrait', note: '주차장: 주차면 5,000×2,500mm · 주차면 2칸마다 기둥 1개(기둥 구간 폭 600mm) · 마주보는 주차라인 사이 통행로 6m 이상' },
+};
+function applyStdMountUi(mt){
+  const isStd = STD_TYPES.includes(mt);
+  const g = id => document.getElementById(id);
+  g('stdOpts').style.display = isStd ? 'inline-flex' : 'none';
+  if(!isStd) return;
+  const D = STD_DEFAULTS[mt];
+  g('roofOpts').style.display = 'none'; g('groundOpts').style.display = 'none';
+  g('azimuthLabel').style.display = 'none';
+  g('tiltLabel').innerHTML = `모듈 경사각(°) <input id="panelTilt" type="number" value="${D.tilt}" step="1" style="width:48px;padding:2px 4px;">`;
+  g('setbackLabel').innerHTML = `지붕 끝 이격(m) <input id="panelSetback" type="number" value="${D.setback}" step="0.1" min="0" style="width:50px;padding:2px 4px;">`;
+  g('stdRidge').value = D.ridge;
+  if(D.rows) g('stdRows').value = String(D.rows);
+  g('stdPitch').value = D.pitch ? D.pitch : '';
+  g('modOrient').value = D.orient;
+  g('modOrientLabel').style.display = (mt === 'insam' || mt === 'insam_flat' || mt === 'zero') ? '' : 'none';
+  g('slabColsLabel').style.display = 'none';
+  g('stdRowsLabel').style.display = (mt === 'insam' || mt === 'insam_flat' || mt === 'zero') ? '' : 'none';
+  g('stdRidgeLabel').style.display = mt === 'parking' ? 'none' : '';
+  g('stdPitchLabel').style.display = (mt === 'insam' || mt === 'insam_flat' || mt === 'zero') ? '' : 'none';
+  g('stdBlockLabel').style.display = (mt === 'wondan' || mt === 'wondan_barn') ? '' : 'none';
+  g('stdParkLabel').style.display = mt === 'parking' ? '' : 'none';
+  g('stdNote').textContent = D.note;
 }
 
 // ===== 배치 레지스트리: 필지·건물마다 만든 배치를 모두 유지하고, 모듈 추가·제거를 배치별로 처리 =====
@@ -2157,7 +2332,7 @@ function replaceLayoutOnSameBoundary(boundary){
   }
   if(solarGroupId && !layoutByGroup(solarGroupId)) solarGroupId = null;
 }
-function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRoofEditLabel(ed); else updateGroundLabel(ed); updateTableLabels(ed); }
+function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRoofEditLabel(ed); else if(ed.type === 'std') updateStdLabel(ed); else updateGroundLabel(ed); updateTableLabels(ed); }
 
 // ===== 테이블(어레이 구조물) 오버레이: 같은 테이블에 속한 모듈을 묶어 외곽선 + "N단×M장" 라벨을 표시 =====
 // mods: [{poly, removed, table:'r-t', tier:k, ...}], rotToReal: 회전좌표→실좌표 함수, cornersRotOf: 모듈 → 회전좌표 모서리 4개
@@ -2406,7 +2581,7 @@ function updateGroundLabel(ed){
   const kw = live * groundEdit.wattPerPanel / 1000;
   const util = Math.round(live * groundEdit.panelW * groundEdit.panelL / Math.max(groundEdit.siteAreaM2, 1) * 100);
   groundEdit.label.setContent(`<div style="background:rgba(15,42,68,.94);color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;font-family:'IBM Plex Mono',monospace;line-height:1.4;white-space:nowrap;">
-    <div style="display:flex;align-items:center;gap:8px;"><b>${live.toLocaleString('ko-KR')}장 · ${kw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW</b>${closeBtnHtml(`removeSolarLayout(${groundEdit.groupId})`)}</div>
+    <div style="display:flex;align-items:center;gap:8px;"><b style="font-size:14px;">${kw.toLocaleString('ko-KR', {maximumFractionDigits:2})} kW</b><span style="opacity:.85;">${groundEdit.wattPerPanel}W × ${live.toLocaleString('ko-KR')}EA</span>${closeBtnHtml(`removeSolarLayout(${groundEdit.groupId})`)}</div>
     <div style="font-size:10.5px;opacity:.85;">${groundEdit.arrRows ? `${groundEdit.orient === 'landscape' ? '가로' : '세로'} ${groundEdit.arrRows}단 테이블 ${(groundEdit.tables || []).length}개 · ` : ''}부지이용률 ${util}% · 열간격 ${groundEdit.pitch.toFixed(2)}m${removed ? ` · 제외 ${removed}장` : ''}</div></div>`);
   lastSolarStats = Object.assign(lastSolarStats || {}, { panelCount: live, totalKw: kw, utilization: util });
 }
@@ -2490,6 +2665,198 @@ function compassName(deg){ // 이 코드의 좌표: 0=정남, +90=정동, -90=�
   if(Math.abs(a) >= 158) return '북향';
   if(a > 0) return a < 68 ? '남동향' : (a <= 112 ? '동향' : '북동향');
   return a > -68 ? '남서향' : (a >= -112 ? '서향' : '북서향');
+}
+// ===== 그랜드썬 설치기준 배치 (기본도면_건물.dwg "설치기준" 시트와 실제 배치도 실측값 기준) =====
+//  · 모듈 간 간격 10mm(도면 실측) — 설정 줄의 "모듈간격" 값 사용
+//  · 원단: 경사지붕 각 면을 연속으로 채움. 모듈 긴 변이 용마루와 직각(경사 방향으로 기울임). 용마루 방향으로 N장마다 1,000mm 이격, 블록마다 통풍로 2개(모듈 자리 2개 비움)
+//  · 인삼밭/제로솔루션: 남쪽을 향해 기울인 열을 일정 피치로 반복. 남북 축에 가까운 건물 축을 열 피치 방향으로 사용
+//  · 주차장: 주차면 깊이 5m에 세로 모듈 2단, 주차면 2칸(모듈 4장)마다 기둥 구간 600mm, 통로 6m
+function stdPitchFromTable(tilt, landscape, rows){
+  // 설치기준 시트 표: 10° 세로 3,500 / 가로 1,750(제로솔루션 1,700), 15° 세로 4,000 / 가로 2,000 — 단 수만큼 배수 (2단 7,000mm는 실제 배치도 나동·가동 실측과 일치)
+  const t = Math.max(10, Math.min(15, tilt));
+  const base = landscape ? (1.75 + (t - 10) / 5 * 0.25) : (3.5 + (t - 10) / 5 * 0.5);
+  return { pitch: base * rows, exact: tilt === 10 || tilt === 15, base };
+}
+function generateStdLayout(kind){
+  const statusEl = document.getElementById('roadviewStatus');
+  if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){
+    statusEl.style.color = '#b3402a';
+    statusEl.textContent = '❌ 먼저 "🏢 건물 선택"으로 건물을 클릭하거나 "📐 면적재기"로 지붕(주차장) 범위를 그려주세요.';
+    return;
+  }
+  const num = (id, d) => { const v = parseFloat((document.getElementById(id) || {}).value); return Number.isFinite(v) ? v : d; };
+  const D = STD_DEFAULTS[kind];
+  const W = num('panelW', 1.134), L = num('panelL', 2.465), watt = num('panelWatt', 645);
+  const gap = Math.max(num('panelGap', 0.01), 0);
+  const tilt = num('panelTilt', D.tilt), cosT = Math.cos(tilt * Math.PI / 180);
+  const setback = Math.max(num('panelSetback', D.setback), 0);
+  const ridgeHalf = Math.max(num('stdRidge', D.ridge), 0);
+  const rows = Math.max(1, Math.round(num('stdRows', D.rows || 1)));
+  const landscape = ((document.getElementById('modOrient') || {}).value || D.orient) === 'landscape';
+  const blockN = Math.max(2, Math.round(num('stdBlock', 20)));
+  const targetKw = num('roofTargetKw', 0);
+
+  const map = ensureKakaoMap();
+  replaceLayoutOnSameBoundary(lastAreaPolygonPath);
+  const lat0Rad = lastAreaPolygonPath.reduce((a, q) => a + q.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180;
+  const polyXY = lastAreaPolygonPath.map(q => solarToXY(q, lat0Rad));
+  const areaM2 = shoelaceArea(lastAreaPolygonPath);
+  // 축: 선택한 변 → 없으면 가장 긴 변(용마루 방향으로 가정)
+  let axis = principalAxes(polyXY);
+  const edgeDeg = alignEdgeAngleDeg(lastAreaPolygonPath);
+  if(edgeDeg !== null) axis = edgeDeg * Math.PI / 180;
+  axis = normAxis(axis) * Math.PI / 180;
+  if(document.getElementById('stdFlip') && document.getElementById('stdFlip').checked) axis += Math.PI / 2;
+  const rot = polyXY.map(q => rotateXY(q.x, q.y, -axis));
+  const xs = rot.map(q => q.x), ys = rot.map(q => q.y);
+  const X0 = Math.min(...xs), X1 = Math.max(...xs), Y0 = Math.min(...ys), Y1 = Math.max(...ys);
+  const ymid = (Y0 + Y1) / 2; // 용마루(대칭 박공 가정)
+  const real = (x, y) => rotateXY(x, y, axis);
+  const flat = kind === 'insam_flat' || ridgeHalf <= 0; // 용마루 이격 0 = 편경사·평지붕처럼 한 면으로 취급
+  const insideRidge = c => !(ridgeHalf > 0 && kind !== 'parking' && !flat && Math.abs(c.y - ymid) < ridgeHalf - 0.005);
+  const sb = setback; // 반복 시작점을 경계 이격만큼 안쪽에서 시작(첫 열이 이격 띠에 걸려 사라지지 않게)
+  const fits = cr => cr.every(c => { const r = real(c.x, c.y); return pointInPolygonXY(r, polyXY) && (setback <= 0 || distToPolygonBoundary(r, polyXY) >= setback - 0.02) && insideRidge(c); }); // 2cm 허용오차: 지적·건물 외곽선이 완전한 직사각형이 아니어서 첫 열이 통째로 빠지는 것 방지
+  const cands = []; // { cr:[rot corners], table, tier, vent }
+  const rect = (x, y, w, h) => [{x, y}, {x: x + w, y}, {x: x + w, y: y + h}, {x, y: y + h}];
+  let summary = '';
+
+  if(kind === 'wondan' || kind === 'wondan_barn'){
+    // 모듈: x'(용마루 방향) 폭 W, y'(경사 방향) 투영 L·cosθ. 각 면을 처마→용마루로 채우고, x' 방향 N장마다 1m 이격
+    const dY = L * cosT, dX = W;
+    let blk = 0;
+    (flat ? ['f'] : ['a', 'b']).forEach(face => {
+      const yLo = face === 'b' ? ymid + ridgeHalf : Y0 + sb, yHi = face === 'a' ? ymid - ridgeHalf : Y1 - sb;
+      const nY = Math.floor((yHi - yLo + gap) / (dY + gap));
+      if(nY < 1) return;
+      const usedY = nY * dY + (nY - 1) * gap;
+      const yStart = face === 'a' ? yHi - usedY : (face === 'b' ? yLo : yLo + ((yHi - yLo) - usedY) / 2); // 박공: 용마루 쪽에 붙임, 한 면: 가운데
+      const availX = X1 - X0 - 2 * sb;
+      const runW = n => n * dX + (n - 1) * gap + Math.floor((n - 1) / blockN) * (1.0 - gap); // N장마다 1m 이격 포함 길이
+      let nX = 0; while(runW(nX + 1) <= availX + 1e-6) nX++;
+      const ventCol = Math.floor((nY - 1) / 2);
+      let x = X0 + sb + (availX - (nX ? runW(nX) : 0)) / 2; // 용마루 방향 가운데 정렬
+      for(let done = 0; done < nX; ){
+        const n = Math.min(blockN, nX - done);
+        const vents = new Set([Math.floor(n / 4), Math.floor(n * 3 / 4)]); // 블록마다 통풍로 2개
+        for(let i = 0; i < n; i++){
+          for(let j = 0; j < nY; j++){
+            const cr = rect(x, yStart + j * (dY + gap), dX, dY);
+            if(fits(cr)) cands.push({ cr, table: face + '-' + blk, tier: j, vent: j === ventCol && vents.has(i) && n >= 4 });
+          }
+          x += dX + (i === n - 1 ? 0 : gap);
+        }
+        done += n; blk++;
+        x += 1.0; // N장마다 1,000mm 이격 (블록 끝 모듈 뒤에서 1m)
+      }
+    });
+    summary = `원단 — 모듈 경사 ${tilt}°, 각 면 연속 배치, 용마루 방향 ${blockN}장마다 1.0m 이격 + 블록당 통풍로 2개, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
+  } else if(kind === 'insam' || kind === 'insam_flat' || kind === 'zero'){
+    // 남북 축에 가까운 축을 열 피치(기울임) 방향으로: axis 방향 벡터 (cos,sin) 의 남북 성분 |sin| 이 크면 x'가 남북
+    const xIsNS = Math.abs(Math.sin(axis)) >= Math.abs(Math.cos(axis));
+    const tiltLen = (landscape ? W : L) * cosT;   // 기울임 방향 투영 길이(모듈 1장)
+    const across = landscape ? L : W;            // 열 방향(좌우) 치수
+    const tb = kind === 'zero' ? { pitch: num('stdPitch', 1.7) * rows, exact: true } : stdPitchFromTable(tilt, landscape, rows);
+    const pitchIn = parseFloat((document.getElementById('stdPitch') || {}).value);
+    const pitch = Number.isFinite(pitchIn) && pitchIn > 0 ? (kind === 'zero' ? pitchIn * rows : pitchIn) : tb.pitch;
+    const depth = rows * tiltLen + (rows - 1) * gap;
+    let r = 0;
+    if(xIsNS){
+      // 열은 y'(경사면 가로질러) 방향으로 늘어서고, x'(용마루 방향) 으로 피치 반복 — 면마다 따로(용마루 이격)
+      for(let x = X0 + sb; x + depth <= X1 - sb + 1e-6; x += pitch, r++){
+        (flat ? ['f'] : ['a', 'b']).forEach(face => {
+          const yLo = face === 'f' ? Y0 + sb : (face === 'a' ? Y0 + sb : ymid + ridgeHalf), yHi = face === 'f' ? Y1 : (face === 'a' ? ymid - ridgeHalf : Y1);
+          for(let k = 0; k < rows; k++){
+            const xa = x + k * (tiltLen + gap);
+            for(let y = yLo; y + across <= yHi + 1e-6; y += across + gap){
+              const cr = rect(xa, y, tiltLen, across);
+              if(fits(cr)) cands.push({ cr, table: r + face, tier: k });
+            }
+          }
+        });
+      }
+    } else {
+      // 열이 x'(용마루) 방향으로 늘어서고 y' 방향으로 피치 반복 — 남북지붕: 면마다 처마에서 시작
+      (flat ? ['f'] : ['a', 'b']).forEach(face => {
+        const yLo = face === 'b' ? ymid + ridgeHalf : Y0 + sb, yHi = face === 'a' ? ymid - ridgeHalf : Y1;
+        for(let y = yLo; y + depth <= yHi + 1e-6; y += pitch, r++){
+          for(let k = 0; k < rows; k++){
+            const ya = y + k * (tiltLen + gap);
+            for(let x = X0 + sb; x + across <= X1 + 1e-6; x += across + gap){
+              const cr = rect(x, ya, across, tiltLen);
+              if(fits(cr)) cands.push({ cr, table: r + face, tier: k });
+            }
+          }
+        }
+      });
+    }
+    summary = `${kind === 'zero' ? '징크판넬·제로솔루션' : (flat ? '인삼밭 플랫' : '인삼밭')} — 모듈 ${landscape ? '가로' : '세로'} ${rows}단, 경사 ${tilt}°, 열 간격 ${pitch.toFixed(2)}m(${Number.isFinite(pitchIn) && pitchIn > 0 ? '입력값' : (kind === 'zero' ? '기준 1.7m × 단 수' : (tb.exact ? '설치기준 표' : '설치기준 10°·15° 사이 비례값'))}), 지붕 끝 ${setback}m${flat ? ', 용마루를 넘어 폭 전체' : `·용마루 한쪽 ${ridgeHalf}m`} 이격`;
+  } else if(kind === 'parking'){
+    // 주차열: 깊이 5m에 세로 모듈 2단(긴 변이 주차면 깊이 방향), 열 방향으로 4장(주차면 2칸)마다 기둥 구간 0.6m
+    const double = ((document.getElementById('stdPark') || {}).value || 'double') === 'double';
+    const dY = L * cosT, dX = W;
+    const bandDepth = double ? 10 : 5, aisle = 6;
+    let r = 0;
+    for(let y = Y0 + sb; y + 5 <= Y1 + 1e-6; y += bandDepth + aisle){
+      const bands = double ? [y, y + 5] : [y];
+      bands.forEach((yb, bi) => {
+        if(yb + 5 > Y1 + 1e-6) return;
+        const yStart = yb + (5 - (2 * dY + gap)) / 2; // 주차면 깊이 가운데 정렬
+        let x = X0 + sb, i = 0, grp = 0;
+        while(x + dX <= X1 + 1e-6){
+          for(let k = 0; k < 2; k++){
+            const cr = rect(x, yStart + k * (dY + gap), dX, dY);
+            if(fits(cr)) cands.push({ cr, table: r + '-' + bi + '-' + grp, tier: k });
+          }
+          i++;
+          if(i % 4 === 0){ x += dX + 0.6; grp++; } else x += dX + gap;
+        }
+      });
+      r++;
+    }
+    summary = `주차장 캐노피 — ${double ? '마주보는 2열(5m+5m)' : '1열(5m)'} + 통로 6m 반복, 주차면 깊이에 세로 모듈 2단, 모듈 4장(주차면 2칸)마다 기둥 구간 0.6m`;
+  }
+
+  if(!cands.length){ statusEl.style.color = '#b3402a'; statusEl.textContent = '❌ 이 경계·이격 조건으로는 모듈이 들어가지 않습니다. 경계나 이격·축(90° 바꾸기)을 확인하세요.'; return; }
+  let chosen = cands;
+  if(targetKw > 0){
+    const tc = Math.floor(targetKw * 1000 / watt);
+    if(tc < cands.filter(c => !c.vent).length) chosen = applyDensityRule(cands.map(c => Object.assign({}, c, { row: c.table })), tc).chosen;
+  }
+  const fill = '#C2148A';
+  const modules = chosen.map(c => {
+    const path = c.cr.map(q => real(q.x, q.y)).map(pt => solarToLatLng(pt.x, pt.y, lat0Rad));
+    const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#5A0A40', strokeOpacity: 0.8, fillColor: fill, fillOpacity: 0.55 });
+    measureShapes.push(poly);
+    const m = { poly, face: 'a', removed: false, line: 't-' + c.table, table: c.table, tier: c.tier, cornersRot: c.cr, color: fill, vent: !!c.vent };
+    try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
+    return m;
+  });
+  solarGroupId = registerMeasureGroup(modules.map(m => m.poly));
+  const topPt = lastAreaPolygonPath.reduce((m, q) => (q.getLat() > m.getLat() ? q : m), lastAreaPolygonPath[0]);
+  const label = new kakao.maps.CustomOverlay({ position: topPt, content: '', yAnchor: 1.4, clickable: true });
+  label.setMap(map); measureShapes.push(label); measureGroups[solarGroupId].shapes.push(label);
+  const first = chosen[0].cr;
+  const ed = { type: 'std', kind, modules, mods: modules, label, wattPerPanel: watt, groupId: solarGroupId, boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: axis,
+    modW: Math.abs(first[1].x - first[0].x), modD: Math.abs(first[2].y - first[1].y), fill, areaM2, summary, geomCount: cands.length, tilt };
+  registerLayout(ed);
+  buildTableOverlays(ed, modules, m => m.cornersRot, (x, y) => real(x, y));
+  // 통풍로: 모듈 자리를 비우고(X 표시) 제외 상태로
+  modules.filter(m => m.vent).forEach(m => setModuleRemoved(m, true));
+  updateStdLabel(ed);
+  const live = modules.filter(m => !m.removed).length;
+  statusEl.style.color = 'var(--ink-soft)';
+  statusEl.textContent = `✅ ${summary}. 모듈 ${live.toLocaleString('ko-KR')}장 = ${(live * watt / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW${modules.some(m => m.vent) ? ` (통풍로 ${modules.filter(m => m.vent).length}자리 제외)` : ''}${targetKw > 0 && chosen.length < cands.length ? `, 목표 ${targetKw}kW에 맞춰 줄임(전체 ${cands.length}장)` : ''}. 모듈 간격 ${Math.round(gap * 1000)}mm. 위성사진·지적 경계 기준 배치이며 실제 지붕 치수·구조 확인 후 확정하세요.`;
+}
+function updateStdLabel(ed){
+  const live = ed.modules.filter(m => !m.removed).length;
+  const kw = live * ed.wattPerPanel / 1000;
+  const vents = ed.modules.filter(m => m.vent && m.removed).length;
+  const removed = ed.modules.filter(m => m.removed).length - vents;
+  const nm = { wondan: '원단', wondan_barn: '원단(축사)', insam: '인삼밭', insam_flat: '인삼밭 플랫', zero: '제로솔루션', parking: '주차장' }[ed.kind] || '';
+  ed.label.setContent(`<div style="background:rgba(90,10,64,.94);color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;font-family:'IBM Plex Mono',monospace;line-height:1.4;white-space:nowrap;">
+    <div style="display:flex;align-items:center;gap:8px;"><b style="font-size:14px;">${kw.toLocaleString('ko-KR', {maximumFractionDigits: 2})} kW</b><span style="opacity:.85;">${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}EA</span>${closeBtnHtml(`removeSolarLayout(${ed.groupId})`)}</div>
+    <div style="font-size:10.5px;opacity:.85;">${nm} · 테이블 ${(ed.tables || []).length}개${vents ? ` · 통풍로 ${vents}` : ''}${removed ? ` · 제외 ${removed}장` : ''}</div></div>`);
+  lastSolarStats = { rows: 0, cols: 0, panelCount: live, totalKw: kw, utilization: 0 };
 }
 function generateBuildingRoofLayout(kind){
   const statusEl = document.getElementById('roadviewStatus');
@@ -2715,7 +3082,7 @@ function updateRoofEditLabel(ed){
     ? `${roofEdit.orient === 'landscape' ? '가로' : '세로'} ${roofEdit.blockRows}단 테이블 ${roofEdit.tables.length}개 · 테이블 간격 ${roofEdit.tableGap.toFixed(2)}m${removed ? ` · 제외 ${removed}장` : ''}`
     : `${roofEdit.faces.a.name} ${na}장(${kw(na)}kW) · ${roofEdit.faces.b.name} ${nb}장(${kw(nb)}kW)${removed ? ` · 제외 ${removed}장` : ''}`;
   roofEdit.label.setContent(`<div style="background:rgba(74,90,27,.94);color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;font-family:'IBM Plex Mono',monospace;line-height:1.4;white-space:nowrap;">
-    <div style="display:flex;align-items:center;gap:8px;"><b>${n.toLocaleString('ko-KR')}장 · ${kw(n)} kW</b>${closeBtnHtml(`removeSolarLayout(${roofEdit.groupId})`)}</div>
+    <div style="display:flex;align-items:center;gap:8px;"><b style="font-size:14px;">${kw(n)} kW</b><span style="opacity:.85;">${roofEdit.wattPerPanel}W × ${n.toLocaleString('ko-KR')}EA</span>${closeBtnHtml(`removeSolarLayout(${roofEdit.groupId})`)}</div>
     <div style="font-size:10.5px;opacity:.85;">${sub}</div></div>`);
   const area = roofEdit.projectedAreaM2;
   lastSolarStats = { rows: 0, cols: 0, panelCount: n, totalKw: n * roofEdit.wattPerPanel / 1000, utilization: Math.round(n * (parseFloat(document.getElementById('panelW').value) || 1.134) * (parseFloat(document.getElementById('panelL').value) || 2.465) / Math.max(area, 1) * 100) };
@@ -2745,6 +3112,7 @@ function onGenerateLayoutClick(){
       if(st) st.textContent = '그린 경계가 건물 위라서 배치 대상을 "건물 슬라브(평지붕)"로 자동 전환했습니다. 경사지붕이면 "건물 박공"으로 바꿔 다시 생성하세요.';
     }
   }
+  if(STD_TYPES.includes(mt)){ generateStdLayout(mt); return; }
   if(mt === 'roof_ns'){ generateBuildingRoofLayout('ns'); }
   else if(mt === 'roof_ew'){ generateBuildingRoofLayout('ew'); }
   else if(mt === 'slab'){ generateBuildingRoofLayout('slab'); }
