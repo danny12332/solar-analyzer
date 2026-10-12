@@ -3847,7 +3847,32 @@ function findBjdongCode(dongText){
   if(candidates.length === 1) return { hit: candidates[0], ambiguous:false };
   if(candidates.length > 1) return { hit: candidates[0], ambiguous:true, count: candidates.length };
 
-  // 3) 반대로, 법정동명이 입력보다 짧을 수 있는 경우(입력에 세부 리까지 있는데 시도표기가 다른 경우 등)는 대응 어려움
+  // 3) 구·시 이름이 바뀌어 법정동 목록과 다른 경우(예: 인천 "서해구 검암동"으로 들어왔지만 목록에는 "서구 검암동"만 있음):
+  //    시/도 + 맨 끝 동·읍·면(·리) 이름만으로 찾는다. 같은 시/도 안에 같은 동 이름이 둘 이상이면 ambiguous로 표시.
+  {
+    const strip = n => String(n).replace(/[(（][^)）]*[)）]/g, '').replace(/\s+/g, ' ').trim();
+    const toks = strip(target).split(' ');
+    if(toks.length >= 2){
+      const tail1 = toks[toks.length - 1];
+      const tail2 = toks.length >= 3 ? toks.slice(-2).join(' ') : null;
+      const tryWith = (sidoLen) => {
+        const sido = toks[0].slice(0, sidoLen);
+        const bySido = BJDONG_LIST.filter(x => strip(x.name).slice(0, sidoLen) === sido);
+        let c = tail2 ? bySido.filter(x => strip(x.name).endsWith(' ' + tail2)) : [];
+        if(!c.length) c = bySido.filter(x => strip(x.name).endsWith(' ' + tail1));
+        return c;
+      };
+      let c = tryWith(2);
+      if(!c.length) c = tryWith(1);
+      if(c.length){
+        // 입력에 있던 구/시 토큰과 겹치는 후보가 있으면 우선
+        const mid = toks.slice(1, -1);
+        const pref = c.find(x => mid.some(t => strip(x.name).split(' ').includes(t)));
+        const hit = pref || c[0];
+        return { hit, ambiguous: c.length > 1 && !pref, count: c.length, loose: true, lostText: target };
+      }
+    }
+  }
   return { hit: null, ambiguous:false };
 }
 
@@ -4483,12 +4508,14 @@ function markKepcoFailed(reason){
   el.insertAdjacentHTML('afterbegin', box);
   if(document.querySelector('#resultsWrap .sum-card')){ try{ runAnalysis(); }catch(e){} }
 }
+let kepcoLooseNote = ''; // 구·시 이름 불일치로 동 이름만으로 법정동을 찾았을 때 안내문
 let kepcoDebug = null; // 조회 과정 기록(전송값·단계별 지번 목록 건수) — 결과가 한전ON과 다를 때 원인 확인용
 function kepcoDebugHtml(){
-  if(!kepcoDebug) return '';
+  const note = kepcoLooseNote ? `<p class="hint" style="margin:6px 0 0;color:#7A4E05;">${kepcoLooseNote}</p>` : '';
+  if(!kepcoDebug) return note;
   const a = kepcoDebug.admin || {};
   const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}${st.nearest ? ' · 배전선로 조회 → ' + st.nearest : ''}`).join('<br>→ ');
-  return `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값) · 코드 v1001-1</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
+  return note + `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값) · 코드 v1001-1</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
 }
 async function checkKepcoCapacity(){
   if(kepcoRunning) return;
@@ -4526,7 +4553,11 @@ async function checkKepcoCapacityInner(){
       markKepcoFailed('주소에 지번이 없어 배전선로를 조회하지 못했습니다. 지번까지 입력하거나 지도에서 필지를 클릭한 뒤 다시 조회하세요.');
       return;
     }
-    const { hit } = findBjdongCode(parsed.dongText);
+    kepcoLooseNote = '';
+    const { hit, loose, ambiguous: looseAmb, count: looseCount } = findBjdongCode(parsed.dongText);
+    if(hit && loose){
+      kepcoLooseNote = `ℹ "${parsed.dongText}"은(는) 한전ON 법정동 목록에 없어 동 이름으로 찾은 <b>"${hit.name}"</b>으로 조회했습니다(행정구역 개편으로 구·시 이름이 다른 경우).${looseAmb ? ` 같은 이름의 동이 ${looseCount}곳이라 첫 번째를 썼으니 결과의 변전소·선로가 이 위치와 맞는지 확인하세요.` : ''}`;
+    }
     if(!hit){
       let regionAdmin = null;
       try{
