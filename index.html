@@ -537,7 +537,9 @@
         </div>
         <div class="panel-bar" id="presetBar" style="gap:6px;">
           <span>② 배치 유형</span>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan')" title="경사지붕 위 연속 배치 · 10° · 지붕 끝 500mm · 20장마다 1m 이격+통풍로 2개">원단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan2')" title="원단 2단 틀 · 10° · 지붕 끝 500mm · 틀 사이 0.5m · 20장마다 1m 이격+통풍로 2개">원단 2단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan3')" title="원단 3단 틀 (예: 2+3+3단)">원단 3단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan4')" title="원단 4단 틀 (예: 3+4+4단)">원단 4단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan_barn')" title="축사 지붕 · 지붕 끝 1,000mm 이격">원단(축사)</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('insamflat1')" title="인삼밭 1단 플랫 · 용마루 넘어 폭 전체 · 세로 · 10° · 지붕 끝 500 · 열 간격 3,500mm">인삼밭 1단 플랫</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('insamflat2')" title="인삼밭 2단 플랫 · 용마루 넘어 폭 전체 · 지붕 끝 500 · 열 간격 7,000mm (10-0617 가동 46.44kW 실측)">인삼밭 2단 플랫</button>
@@ -574,7 +576,7 @@
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.01" step="0.005" style="width:50px;padding:2px 4px;" title="그랜드썬 배치도 실측: 모듈 사이 10mm"></label>
           <label id="modOrientLabel" style="font-size:11.5px;color:var(--ink-soft);" title="가로(눕힘): 모듈 긴 변이 좌우, 짧은 변이 경사 방향으로 N단 쌓임 · 세로(세움): 모듈 긴 변이 경사 방향">모듈 방향 <select id="modOrient" style="padding:2px 4px;"><option value="landscape" selected>가로(눕힘)</option><option value="portrait">세로(세움)</option></select></label>
           <label id="alignEdgeLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(줄)을 어느 경계 변과 나란히 놓을지. 자동 = 지상은 주향 설정, 건물은 긴 변 기준. 변 길이는 지도에 표시된 변 길이(m)와 같습니다">방향 기준 변 <select id="alignEdge" style="padding:2px 4px;" onfocus="refreshAlignEdgeOptions()" onmousedown="refreshAlignEdgeOptions()"><option value="auto" selected>자동</option></select></label>
-          <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선을 지도에 표시"><input id="showTables" type="checkbox" checked style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선</label>
+          <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선을 지도에 표시"><input id="showTables" type="checkbox" style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선</label>
           <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="3" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
           <label id="azimuthLabel" style="font-size:11.5px;color:var(--ink-soft);">방위각(°, 0=정남) <input id="panelAzimuth" type="number" value="0" step="1" style="width:48px;padding:2px 4px;"></label>
           <label id="shadeGapLabel" style="font-size:11.5px;color:var(--ink-soft);display:none;">그늘구간 간격(m, 용마루쪽 절반) <input id="panelShadeGap" type="number" value="0.1" step="0.01" min="0" style="width:55px;padding:2px 4px;"></label>
@@ -593,6 +595,8 @@
             <label id="stdRowsLabel">단 수 <select id="stdRows" style="padding:2px 4px;"><option value="1">1단</option><option value="2" selected>2단</option></select></label>
             <label id="stdRidgeLabel">용마루 이격(m, 한쪽) <input id="stdRidge" type="number" value="0.3" step="0.1" min="0" style="width:50px;padding:2px 4px;"></label>
             <label id="stdPitchLabel" title="열 앞단에서 다음 열 앞단까지. 비우면 설치기준 표(10°/15° · 세로/가로)로 자동">열 간격(m) <input id="stdPitch" type="number" placeholder="기준표" step="0.05" min="0" style="width:60px;padding:2px 4px;"></label>
+            <label id="stdFrameLabel" title="원단 틀(프레임) 하나에 경사 방향으로 넣는 모듈 수. 면 깊이가 남으면 처마 쪽 첫 틀을 작게(예: 2+3+3단)">원단 단 수 <select id="stdFrameRows" style="padding:2px 4px;"><option value="2">2단</option><option value="3" selected>3단</option><option value="4">4단</option><option value="5">5단</option></select></label>
+            <label id="stdFrameGapLabel" title="틀과 틀 사이 간격(평면). 기본도면 측면도(3+3+3단 등) 실측 약 490~495mm">틀 사이(m) <input id="stdFrameGap" type="number" value="0.5" step="0.05" min="0" style="width:50px;padding:2px 4px;"></label>
             <label id="stdBlockLabel" title="원단: 모듈 N장마다 1,000mm 이격 + 통풍로 2개(모듈 2장 자리 비움)">모듈 <input id="stdBlock" type="number" value="20" step="1" min="2" style="width:40px;padding:2px 4px;">장마다 1m 이격·통풍로 2개</label>
             <label id="stdParkLabel">주차열 <select id="stdPark" style="padding:2px 4px;"><option value="double" selected>마주보는 2열(10m) + 통로 6m</option><option value="single">1열(5m) + 통로 6m</option></select></label>
             <label id="stdFlipLabel"><input id="stdFlip" type="checkbox" style="vertical-align:middle;"> 축 90° 바꾸기</label>
@@ -2148,6 +2152,9 @@ const LAYOUT_PRESETS = {
   ground2:  { mount: 'ground',  orient: 'landscape', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
   slab:     { mount: 'slab',    orient: 'portrait',  rows: 2, tilt: 8,  setback: 0.5, aisle: 0.6, label: '평슬라브 경사거치' },
   wondan:      { mount: 'wondan', std: true, label: '원단' },
+  wondan2:     { mount: 'wondan', std: true, frame: 2, label: '원단 2단' },
+  wondan3:     { mount: 'wondan', std: true, frame: 3, label: '원단 3단' },
+  wondan4:     { mount: 'wondan', std: true, frame: 4, label: '원단 4단' },
   wondan_barn: { mount: 'wondan_barn', std: true, label: '원단(축사)' },
   insamflat1:  { mount: 'insam_flat', std: true, rows: 1, orient: 'portrait', label: '인삼밭 1단 플랫' },
   insamflat2:  { mount: 'insam_flat', std: true, rows: 2, orient: 'portrait', label: '인삼밭 2단 플랫' },
@@ -2161,6 +2168,7 @@ function applyLayoutPreset(key){
   g('mountType').value = P.mount; onMountTypeChange();
   if(P.std){
     if(P.rows) g('stdRows').value = String(P.rows);
+    if(P.frame) g('stdFrameRows').value = String(P.frame);
     if(P.orient) g('modOrient').value = P.orient;
     activePreset = key;
     document.querySelectorAll('#presetBar .preset-btn').forEach(b => b.classList.toggle('on', (b.getAttribute('onclick') || '').includes("'" + key + "'")));
@@ -2202,7 +2210,7 @@ function exportLayoutDxf(){
     const live = ed.modules.filter(m => !m.removed);
     live.forEach(m => { items.push({ layer: 'MODULE', path: pathOf(m.poly), closed: true }); modCount++; });
     ed.modules.filter(m => m.vent && m.removed).forEach(m => { const q = pathOf(m.poly); if(q.length === 4){ items.push({ layer: 'VENT', path: [q[0], q[2]], closed: false }, { layer: 'VENT', path: [q[1], q[3]], closed: false }, { layer: 'VENT', path: q, closed: true }); } });
-    (ed.tables || []).forEach(t => { if(t.mods.some(m => !m.removed)) items.push({ layer: 'TABLE', path: pathOf(t.outline), closed: true }); });
+    if(tableOverlaysOn()) (ed.tables || []).forEach(t => { if(t.mods.some(m => !m.removed)) items.push({ layer: 'TABLE', path: pathOf(t.outline), closed: true }); });
     const kw = live.length * ed.wattPerPanel / 1000; kwTotal += kw;
     const b = ed.boundary.map(xy); const cx = b.reduce((a, q) => a + q.x, 0) / b.length, cy = Math.max(...b.map(q => q.y)) + 2;
     items.push({ layer: 'TEXT', text: `${live.length}EA x ${ed.wattPerPanel}W = ${kw.toFixed(2)}kW`, x: cx, y: cy, h: 1.2 });
@@ -2319,6 +2327,8 @@ function applyStdMountUi(mt){
   g('stdRidgeLabel').style.display = mt === 'parking' ? 'none' : '';
   g('stdPitchLabel').style.display = (mt === 'insam' || mt === 'insam_flat' || mt === 'zero') ? '' : 'none';
   g('stdBlockLabel').style.display = (mt === 'wondan' || mt === 'wondan_barn') ? '' : 'none';
+  g('stdFrameLabel').style.display = (mt === 'wondan' || mt === 'wondan_barn') ? '' : 'none';
+  g('stdFrameGapLabel').style.display = (mt === 'wondan' || mt === 'wondan_barn') ? '' : 'none';
   g('stdParkLabel').style.display = mt === 'parking' ? '' : 'none';
   g('stdNote').textContent = D.note;
 }
@@ -2731,25 +2741,39 @@ function generateStdLayout(kind){
   if(kind === 'wondan' || kind === 'wondan_barn'){
     // 모듈: x'(용마루 방향) 폭 W, y'(경사 방향) 투영 L·cosθ. 각 면을 처마→용마루로 채우고, x' 방향 N장마다 1m 이격
     const dY = L * cosT, dX = W;
+    const frameN = Math.max(1, Math.round(num('stdFrameRows', 3)));
+    const frameGap = Math.max(num('stdFrameGap', 0.5), gap);
+    const frameSummary = [];
     let blk = 0;
     (flat ? ['f'] : ['a', 'b']).forEach(face => {
       const yLo = face === 'b' ? ymid + ridgeHalf : Y0 + sb, yHi = face === 'a' ? ymid - ridgeHalf : Y1 - sb;
-      const nY = Math.floor((yHi - yLo + gap) / (dY + gap));
-      if(nY < 1) return;
-      const usedY = nY * dY + (nY - 1) * gap;
-      const yStart = face === 'a' ? yHi - usedY : (face === 'b' ? yLo : yLo + ((yHi - yLo) - usedY) / 2); // 박공: 용마루 쪽에 붙임, 한 면: 가운데
+      // 경사 방향: N단 틀(프레임)을 처마 쪽부터 채움. 남는 모듈 수는 처마 쪽 첫 틀을 작게(예: 2+3+3단)
+      const D = yHi - yLo;
+      const frameW = k => k * dY + (k - 1) * gap;
+      const totalW = m => { if(m <= 0) return 0; const f = Math.ceil(m / frameN); return m * dY + (m - f) * gap + (f - 1) * frameGap; };
+      let m = 0; while(totalW(m + 1) <= D + 1e-6) m++;
+      // 기본도면 예시(2단+2단, 2+3+3단, 3+3+3+4단 …)처럼 틀은 최소 2단 — 1단짜리 틀이 남으면 그 1장은 빼고 배치
+      if(frameN >= 2 && m > frameN && (m % frameN) === 1) m -= 1;
+      if(m < 1) return;
+      const fCount = Math.ceil(m / frameN), rem = m - (fCount - 1) * frameN;
+      const sizes = [rem].concat(Array(fCount - 1).fill(frameN)); // 처마 쪽부터
+      const offs = []; // 처마에서의 거리(각 단 시작), 틀 번호
+      { let o = 0; sizes.forEach((k, fi) => { for(let t = 0; t < k; t++){ offs.push({ o, fi }); o += dY + (t === k - 1 ? 0 : gap); } o += frameGap; }); }
+      const nY = offs.length;
+      const yAt = j => face === 'b' ? (yHi - offs[j].o - dY) : (yLo + offs[j].o); // b면은 처마가 yHi 쪽
+      frameSummary.push(sizes.join('+'));
       const availX = X1 - X0 - 2 * sb;
       const runW = n => n * dX + (n - 1) * gap + Math.floor((n - 1) / blockN) * (1.0 - gap); // N장마다 1m 이격 포함 길이
       let nX = 0; while(runW(nX + 1) <= availX + 1e-6) nX++;
       const ventCol = Math.floor((nY - 1) / 2);
-      let x = X0 + sb + (availX - (nX ? runW(nX) : 0)) / 2; // 용마루 방향 가운데 정렬
+      let x = X0 + sb; // 건물 끝에서 이격거리만큼 떨어진 곳부터 배치
       for(let done = 0; done < nX; ){
         const n = Math.min(blockN, nX - done);
         const vents = new Set([Math.floor(n / 4), Math.floor(n * 3 / 4)]); // 블록마다 통풍로 2개
         for(let i = 0; i < n; i++){
           for(let j = 0; j < nY; j++){
-            const cr = rect(x, yStart + j * (dY + gap), dX, dY);
-            if(fits(cr)) cands.push({ cr, table: face + '-' + blk, tier: j, vent: j === ventCol && vents.has(i) && n >= 4 });
+            const cr = rect(x, yAt(j), dX, dY);
+            if(fits(cr)) cands.push({ cr, table: face + '-' + blk + '-' + offs[j].fi, tier: j, vent: j === ventCol && vents.has(i) && n >= 4 });
           }
           x += dX + (i === n - 1 ? 0 : gap);
         }
@@ -2757,7 +2781,7 @@ function generateStdLayout(kind){
         x += 1.0; // N장마다 1,000mm 이격 (블록 끝 모듈 뒤에서 1m)
       }
     });
-    summary = `원단 — 모듈 경사 ${tilt}°, 각 면 연속 배치, 용마루 방향 ${blockN}장마다 1.0m 이격 + 블록당 통풍로 2개, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
+    summary = `원단 ${frameN}단 — ${flat ? '' : '면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tilt}°, 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 1.0m 이격 + 블록당 통풍로 2개, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
   } else if(kind === 'insam' || kind === 'insam_flat' || kind === 'zero'){
     // 남북 축에 가까운 축을 열 피치(기울임) 방향으로: axis 방향 벡터 (cos,sin) 의 남북 성분 |sin| 이 크면 x'가 남북
     const xIsNS = Math.abs(Math.sin(axis)) >= Math.abs(Math.cos(axis));
@@ -2845,7 +2869,7 @@ function generateStdLayout(kind){
   label.setMap(map); measureShapes.push(label); measureGroups[solarGroupId].shapes.push(label);
   const first = chosen[0].cr;
   const ed = { type: 'std', kind, modules, mods: modules, label, wattPerPanel: watt, groupId: solarGroupId, boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: axis,
-    modW: Math.abs(first[1].x - first[0].x), modD: Math.abs(first[2].y - first[1].y), fill, areaM2, summary, geomCount: cands.length, tilt };
+    modW: Math.abs(first[1].x - first[0].x), modD: Math.abs(first[2].y - first[1].y), fill, areaM2, summary, geomCount: cands.length, tilt, frameN: (kind === 'wondan' || kind === 'wondan_barn') ? Math.round(num('stdFrameRows', 3)) : 0 };
   registerLayout(ed);
   buildTableOverlays(ed, modules, m => m.cornersRot, (x, y) => real(x, y));
   // 통풍로: 모듈 자리를 비우고(X 표시) 제외 상태로
@@ -2860,7 +2884,7 @@ function updateStdLabel(ed){
   const kw = live * ed.wattPerPanel / 1000;
   const vents = ed.modules.filter(m => m.vent && m.removed).length;
   const removed = ed.modules.filter(m => m.removed).length - vents;
-  const nm = { wondan: '원단', wondan_barn: '원단(축사)', insam: '인삼밭', insam_flat: '인삼밭 플랫', zero: '제로솔루션', parking: '주차장' }[ed.kind] || '';
+  const nm = { wondan: '원단 ' + (ed.frameN || '') + '단', wondan_barn: '원단(축사) ' + (ed.frameN || '') + '단', insam: '인삼밭', insam_flat: '인삼밭 플랫', zero: '제로솔루션', parking: '주차장' }[ed.kind] || '';
   ed.label.setContent(`<div style="background:rgba(90,10,64,.94);color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;font-family:'IBM Plex Mono',monospace;line-height:1.4;white-space:nowrap;">
     <div style="display:flex;align-items:center;gap:8px;"><b style="font-size:14px;">${kw.toLocaleString('ko-KR', {maximumFractionDigits: 2})} kW</b><span style="opacity:.85;">${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}EA</span>${closeBtnHtml(`removeSolarLayout(${ed.groupId})`)}</div>
     <div style="font-size:10.5px;opacity:.85;">${nm} · 테이블 ${(ed.tables || []).length}개${vents ? ` · 통풍로 ${vents}` : ''}${removed ? ` · 제외 ${removed}장` : ''}</div></div>`);
