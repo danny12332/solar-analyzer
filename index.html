@@ -615,7 +615,7 @@
             <label id="stdPitchLabel" title="열 앞단에서 다음 열 앞단까지. 비우면 설치기준 표(10°/15° · 세로/가로)로 자동">열 간격(m) <input id="stdPitch" type="number" placeholder="기준표" step="0.05" min="0" style="width:60px;padding:2px 4px;"></label>
             <label id="stdFrameLabel" title="원단 틀(프레임) 하나에 경사 방향으로 넣는 모듈 수. 면 깊이가 남으면 처마 쪽 첫 틀을 작게(예: 2+3+3단)">원단 단 수 <select id="stdFrameRows" style="padding:2px 4px;"><option value="2">2단</option><option value="3" selected>3단</option><option value="4">4단</option><option value="5">5단</option></select></label>
             <label id="stdFrameGapLabel" title="틀과 틀 사이 간격(평면). 기본도면 측면도(3+3+3단 등) 실측 약 490~495mm">틀 사이(m) <input id="stdFrameGap" type="number" value="0.5" step="0.05" min="0" style="width:50px;padding:2px 4px;"></label>
-            <label id="stdBlockLabel" title="원단: 모듈 N장마다 1,000mm 이격 + 통풍로 2개(모듈 2장 자리 비움)">모듈 <input id="stdBlock" type="number" value="20" step="1" min="2" style="width:40px;padding:2px 4px;">장마다 1m 이격·통풍로 2개</label>
+            <label id="stdBlockLabel" title="원단: 모듈 N장마다 통풍로 2개(모듈 2장 자리 비움) — 3단 이상 틀에만. 이격을 0보다 크게 넣으면 N장마다 그만큼 띄움(기본 0 = 빈 공간 없음)">모듈 <input id="stdBlock" type="number" value="20" step="1" min="2" style="width:40px;padding:2px 4px;">장마다 통풍로 2개(3단↑) · 이격 <input id="stdBlockGap" type="number" value="0" step="0.1" min="0" style="width:44px;padding:2px 4px;">m</label>
             <label id="stdParkLabel">주차열 <select id="stdPark" style="padding:2px 4px;"><option value="double" selected>마주보는 2열(10m) + 통로 6m</option><option value="single">1열(5m) + 통로 6m</option></select></label>
             <label id="stdFlipLabel"><input id="stdFlip" type="checkbox" style="vertical-align:middle;"> 축 90° 바꾸기</label>
             <span id="stdNote" class="hint" style="font-size:11px;"></span>
@@ -2545,7 +2545,7 @@ function onMountTypeChange(){
 // 그랜드썬 설치기준(기본도면_건물.dwg "설치기준" 시트) 유형별 기본값과 표시 항목
 const STD_TYPES = ['wondan', 'wondan_barn', 'insam', 'insam_flat', 'zero', 'parking'];
 const STD_DEFAULTS = {
-  wondan:      { tilt: 10, setback: 0.5, ridge: 0.3, orient: 'portrait', note: '원단: 모듈 경사 10° · 지붕 끝 500mm 이격 · 모듈 20장마다 1,000mm 이격 및 통풍로 2개 · 높이 남쪽 ≥1,000 / 북쪽 ≥500 / 최대 4m' },
+  wondan:      { tilt: 10, setback: 0.5, ridge: 0.3, orient: 'portrait', note: '원단: 모듈 경사 10° · 지붕 끝 500mm 이격 · 모듈 20장마다 통풍로 2개(3단 이상 틀) · 모듈 사이 빈 공간 없음 · 높이 남쪽 ≥1,000 / 북쪽 ≥500 / 최대 4m' },
   wondan_barn: { tilt: 10, setback: 1.0, ridge: 0.3, orient: 'portrait', note: '원단(축사): 축사 지붕 끝 1,000mm 이격 · 모듈 경사 10° · 20장마다 1,000mm 이격·통풍로 2개' },
   insam:       { tilt: 10, setback: 0.7, ridge: 0.3, orient: 'portrait', rows: 2, note: '인삼밭: 모듈 경사 10° · 지붕 끝 700mm · 용마루 끝단 한쪽 300mm · 모듈간격(열 피치) 10° 세로 3,500 / 가로 1,750, 15° 세로 4,000 / 가로 2,000 (단 수 배)' },
   insam_flat:  { tilt: 10, setback: 0.5, ridge: 0, orient: 'portrait', rows: 2, note: '인삼밭 플랫: 지붕 끝 500mm · 용마루를 넘어 건물 폭 전체에 열 배치 · 높이 최대 4m, 용마루 위 500mm(벤츄레이터 있으면 그 위 200mm) · 열 간격 10° 세로 3,500mm × 단 수 (2단 7,000mm = 10-0617 가동 실측)' },
@@ -3082,6 +3082,7 @@ function generateStdLayout(kind){
     const dY = L * cosT, dX = W;
     const frameN = Math.max(1, Math.round(num('stdFrameRows', 3)));
     const frameGap = Math.max(num('stdFrameGap', 0.5), gap);
+    const blockGap = Math.max(num('stdBlockGap', 0), 0); // N장마다 추가 이격(기본 0 = 빈 공간 없이 연속)
     const frameSummary = [];
     let blk = 0;
     (flat ? ['f'] : ['a', 'b']).forEach(face => {
@@ -3102,9 +3103,11 @@ function generateStdLayout(kind){
       const yAt = j => face === 'b' ? (yHi - offs[j].o - dY) : (yLo + offs[j].o); // b면은 처마가 yHi 쪽
       frameSummary.push(sizes.join('+'));
       const availX = X1 - X0 - 2 * sb;
-      const runW = n => n * dX + (n - 1) * gap + Math.floor((n - 1) / blockN) * (1.0 - gap); // N장마다 1m 이격 포함 길이
+      const runW = n => n * dX + (n - 1) * gap + Math.floor((n - 1) / blockN) * Math.max(blockGap - gap, 0); // N장마다 이격 포함 길이
       let nX = 0; while(runW(nX + 1) <= availX + 1e-6) nX++;
-      const ventCol = Math.floor((nY - 1) / 2);
+      // 통풍로: 3단 이상 틀에만, 그 틀의 가운데 단에 (2단 틀에는 만들지 않음)
+      const ventTiers = new Set();
+      { let j0 = 0; sizes.forEach(k => { if(k >= 3) ventTiers.add(j0 + Math.floor((k - 1) / 2)); j0 += k; }); }
       let x = X0 + sb; // 건물 끝에서 이격거리만큼 떨어진 곳부터 배치
       for(let done = 0; done < nX; ){
         const n = Math.min(blockN, nX - done);
@@ -3112,15 +3115,15 @@ function generateStdLayout(kind){
         for(let i = 0; i < n; i++){
           for(let j = 0; j < nY; j++){
             const cr = rect(x, yAt(j), dX, dY);
-            if(fits(cr)) cands.push({ cr, table: face + '-' + blk + '-' + offs[j].fi, tier: j, vent: j === ventCol && vents.has(i) && n >= 4 });
+            if(fits(cr)) cands.push({ cr, table: face + '-' + blk + '-' + offs[j].fi, tier: j, vent: ventTiers.has(j) && vents.has(i) && n >= 4 });
           }
           x += dX + (i === n - 1 ? 0 : gap);
         }
         done += n; blk++;
-        x += 1.0; // N장마다 1,000mm 이격 (블록 끝 모듈 뒤에서 1m)
+        x += Math.max(blockGap, gap); // 블록 사이: 기본은 모듈간격과 같게(빈 공간 없음)
       }
     });
-    summary = `원단 ${frameN}단 — ${flat ? '' : '면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tilt}°, 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 1.0m 이격 + 블록당 통풍로 2개, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
+    summary = `원단 ${frameN}단 — ${flat ? '' : '면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tilt}°, 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 통풍로 2개(3단 이상 틀만)${blockGap > 0 ? ` + ${blockGap}m 이격` : ', 블록 사이 빈 공간 없음'}, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
   } else if(kind === 'insam' || kind === 'insam_flat' || kind === 'zero'){
     // 남북 축에 가까운 축을 열 피치(기울임) 방향으로: axis 방향 벡터 (cos,sin) 의 남북 성분 |sin| 이 크면 x'가 남북
     const xIsNS = Math.abs(Math.sin(axis)) >= Math.abs(Math.cos(axis));
