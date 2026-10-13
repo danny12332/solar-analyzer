@@ -2318,9 +2318,50 @@ async function exportLayoutSheet(fmt){
     L.vents.forEach(m => { const path = m.poly.getPath(); poly(path, '#11AA22', 'rgba(60,220,60,0.75)', 1.6); if(path.length === 4){ const a = toC(path[0].getLat(), path[0].getLng()), b = toC(path[2].getLat(), path[2].getLng()), c2 = toC(path[1].getLat(), path[1].getLng()), d = toC(path[3].getLat(), path[3].getLng()); g.strokeStyle = '#000'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.moveTo(c2.x, c2.y); g.lineTo(d.x, d.y); g.stroke(); } });
   });
   g.restore();
+  const placed = [];
+  // 3-1) 통풍로 상세(빨간 확대 원 + 지시선 + "통풍로") — 도면 표기 방식
+  {
+    const VL = layouts.find(L => L.vents.length);
+    if(VL){
+      // 확대 원과 가장 가까운(오른쪽 끝) 통풍로를 골라 지시선을 짧게
+      const vm = VL.vents.reduce((b, m) => { const x = Math.max(...m.poly.getPath().map(q => toC(q.getLat(), q.getLng()).x)); return (!b || x > b.x) ? { m, x } : b; }, null).m;
+      const vp = vm.poly.getPath().map(q => toC(q.getLat(), q.getLng()));
+      const vc = { x: vp.reduce((a, q) => a + q.x, 0) / vp.length, y: vp.reduce((a, q) => a + q.y, 0) / vp.length };
+      const allMods = layouts.flatMap(L => L.ed.modules.map(m => ({ m, p: m.poly.getPath().map(q => toC(q.getLat(), q.getLng())) })));
+      const xsAll = allMods.flatMap(o => o.p.map(q => q.x));
+      const Rr = 95, Z = 3.2; // 원 반지름(px), 확대 배율
+      let cx = Math.min(Math.max(...xsAll) + Rr + 60, M.x + M.w - Rr - 230), cy = Math.min(Math.max(vc.y, M.y + Rr + 20), M.y + M.h - Rr - 20);
+      if(cx < vc.x + Rr + 20) cx = Math.min(vc.x + Rr * 2.2, M.x + M.w - Rr - 230);
+      // 지시선
+      const ang = Math.atan2(vc.y - cy, vc.x - cx);
+      g.strokeStyle = '#E00000'; g.lineWidth = 3; g.beginPath(); g.moveTo(vc.x, vc.y); g.lineTo(cx + Rr * Math.cos(ang), cy + Rr * Math.sin(ang)); g.stroke();
+      // 확대 내용
+      g.save(); g.beginPath(); g.arc(cx, cy, Rr, 0, Math.PI * 2); g.clip();
+      g.fillStyle = 'rgba(255,255,255,0.92)'; g.fillRect(cx - Rr, cy - Rr, Rr * 2, Rr * 2);
+      const T = q => ({ x: cx + (q.x - vc.x) * Z, y: cy + (q.y - vc.y) * Z });
+      allMods.forEach(o => {
+        const c0 = o.p.reduce((a, q) => ({ x: a.x + q.x / o.p.length, y: a.y + q.y / o.p.length }), { x: 0, y: 0 });
+        if(Math.hypot(c0.x - vc.x, c0.y - vc.y) > Rr / Z * 1.6) return;
+        const tp = o.p.map(T);
+        const isVent = o.m.vent && o.m.removed;
+        if(o.m.removed && !isVent) return;
+        g.beginPath(); tp.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.closePath();
+        g.fillStyle = isVent ? 'rgba(60,220,60,0.9)' : 'rgba(255,255,255,0.3)'; g.fill();
+        g.lineWidth = 2.2; g.strokeStyle = isVent ? '#0B6B0B' : '#FF00FF'; g.stroke();
+        if(isVent && tp.length === 4){ g.strokeStyle = '#000'; g.lineWidth = 3; g.beginPath(); g.moveTo(tp[0].x, tp[0].y); g.lineTo(tp[2].x, tp[2].y); g.moveTo(tp[1].x, tp[1].y); g.lineTo(tp[3].x, tp[3].y); g.stroke(); }
+      });
+      g.restore();
+      g.strokeStyle = '#E00000'; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, Rr, 0, Math.PI * 2); g.stroke();
+      // "◀━ 통풍로"
+      g.fillStyle = '#000'; g.beginPath(); g.moveTo(cx + Rr - 6, cy); g.lineTo(cx + Rr + 22, cy - 12); g.lineTo(cx + Rr + 22, cy + 12); g.closePath(); g.fill();
+      g.fillRect(cx + Rr + 20, cy - 6, 50, 12);
+      g.font = 'bold 46px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle';
+      g.lineWidth = 6; g.strokeStyle = '#fff'; g.strokeText('통풍로', cx + Rr + 80, cy); g.fillText('통풍로', cx + Rr + 80, cy);
+      placed.push({ x: cx - Rr, y: cy - Rr, w: Rr * 2 + 260, h: Rr * 2 });
+    }
+  }
   // 4) 동별 용량 상자
   g.textBaseline = 'middle'; g.textAlign = 'center';
-  const placed = [];
   layouts.forEach((L, i) => {
     const pts = L.live.flatMap(m => m.poly.getPath()); if(!pts.length) return;
     const xs = pts.map(q => toC(q.getLat(), q.getLng()));
@@ -2724,7 +2765,26 @@ function tableSummaryText(ed){
 // 모듈 상태 반영
 function setModuleRemoved(m, removed){
   m.removed = removed;
-  m.poly.setOptions({ fillColor: removed ? '#B0B0B0' : m.color, fillOpacity: removed ? 0.25 : 0.55, strokeOpacity: removed ? 0.3 : 0.8 });
+  if(m.vent && removed){
+    m.poly.setOptions({ fillColor: '#2FCB2F', fillOpacity: 0.9, strokeColor: '#0B6B0B', strokeOpacity: 1 });
+    showVentX(m, true);
+    return;
+  }
+  if(m.vent) showVentX(m, false);
+  m.poly.setOptions({ fillColor: removed ? '#B0B0B0' : m.color, fillOpacity: removed ? 0.25 : 0.55, strokeOpacity: removed ? 0.3 : 0.8, strokeColor: '#5A0A40' });
+}
+// 통풍로 칸의 X(대각선 2개)
+function ventXPaths(m){ const q = m.poly.getPath(); return q.length >= 4 ? [[q[0], q[2]], [q[1], q[3]]] : []; }
+function showVentX(m, on){
+  if(on){
+    const map = ensureKakaoMap();
+    const paths = ventXPaths(m);
+    if(!m.ventX){
+      m.ventX = paths.map(pp => new kakao.maps.Polyline({ map, path: pp, strokeWeight: 1.5, strokeColor: '#000000', strokeOpacity: 0.95, zIndex: 3 }));
+      const ed = layoutByModule(m);
+      m.ventX.forEach(l => { measureShapes.push(l); if(ed && measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(l); });
+    } else { m.ventX.forEach((l, i) => { if(paths[i]) l.setPath(paths[i]); l.setMap(map); }); }
+  } else if(m.ventX){ m.ventX.forEach(l => l.setMap(null)); }
 }
 // 모듈 클릭: 기본 = 한 장 제외/복원, "줄 단위" 모드 = 같은 줄(열·테이블) 전체 제외/복원
 function moduleClicked(m){
@@ -2768,6 +2828,7 @@ function moveLayoutBy(ed, dx, dy){
   ed.modules.forEach(m => {
     m.poly.setPath(shiftPath(m.poly.getPath(), dx, dy, lat0));
     if(m.cornersRot) m.cornersRot = m.cornersRot.map(c => ({ x: c.x + dr.x, y: c.y + dr.y }));
+    if(m.ventX){ const pp = ventXPaths(m); m.ventX.forEach((l, i) => { if(pp[i]) l.setPath(pp[i]); }); }
   });
   (ed.tables || []).forEach(t => { try{ t.outline.setPath(shiftPath(t.outline.getPath(), dx, dy, lat0)); }catch(e){} });
   [ed.label, ed.badge].forEach(o => { if(o && o.getPosition){ try{ o.setPosition(shiftPath([o.getPosition()], dx, dy, lat0)[0]); }catch(e){} } });
@@ -2807,7 +2868,7 @@ function endMoveLayout(done){
   if(!moveSel) return;
   const ed = moveSel.ed;
   moveSel.handle.setMap(null); moveSel.panel.setMap(null);
-  ed.modules.forEach(m => m.poly.setOptions({ strokeColor: '#5A0A40', strokeWeight: 1 }));
+  ed.modules.forEach(m => m.poly.setOptions({ strokeColor: (m.vent && m.removed) ? '#0B6B0B' : '#5A0A40', strokeWeight: 1 }));
   moveSel = null;
   if(done){
     setMode('normal');
@@ -2827,7 +2888,7 @@ function toggleDeleteModuleMode(){
 }
 function deleteModule(ed, m){
   const idx = ed.modules.indexOf(m); if(idx < 0) return;
-  m.poly.setMap(null);
+  m.poly.setMap(null); if(m.ventX) m.ventX.forEach(l => l.setMap(null));
   ed.modules.splice(idx, 1);
   if(ed.mods && ed.mods !== ed.modules){ const j = ed.mods.indexOf(m); if(j >= 0) ed.mods.splice(j, 1); }
   let tableId = null;
@@ -2843,7 +2904,7 @@ function undoDeleteModule(){
   const d = deletedStack.pop(); if(!d) return;
   const { ed, m, idx, tableId } = d;
   if(!layoutRegistry.includes(ed)){ undoDeleteModule(); return; } // 배치 자체를 지운 경우 건너뜀
-  m.poly.setMap(ensureKakaoMap());
+  m.poly.setMap(ensureKakaoMap()); if(m.vent && m.removed) showVentX(m, true);
   ed.modules.splice(Math.min(idx, ed.modules.length), 0, m);
   if(ed.mods && ed.mods !== ed.modules) ed.mods.push(m);
   if(tableId !== null){ const t = (ed.tables || []).find(x => x.id === tableId); if(t){ t.mods.push(m); recomputeTableOutline(ed, t); if(tableOverlaysOn()) try{ t.outline.setMap(ensureKakaoMap()); }catch(e){} } }
