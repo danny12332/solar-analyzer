@@ -561,7 +561,11 @@
           <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
           <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
           <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
-          <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="exportLayoutSheet()">PNG 저장</button>
+          <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
+          <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
+          <span id="sheetWinInfo" style="font-size:11px;color:var(--ink-soft);">범위: 자동(배치 전체)</span>
+          <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="exportLayoutSheet('png')">PNG 저장</button>
+          <button type="button" class="run" style="background:#7A0E58;color:#fff;" onclick="exportLayoutSheet('pdf')">PDF 저장 (A4 가로)</button>
           <span id="sheetStatus" class="hint" style="font-size:11px;"></span>
         </div>
         <details id="layoutDetails" style="margin-bottom:12px;">
@@ -1754,6 +1758,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'addtable'){ addTableAt(mouseEvent.latLng); }
     else if(mapMode === 'trace'){ traceClick(mouseEvent.latLng); }
     else if(mapMode === 'editadd'){ editAddVertexAt(mouseEvent.latLng); }
+    else if(mapMode === 'sheetwin'){ sheetWinClick(mouseEvent.latLng); }
     else if(mapMode === 'delrect'){ rectDeleteClick(mouseEvent.latLng); }
     else if(mapMode === 'delline'){ /* 모듈 클릭으로만 동작 */ }
     else if(mapMode === 'movelayout'){ /* 모듈 클릭으로 배치 선택 */ }
@@ -1779,6 +1784,7 @@ function ensureKakaoMap(){
   });
   kakao.maps.event.addListener(kakaoMapObj, 'mousemove', function(mouseEvent){
     if(mapMode === 'trace'){ traceMove(mouseEvent.latLng); }
+    else if(mapMode === 'sheetwin'){ sheetWinMove(mouseEvent.latLng); }
     else if(mapMode === 'radius' && radiusCenter){ updateRadiusPreview(mouseEvent.latLng); }
     else if(mapMode === 'distance' && distancePoints.length > 0){ updateDistancePreview(mouseEvent.latLng); }
     else if(mapMode === 'area' && areaPoints.length > 0){ updateAreaPreview(mouseEvent.latLng); }
@@ -1885,7 +1891,7 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout'].includes(mode));
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin'].includes(mode));
     [['addModBtn','addmod'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
@@ -2206,6 +2212,37 @@ function applyLayoutPreset(key){
 
 // ===== 🖼 모듈 배치도 이미지(PNG): 위성사진(VWorld → Esri 순으로 시도) + 경계·모듈·동별 용량 + 모듈 표 + 표제란 =====
 // 지도 화면 캡처가 아니라 배치 좌표로 직접 다시 그림(카카오 지도 타일은 브라우저 보안상 이미지로 저장할 수 없음).
+let sheetWindow = null; // { s, n, w, e } 위경도
+let sheetWinFirst = null, sheetWinRect = null;
+function toggleSheetWindowMode(){
+  if(mapMode === 'sheetwin'){ setMode('normal'); sheetWinFirst = null; document.getElementById('sheetWinBtn').classList.remove('on'); return; }
+  setMode('sheetwin'); sheetWinFirst = null;
+  document.getElementById('sheetWinBtn').classList.add('on');
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = '⬚ 출력 범위: 지도에서 출력할 사각형의 첫 모서리와 반대쪽 모서리를 차례로 클릭하세요 (캐드 플롯의 "윈도우" 지정과 같음). 범위는 A4 가로 도면 칸에 용지 맞춤·가운데 정렬로 들어갑니다.';
+}
+function sheetWinPath(a, b){ return [new kakao.maps.LatLng(a.getLat(), a.getLng()), new kakao.maps.LatLng(a.getLat(), b.getLng()), new kakao.maps.LatLng(b.getLat(), b.getLng()), new kakao.maps.LatLng(b.getLat(), a.getLng())]; }
+function sheetWinDraw(path){
+  const map = ensureKakaoMap();
+  if(!sheetWinRect){ sheetWinRect = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#C2148A', strokeOpacity: 0.95, strokeStyle: 'dash', fillColor: '#C2148A', fillOpacity: 0.04, zIndex: 50 }); }
+  else { sheetWinRect.setPath(path); sheetWinRect.setMap(map); }
+}
+function sheetWinClick(ll){
+  if(!sheetWinFirst){ sheetWinFirst = ll; sheetWinDraw(sheetWinPath(ll, ll)); return; }
+  const a = sheetWinFirst, b = ll; sheetWinFirst = null;
+  sheetWindow = { s: Math.min(a.getLat(), b.getLat()), n: Math.max(a.getLat(), b.getLat()), w: Math.min(a.getLng(), b.getLng()), e: Math.max(a.getLng(), b.getLng()) };
+  sheetWinDraw(sheetWinPath(a, b));
+  setMode('normal'); document.getElementById('sheetWinBtn').classList.remove('on');
+  const wm = haversineMeters(new kakao.maps.LatLng(sheetWindow.s, sheetWindow.w), new kakao.maps.LatLng(sheetWindow.s, sheetWindow.e));
+  const hm = haversineMeters(new kakao.maps.LatLng(sheetWindow.s, sheetWindow.w), new kakao.maps.LatLng(sheetWindow.n, sheetWindow.w));
+  const info = document.getElementById('sheetWinInfo'); if(info) info.textContent = `범위: ${wm.toFixed(0)}m × ${hm.toFixed(0)}m (지정)`;
+  const st = document.getElementById('roadviewStatus'); st.textContent = `⬚ 출력 범위를 지정했습니다 (${wm.toFixed(0)}m × ${hm.toFixed(0)}m). "PNG 저장" 또는 "PDF 저장"을 누르세요. 분홍 점선은 저장 이미지에 나오지 않습니다.`;
+}
+function sheetWinMove(ll){ if(sheetWinFirst) sheetWinDraw(sheetWinPath(sheetWinFirst, ll)); }
+function clearSheetWindow(){
+  sheetWindow = null; sheetWinFirst = null; if(sheetWinRect) sheetWinRect.setMap(null);
+  const info = document.getElementById('sheetWinInfo'); if(info) info.textContent = '범위: 자동(배치 전체)';
+}
 function toggleSheetOpts(){
   const el = document.getElementById('sheetOpts'); if(!el) return;
   const show = el.style.display === 'none';
@@ -2221,7 +2258,7 @@ const SAT_PROVIDERS = [
   { name: 'VWorld 위성영상', maxZ: 19, url: (z, x, y) => `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/${z}/${y}/${x}.jpeg` },
   { name: 'Esri World Imagery', maxZ: 19, url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}` },
 ];
-async function exportLayoutSheet(){
+async function exportLayoutSheet(fmt){
   const st = document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
   if(!layoutRegistry.length){ st.textContent = '❌ 먼저 배치를 생성하세요.'; return; }
   st.textContent = '배치도를 그리는 중…';
@@ -2236,11 +2273,11 @@ async function exportLayoutSheet(){
   const allPts = [];
   layouts.forEach(L => { L.ed.modules.forEach(m => m.poly.getPath().forEach(q => allPts.push(q))); (L.ed.boundary || []).forEach(q => allPts.push(q)); });
   const lats = allPts.map(q => q.getLat()), lngs = allPts.map(q => q.getLng());
-  const bb = { s: Math.min(...lats), n: Math.max(...lats), w: Math.min(...lngs), e: Math.max(...lngs) };
+  const bb = sheetWindow ? Object.assign({}, sheetWindow) : { s: Math.min(...lats), n: Math.max(...lats), w: Math.min(...lngs), e: Math.max(...lngs) };
   // 줌·배율: 배치 범위가 지도 영역의 약 75%를 차지하도록
   const p0 = wmPx(bb.n, bb.w, 0), p1 = wmPx(bb.s, bb.e, 0);
   const bw0 = Math.max(p1.x - p0.x, 1e-9), bh0 = Math.max(p1.y - p0.y, 1e-9);
-  const fit = Math.min(M.w / bw0, M.h / bh0) * 0.75; // 캔버스 px / z0 px
+  const fit = Math.min(M.w / bw0, M.h / bh0) * (sheetWindow ? 1.0 : 0.75); // 지정 범위는 용지에 맞춤, 자동은 여백 25%
   let z = Math.min(19, Math.max(1, Math.floor(Math.log2(fit / 1.2))));
   const k = fit / Math.pow(2, z); // 캔버스 px / z px
   const c = wmPx((bb.n + bb.s) / 2, (bb.w + bb.e) / 2, z);
@@ -2341,7 +2378,18 @@ async function exportLayoutSheet(){
     g.textAlign = 'left'; g.fillText('도 면 명', 2010, ty + 30); g.fillText('T I T L E', 2010, ty + 60); g.textAlign = 'center'; g.font = '26px "Noto Sans KR", sans-serif'; g.fillText('모 듈 배 치 평 면 도', (2010 + x1) / 2 + 40, ty + 105);
   }
   // 저장
-  const name = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_모듈배치도.png';
+  const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_모듈배치도';
+  if(fmt === 'pdf'){
+    try{
+      const pdfBlob = canvasToPdfA4(cv);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(pdfBlob); a.download = base + '.pdf'; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      st.textContent = `✅ ${base}.pdf 저장 (A4 가로) — 모듈 ${totalN.toLocaleString('ko-KR')}장 · ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits: 3})}kW${satOk ? ` · 배경 ${satName}` : ' · 위성사진은 불러오지 못해 배경 없이 저장'}`;
+    }catch(e){ st.textContent = '❌ PDF 저장 실패: ' + e.message; }
+    window.__lastSheetCanvas = cv;
+    return cv;
+  }
+  const name = base + '.png';
   try{
     cv.toBlob(blob => {
       if(!blob){ st.textContent = '❌ 이미지 생성 실패'; return; }
@@ -2352,6 +2400,29 @@ async function exportLayoutSheet(){
   }catch(e){ st.textContent = '❌ 이미지 저장 실패: ' + e.message; }
   window.__lastSheetCanvas = cv;
   return cv;
+}
+// 캔버스 → A4 가로 PDF(1쪽, JPEG 이미지 1장). 외부 라이브러리 없이 PDF 구조를 직접 작성
+function canvasToPdfA4(cv){
+  const jpg = atob(cv.toDataURL('image/jpeg', 0.92).split(',')[1]);
+  const img = new Uint8Array(jpg.length); for(let i = 0; i < jpg.length; i++) img[i] = jpg.charCodeAt(i);
+  const PW = 841.89, PH = 595.28; // A4 가로(pt)
+  const enc = str => new TextEncoder().encode(str);
+  const parts = [], offs = [];
+  let len = 0;
+  const push = b => { parts.push(b); len += b.length; };
+  push(enc('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'));
+  const obj = (n, body) => { offs[n] = len; push(enc(`${n} 0 obj\n`)); if(typeof body === 'string') push(enc(body)); else body.forEach(push); push(enc('\nendobj\n')); };
+  const content = `q\n${PW} 0 0 ${PH} 0 0 cm\n/Im0 Do\nQ\n`;
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
+  obj(4, [enc(`<< /Type /XObject /Subtype /Image /Width ${cv.width} /Height ${cv.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`), img, enc('\nendstream')]);
+  obj(5, `<< /Length ${content.length} >>\nstream\n${content}endstream`);
+  const xref = len;
+  let x = 'xref\n0 6\n0000000000 65535 f \n';
+  for(let i = 1; i <= 5; i++) x += String(offs[i]).padStart(10, '0') + ' 00000 n \n';
+  push(enc(x + `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
+  return new Blob(parts, { type: 'application/pdf' });
 }
 function wrapText(g, text, x, y, maxW, lh){
   let line = '', yy = y;
