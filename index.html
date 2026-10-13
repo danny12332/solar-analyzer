@@ -550,8 +550,9 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('zero')" title="징크판넬·제로솔루션 · 가로배치 · 열 간격 1,700mm · 지붕 끝 700">제로솔루션</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('slab')" title="평슬라브 경사거치 · 세로 2단 · 8°">평슬라브</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('parking')" title="주차면 5,000×2,500 · 2칸마다 기둥 600 · 통로 6m">주차장</button>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 정남향(방위각 0°) · 모듈 세로 4단 · 10° · 경계 3m">토지 노지 4단</button>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 정남향(방위각 0°) · 모듈 세로 2단 · 10° · 경계 3m">토지 노지 2단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 모듈 세로 4단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 4단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 모듈 세로 2단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 2단</button>
+          <label id="groundDirWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="경계선에 맞춤: 테이블 줄을 부지(그린 경계)의 변과 나란히 놓아 줄 끝이 끊기지 않고 면적을 채움(남향에서 최대 45° 틀어질 수 있음). 정남: 줄을 정동-정서로 놓음(경계가 기울어 있으면 줄 끝이 비스듬히 잘림)">줄 방향 <select id="groundDir" style="font-size:11.5px;padding:0 2px;"><option value="axis" selected>경계선에 맞춤 (끊김 없음)</option><option value="south">정남</option></select></label>
           <label id="denseWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="설치기준 열 간격(음영 간격) 대신 열을 바짝 붙여 지붕 끝 이격 안을 가득 채웁니다. 그늘이 질 줄·모듈은 배치 후 ✂ 모듈 삭제 / ⋯더보기 → 🗑 테이블 제거로 직접 빼세요."><input type="checkbox" id="stdDense" style="vertical-align:middle;"> 빈틈없이 채우기(음영은 직접 삭제) · 열 사이 <input id="stdDenseGap" type="number" value="0.5" step="0.1" min="0" style="width:42px;padding:1px 3px;">m</label>
           <span style="flex:1;"></span>
           <button type="button" class="run" id="mainGenBtn" style="background:var(--sun);color:#2A1A00;font-size:13px;padding:7px 16px;" onclick="onGenerateLayoutClick()">③ 배치 생성</button>
@@ -2749,6 +2750,7 @@ function onMountTypeChange(){
   document.getElementById('ewRackLabel').style.display = 'none';
   document.getElementById('roofOpts').style.display = (isNewGable || mt === 'slab') ? 'inline-flex' : 'none';
   document.getElementById('groundOpts').style.display = mt === 'ground' ? 'inline-flex' : 'none';
+  if(document.getElementById('groundDirWrap')) document.getElementById('groundDirWrap').style.display = mt === 'ground' ? '' : 'none';
   document.getElementById('ridgeGapLabel').style.display = isNewGable ? '' : 'none';
   document.getElementById('ridgeFlipLabel').style.display = isNewGable ? '' : 'none';
   const facingSel = document.getElementById('arrFacing');
@@ -3488,12 +3490,10 @@ function generateStdLayout(kind){
       for(let x = X0 + sb; x + depth <= X1 - sb + 1e-6; x += pitch, r++){
         (flat ? ['f'] : ['a', 'b']).forEach(face => {
           const yLo = face === 'f' ? Y0 + sb : (face === 'a' ? Y0 + sb : ymid + ridgeHalf), yHi = face === 'f' ? Y1 : (face === 'a' ? ymid - ridgeHalf : Y1);
-          for(let k = 0; k < rows; k++){
-            const xa = x + k * (tiltLen + gap);
-            for(let y = yLo; y + across <= yHi + 1e-6; y += across + gap){
-              const cr = rect(xa, y, tiltLen, across);
-              if(fits(cr)) cands.push({ cr, table: r + face, tier: k });
-            }
+          for(let y = yLo; y + across <= yHi + 1e-6; y += across + gap){
+            const col = [];
+            for(let k = 0; k < rows; k++){ const cr = rect(x + k * (tiltLen + gap), y, tiltLen, across); if(!fits(cr)){ col.length = 0; break; } col.push({ cr, table: r + face, tier: k }); }
+            if(col.length === rows) col.forEach(c => cands.push(c)); // 모든 단이 들어가는 줄만
           }
         });
       }
@@ -3502,12 +3502,10 @@ function generateStdLayout(kind){
       (flat ? ['f'] : ['a', 'b']).forEach(face => {
         const yLo = face === 'b' ? ymid + ridgeHalf : Y0 + sb, yHi = face === 'a' ? ymid - ridgeHalf : Y1;
         for(let y = yLo; y + depth <= yHi + 1e-6; y += pitch, r++){
-          for(let k = 0; k < rows; k++){
-            const ya = y + k * (tiltLen + gap);
-            for(let x = X0 + sb; x + across <= X1 + 1e-6; x += across + gap){
-              const cr = rect(x, ya, across, tiltLen);
-              if(fits(cr)) cands.push({ cr, table: r + face, tier: k });
-            }
+          for(let x = X0 + sb; x + across <= X1 + 1e-6; x += across + gap){
+            const col = [];
+            for(let k = 0; k < rows; k++){ const cr = rect(x, y + k * (tiltLen + gap), across, tiltLen); if(!fits(cr)){ col.length = 0; break; } col.push({ cr, table: r + face, tier: k }); }
+            if(col.length === rows) col.forEach(c => cands.push(c)); // 모든 단이 들어가는 줄만
           }
         }
       });
@@ -4118,7 +4116,8 @@ function generateSolarLayout(){
   const arrCols = Math.max(1, Math.round(parseFloat(document.getElementById('arrCols').value) || 20));
   const arrSideGap = Math.max(parseFloat(document.getElementById('arrSideGap').value) || 0, 0);
   const arrRowGapIn = parseFloat(document.getElementById('arrRowGap').value);
-  const facingMode = (document.getElementById('arrFacing') || {}).value || 'south';
+  let facingMode = (document.getElementById('arrFacing') || {}).value || 'south';
+  if(facingMode !== 'manual' && document.getElementById('groundDir')) facingMode = document.getElementById('groundDir').value || 'axis';
   const orient = ((document.getElementById('modOrient') || {}).value) || 'landscape';
   const landscape = orient === 'landscape';
   // 가로(눕힘): 모듈 짧은 변(폭)이 경사 방향, 긴 변(길이)이 좌우 / 세로(세움): 긴 변이 경사 방향
@@ -4128,7 +4127,13 @@ function generateSolarLayout(){
   const edgeDeg = alignEdgeAngleDeg(lastAreaPolygonPath);
   if(edgeDeg !== null) azimuthDeg = Math.round(edgeDeg * 10) / 10; // 선택한 경계 변과 나란히(줄이 그 변을 따라감)
   else if(facingMode === 'south') azimuthDeg = 0;
-  else if(facingMode === 'axis') azimuthDeg = suggestAzimuthFromPath(lastAreaPolygonPath);
+  else if(facingMode === 'axis'){
+    // 경계를 감싸는 최소 직사각형의 축(사각형 부지면 그 변) — 남향 ±45° 안으로
+    const la = lastAreaPolygonPath.reduce((s2, q) => s2 + q.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180;
+    let d = normAxis(principalAxes(lastAreaPolygonPath.map(q => solarToXY(q, la))));
+    if(Math.abs(d) > 45) d += (d > 0 ? -90 : 90);
+    azimuthDeg = Math.round(d * 10) / 10;
+  }
   else azimuthDeg = parseFloat(document.getElementById('panelAzimuth').value) || 0;
   document.getElementById('panelAzimuth').value = azimuthDeg;
   const azimuthRad = azimuthDeg * Math.PI/180;
@@ -4161,23 +4166,43 @@ function generateSolarLayout(){
   const xmin = Math.min(...xs) + setback, xmax = Math.max(...xs) - setback;
   const ymin = Math.min(...ys) + setback, ymax = Math.max(...ys) - setback;
 
-  const cands = [];
-  let rowIdx = 0;
-  // 어레이 줄(상하) × 어레이(좌우 C장씩, 사이에 좌우 이격). 모듈은 한 장씩 경계·이격 판정.
-  for(let y = ymin; y + footprintNS <= ymax; y += pitch, rowIdx++){
-    let col = 0;
-    for(let x = xmin; x + footprintEW <= xmax; ){
-      const tableIdx = Math.floor(col / arrCols); // 이 줄에서 몇 번째 테이블인지
-      for(let k = 0; k < arrRows; k++){
-        const y0 = y + k * (footprintNS + gap), y1 = y0 + footprintNS;
-        if(y1 > ymax) break;
-        const cornersRot = [ {x, y: y0}, {x: x+footprintEW, y: y0}, {x: x+footprintEW, y: y1}, {x, y: y1} ];
-        const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad));
-        const fits = cornersReal.every(c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback));
-        if(fits) cands.push({ cornersReal, cornersRot, row: rowIdx, table: rowIdx + '-' + tableIdx, tier: k });
+  // 어레이 줄(상하) × 어레이(좌우 C장씩, 사이에 좌우 이격).
+  // 구조물 기준: 세로 한 줄(1단~N단 모듈 묶음)이 모두 경계·이격 안에 들어갈 때만 그 줄을 놓음 → 줄 끝이 계단처럼 끊기지 않음
+  // 시작 위치(좌우·상하)를 조금씩 옮겨 보며 모듈이 가장 많이 들어가는 격자를 고름
+  const fitsCorner = c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback - 0.02);
+  const buildGroundCands = (ox, oy) => {
+    const out = []; let rowIdx = 0;
+    for(let y = ymin - setback + oy; y + arrDepth <= ymax + 1e-6; y += pitch, rowIdx++){
+      let col = 0, tIdx = 0, run = 0;
+      for(let x = xmin - setback + ox; x + footprintEW <= xmax + 1e-6; ){
+        const colMods = [];
+        for(let k = 0; k < arrRows; k++){
+          const y0 = y + k * (footprintNS + gap), y1 = y0 + footprintNS;
+          const cornersRot = [ {x, y: y0}, {x: x+footprintEW, y: y0}, {x: x+footprintEW, y: y1}, {x, y: y1} ];
+          const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad));
+          if(!cornersReal.every(fitsCorner)){ colMods.length = 0; break; }
+          colMods.push({ cornersReal, cornersRot, tier: k });
+        }
+        if(colMods.length === arrRows){
+          if(run === 0 && col > 0) tIdx++; // 중간에 끊겼다가 다시 시작하면 새 테이블
+          colMods.forEach(m => out.push(Object.assign(m, { row: rowIdx, table: rowIdx + '-' + tIdx })));
+          run++; if(run >= arrCols){ run = 0; tIdx++; }
+        } else if(run > 0){ run = 0; tIdx++; }
+        col++;
+        // 테이블이 꽉 찼으면(run 0으로 넘어감) 좌우 이격, 아니면 모듈 간격
+        x += footprintEW + ((run === 0 && colMods.length === arrRows) ? arrSideGap : gap);
       }
-      col++;
-      x += footprintEW + ((col % arrCols === 0) ? arrSideGap : gap);
+    }
+    return out;
+  };
+  let cands = [], bestOff = null;
+  const stepX = footprintEW + gap;
+  const nY = Math.max(1, Math.min(16, Math.ceil(pitch / 0.25))), nX = 6;
+  for(let iy = 0; iy < nY; iy++){
+    for(let ix = 0; ix < nX; ix++){
+      const ox = setback + ix * stepX / nX, oy = setback + iy * Math.min(pitch, ymax - ymin) / nY;
+      const c = buildGroundCands(ox, oy);
+      if(c.length > cands.length){ cands = c; bestOff = { ox, oy }; }
     }
   }
   // 실무 밀도 기준(토지 300평/100kW) 적용
@@ -4242,7 +4267,7 @@ function generateSolarLayout(){
   hookTableZoom(map);
   updateGroundLabel(thisGround);
 
-  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈 ${landscape ? '가로(눕힘)' : '세로(세움)'} ${arrRows}단×테이블당 가로 ${arrCols}장, 설치각 ${tiltDeg}°, 테이블 ${thisGround.tables.length}개(${tableSummaryText(thisGround)}; 테이블 깊이 ${arrDepth.toFixed(2)}m·뒤쪽 높이 ${arrHeight.toFixed(2)}m), 주향 ${edgeDeg !== null ? '선택한 경계 변과 나란히' : (facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '부지 축' : '직접 입력'))}(방위각 ${azimuthDeg}°), 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈 ${landscape ? '가로(눕힘)' : '세로(세움)'} ${arrRows}단×테이블당 가로 ${arrCols}장, 설치각 ${tiltDeg}°, 테이블 ${thisGround.tables.length}개(${tableSummaryText(thisGround)}; 테이블 깊이 ${arrDepth.toFixed(2)}m·뒤쪽 높이 ${arrHeight.toFixed(2)}m), 줄 방향 ${edgeDeg !== null ? '선택한 경계 변과 나란히' : (facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '경계선에 맞춤' : '직접 입력'))}(방위각 ${azimuthDeg}°${azimuthDeg ? ` = 정남에서 ${Math.abs(azimuthDeg)}° ${azimuthDeg > 0 ? '동쪽' : '서쪽'}으로 틀어짐 — 정남으로 하려면 ② "줄 방향: 정남"` : ''}), 세로 한 줄(1~${arrRows}단)이 모두 들어가는 자리에만 배치, 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
