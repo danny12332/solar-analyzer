@@ -635,6 +635,8 @@
           <button type="button" class="map-fab" id="rvFab" onclick="toggleRoadview()" title="지도에서 지점을 클릭한 뒤 누르면 그 위치의 로드뷰가 열립니다">🚶 로드뷰</button>
           <div class="layout-tools" id="layoutTools" style="display:none;">
             <button type="button" onclick="startBuildingEdit()" title="꼭짓점을 끌어 지붕·부지 모양에 맞춥니다">↔ 꼭짓점 조정</button>
+            <button type="button" id="delModBtn" onclick="toggleDeleteModuleMode()" title="켠 뒤 모듈을 클릭하면 한 장씩 삭제 (Ctrl+Z 또는 ↶로 되돌리기)">✂ 모듈 삭제</button>
+            <button type="button" id="undoDelBtn" onclick="undoDeleteModule()" title="마지막으로 삭제한 모듈 되살리기" style="display:none;">↶ 되돌리기</button>
             <button type="button" id="moveLayoutBtn" onclick="toggleMoveLayoutMode()" title="배치(모듈 묶음)를 클릭해 선택한 뒤 손잡이를 끌거나 화살표로 전체를 이동">✥ 배치 이동</button>
             <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈을 클릭하면 한 장씩 제외/복원)">➕ 모듈 추가</button>
             <span id="addTableWrap" style="display:inline-flex;align-items:center;gap:3px;">
@@ -1762,7 +1764,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'sheetwin'){ sheetWinClick(mouseEvent.latLng); }
     else if(mapMode === 'delrect'){ rectDeleteClick(mouseEvent.latLng); }
     else if(mapMode === 'delline'){ /* 모듈 클릭으로만 동작 */ }
-    else if(mapMode === 'movelayout'){ /* 모듈 클릭으로 배치 선택 */ }
+    else if(mapMode === 'movelayout' || mapMode === 'delmod'){ /* 모듈 클릭으로 처리 */ }
     else {
       if(Date.now() - (window.__shapeClickAt || 0) < 400) return; // 건물(동) 도형을 클릭한 경우
       setMarkerPosition(mouseEvent.latLng);
@@ -1892,8 +1894,8 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin'].includes(mode));
-    [['addModBtn','addmod'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout']].forEach(([id, md]) => {
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod'].includes(mode));
+    [['addModBtn','addmod'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
     });
@@ -2728,7 +2730,9 @@ function setModuleRemoved(m, removed){
 function moduleClicked(m){
   const ed = layoutByModule(m);
   if(!ed) return;
+  window.__shapeClickAt = Date.now(); // 모듈 클릭이 지도 클릭(주소 표시·필지 선택)으로 이어지지 않게
   if(mapMode === 'movelayout'){ selectLayoutForMove(ed); return; }
+  if(mapMode === 'delmod'){ deleteModule(ed, m); return; }
   if(mapMode === 'delline'){
     const target = !m.removed;
     ed.modules.filter(x => x.line === m.line).forEach(x => setModuleRemoved(x, target));
@@ -2812,6 +2816,42 @@ function endMoveLayout(done){
     st.textContent = `✥ 배치를 이동했습니다 (동쪽 ${mv.dx.toFixed(2)}m, 북쪽 ${mv.dy.toFixed(2)}m). 건물 경계 밖으로 나간 모듈은 직접 확인해 "영역 제거"나 모듈 클릭으로 빼세요.`;
   }
 }
+// ===== ✂ 모듈 삭제: 클릭한 모듈을 한 장씩 지도·집계·도면에서 완전히 삭제 (되돌리기 가능) =====
+const deletedStack = []; // [{ ed, m, idx, tableId }]
+function toggleDeleteModuleMode(){
+  if(mapMode === 'delmod'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
+  if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성하세요.'; return; }
+  setMode('delmod');
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = '✂ 모듈 삭제: 지울 모듈을 하나씩 클릭하세요. 잘못 지웠으면 "↶ 되돌리기"(또는 Ctrl+Z). 끝내려면 버튼을 다시 누르세요.';
+}
+function deleteModule(ed, m){
+  const idx = ed.modules.indexOf(m); if(idx < 0) return;
+  m.poly.setMap(null);
+  ed.modules.splice(idx, 1);
+  if(ed.mods && ed.mods !== ed.modules){ const j = ed.mods.indexOf(m); if(j >= 0) ed.mods.splice(j, 1); }
+  let tableId = null;
+  (ed.tables || []).forEach(t => { const k = t.mods.indexOf(m); if(k >= 0){ t.mods.splice(k, 1); tableId = t.id; if(t.mods.length) recomputeTableOutline(ed, t); else try{ t.outline.setMap(null); }catch(e){} } });
+  deletedStack.push({ ed, m, idx, tableId });
+  refreshLayoutLabel(ed);
+  const u = document.getElementById('undoDelBtn'); if(u) u.style.display = '';
+  const st = document.getElementById('roadviewStatus');
+  const live = ed.modules.filter(x => !x.removed).length;
+  st.textContent = `✂ 1장 삭제 — 이 배치 ${live.toLocaleString('ko-KR')}장 · ${(live * ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW (삭제 ${deletedStack.length}장, ↶ 되돌리기 가능)`;
+}
+function undoDeleteModule(){
+  const d = deletedStack.pop(); if(!d) return;
+  const { ed, m, idx, tableId } = d;
+  if(!layoutRegistry.includes(ed)){ undoDeleteModule(); return; } // 배치 자체를 지운 경우 건너뜀
+  m.poly.setMap(ensureKakaoMap());
+  ed.modules.splice(Math.min(idx, ed.modules.length), 0, m);
+  if(ed.mods && ed.mods !== ed.modules) ed.mods.push(m);
+  if(tableId !== null){ const t = (ed.tables || []).find(x => x.id === tableId); if(t){ t.mods.push(m); recomputeTableOutline(ed, t); if(tableOverlaysOn()) try{ t.outline.setMap(ensureKakaoMap()); }catch(e){} } }
+  refreshLayoutLabel(ed);
+  const u = document.getElementById('undoDelBtn'); if(u) u.style.display = deletedStack.length ? '' : 'none';
+  const st = document.getElementById('roadviewStatus'); if(st) st.textContent = `↶ 1장 되살렸습니다 (남은 되돌리기 ${deletedStack.length}장)`;
+}
+document.addEventListener('keydown', e => { if((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && deletedStack.length && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')){ e.preventDefault(); undoDeleteModule(); } });
 function toggleLineDeleteMode(){
   if(mapMode === 'delline'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
   if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성하세요.'; return; }
