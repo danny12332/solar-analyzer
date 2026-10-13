@@ -552,6 +552,7 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('parking')" title="주차면 5,000×2,500 · 2칸마다 기둥 600 · 통로 6m">주차장</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 정남향(방위각 0°) · 모듈 세로 4단 · 10° · 경계 3m">토지 노지 4단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 정남향(방위각 0°) · 모듈 세로 2단 · 10° · 경계 3m">토지 노지 2단</button>
+          <label id="denseWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="설치기준 열 간격(음영 간격) 대신 열을 바짝 붙여 지붕 끝 이격 안을 가득 채웁니다. 그늘이 질 줄·모듈은 배치 후 ✂ 모듈 삭제 / ⋯더보기 → 🗑 테이블 제거로 직접 빼세요."><input type="checkbox" id="stdDense" style="vertical-align:middle;"> 빈틈없이 채우기(음영은 직접 삭제) · 열 사이 <input id="stdDenseGap" type="number" value="0.5" step="0.1" min="0" style="width:42px;padding:1px 3px;">m</label>
           <span style="flex:1;"></span>
           <button type="button" class="run" id="mainGenBtn" style="background:var(--sun);color:#2A1A00;font-size:13px;padding:7px 16px;" onclick="onGenerateLayoutClick()">③ 배치 생성</button>
           <button type="button" class="preset-btn hist-undo" onclick="histUndo()" title="마지막 작업 1개를 취소 (배치 생성·모듈 삭제·이동·추가·경계·구역 나누기) · Ctrl+Z" disabled>↶ 이전으로</button>
@@ -2768,6 +2769,7 @@ function applyStdMountUi(mt){
   const isStd = STD_TYPES.includes(mt);
   const g = id => document.getElementById(id);
   g('stdOpts').style.display = isStd ? 'inline-flex' : 'none';
+  if(g('denseWrap')) g('denseWrap').style.display = (mt === 'insam' || mt === 'insam_flat' || mt === 'zero') ? '' : 'none';
   if(!isStd) return;
   const D = STD_DEFAULTS[mt];
   g('roofOpts').style.display = 'none'; g('groundOpts').style.display = 'none';
@@ -3475,8 +3477,11 @@ function generateStdLayout(kind){
     const across = landscape ? L : W;            // 열 방향(좌우) 치수
     const tb = kind === 'zero' ? { pitch: num('stdPitch', 1.7) * rows, exact: true } : stdPitchFromTable(tilt, landscape, rows);
     const pitchIn = parseFloat((document.getElementById('stdPitch') || {}).value);
-    const pitch = Number.isFinite(pitchIn) && pitchIn > 0 ? (kind === 'zero' ? pitchIn * rows : pitchIn) : tb.pitch;
     const depth = rows * tiltLen + (rows - 1) * gap;
+    const dense = !!(document.getElementById('stdDense') || {}).checked;
+    const denseGap = Math.max(parseFloat((document.getElementById('stdDenseGap') || {}).value) || 0, 0);
+    const pitchStd = Number.isFinite(pitchIn) && pitchIn > 0 ? (kind === 'zero' ? pitchIn * rows : pitchIn) : tb.pitch;
+    const pitch = dense ? depth + denseGap : pitchStd;
     let r = 0;
     if(xIsNS){
       // 열은 y'(경사면 가로질러) 방향으로 늘어서고, x'(용마루 방향) 으로 피치 반복 — 면마다 따로(용마루 이격)
@@ -3507,7 +3512,7 @@ function generateStdLayout(kind){
         }
       });
     }
-    summary = `${kind === 'zero' ? '징크판넬·제로솔루션' : (flat ? '인삼밭 플랫' : '인삼밭')} — 모듈 ${landscape ? '가로' : '세로'} ${rows}단, 경사 ${tilt}°, 열 간격 ${pitch.toFixed(2)}m(${Number.isFinite(pitchIn) && pitchIn > 0 ? '입력값' : (kind === 'zero' ? '기준 1.7m × 단 수' : (tb.exact ? '설치기준 표' : '설치기준 10°·15° 사이 비례값'))}), 지붕 끝 ${setback}m${flat ? ', 용마루를 넘어 폭 전체' : `·용마루 한쪽 ${ridgeHalf}m`} 이격`;
+    summary = `${kind === 'zero' ? '징크판넬·제로솔루션' : (flat ? '인삼밭 플랫' : '인삼밭')} — 모듈 ${landscape ? '가로' : '세로'} ${rows}단, 경사 ${tilt}°, 열 간격 ${pitch.toFixed(2)}m(${dense ? `빈틈없이 채우기: 열 사이 ${denseGap}m · 설치기준 음영 간격 ${pitchStd.toFixed(2)}m는 적용 안 함 → 그늘 질 줄은 ✂ 모듈 삭제 또는 🗑 테이블 제거로 직접 빼세요` : (Number.isFinite(pitchIn) && pitchIn > 0 ? '입력값' : (kind === 'zero' ? '기준 1.7m × 단 수' : (tb.exact ? '설치기준 표' : '설치기준 10°·15° 사이 비례값')))}), 지붕 끝 ${setback}m${flat ? ', 용마루를 넘어 폭 전체' : `·용마루 한쪽 ${ridgeHalf}m`} 이격`;
   } else if(kind === 'parking'){
     // 주차열: 깊이 5m에 세로 모듈 2단(긴 변이 주차면 깊이 방향), 열 방향으로 4장(주차면 2칸)마다 기둥 구간 0.6m
     const double = ((document.getElementById('stdPark') || {}).value || 'double') === 'double';
