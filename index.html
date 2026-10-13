@@ -146,12 +146,15 @@
   .panel-bar label{font-size:11.5px;color:var(--ink-soft);}
   .panel-bar input, .panel-bar select{padding:3px 5px;border:1px solid #E2CFA3;border-radius:4px;background:#fff;font-family:inherit;font-size:12px;color:var(--ink);}
   .panel-bar button.run{width:auto;margin:0;padding:6px 12px;font-size:12px;border-radius:var(--r-sm);}
-  #kakaoMap{width:100%;height:560px;border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
+  #kakaoMap{width:100%;height:clamp(560px, 80vh, 920px);border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
   .map-stage{position:relative;}
   #kakaoRoadviewWrap{display:none;position:absolute;inset:0;z-index:5;border-radius:var(--r-md);overflow:hidden;background:#111;}
   /* 분할 보기: 왼쪽 로드뷰 · 오른쪽 지도 (지도를 클릭해 로드뷰 위치를 옮길 수 있음) */
   .map-stage.rv-split{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  .map-stage.rv-split #kakaoRoadviewWrap{display:block;position:relative;inset:auto;height:560px;order:0;}
+  .map-stage.rv-split #kakaoRoadviewWrap{display:block;position:relative;inset:auto;height:clamp(560px, 80vh, 920px);order:0;}
+  .map-status{position:absolute;top:10px;left:10px;right:130px;z-index:5;display:none;align-items:flex-start;gap:6px;background:rgba(255,255,255,.95);border-radius:8px;padding:6px 8px 6px 10px;box-shadow:0 2px 10px rgba(0,0,0,.25);max-height:76px;overflow:auto;}
+  .map-status p{margin:0;font-size:12px;line-height:1.45;flex:1;}
+  .map-status button{border:none;background:transparent;cursor:pointer;font-size:13px;color:#666;padding:0 2px;}
   .map-stage.rv-split #kakaoMap{order:1;}
   @media (max-width:900px){.map-stage.rv-split{grid-template-columns:1fr;} .map-stage.rv-split #kakaoRoadviewWrap{height:360px;} .map-stage.rv-split #kakaoMap{height:360px;}}
   .rv-bar .rv-btn.rv-btn2{background:rgba(255,255,255,.92);color:var(--ink);}
@@ -675,6 +678,7 @@
             <button type="button" onclick="clearLayoutAndOutline()" title="현재 경계와 그 경계의 배치를 지웁니다">🧹 지우기</button>
             </span>
           </div>
+          <div class="map-status" id="mapStatusWrap"><p id="roadviewStatus" class="hint"></p><button type="button" onclick="document.getElementById('mapStatusWrap').style.display='none'" title="알림 닫기">✕</button></div>
           <div id="kakaoRoadviewWrap">
             <div id="kakaoRoadview"></div>
             <div class="rv-bar">
@@ -684,8 +688,6 @@
             <button type="button" class="rv-close" onclick="showMapStage()" title="로드뷰 닫기 (지도로 돌아가기)">✕</button>
           </div>
         </div>
-        <p id="roadviewStatus" class="hint" style="margin-top:6px;"></p>
-        <p class="footnote" style="margin-top:10px;">지적편집도·거리·면적·반경은 참고용이며 실제 값과 다를 수 있습니다. 지도를 클릭하거나 주소를 검색하면 그 지점의 <b>지번 주소와 도로명 주소가 함께</b> 표시됩니다. "로드뷰 가능 도로"를 켜면 파란 선으로 표시된 도로 위에서 로드뷰가 나올 가능성이 높습니다. "🏢 건물 선택"을 켜고 건물을 클릭하면 공식 건물 외곽선이 지붕 경계로 잡히고 변 길이가 표시됩니다. 지도 색 범례: 분홍 = 검색한 필지 경계, 파란 선 = 경계에 접한 지목 "도로" 필지, 하늘색 = 접한 하천·구거·제방 필지, 빨강 = 반경 200m 내 건축물대장상 주택. "🚶 로드뷰" 버튼을 누르면 지도 자리에 로드뷰가 나타나고, "지도로 돌아가기"로 다시 지도로 전환됩니다. 지도 위 카메라 아이콘이 로드뷰 위치·바라보는 방향을 보여줍니다. 거리재기·면적재기·반경재기는 지도를 클릭해 점을 찍고, 지도를 오른쪽 클릭하거나 버튼을 다시 누르면 측정이 끝납니다.</p>
       </div>
       <div class="results" id="resultsWrap">
         <div class="card"><div class="placeholder">왼쪽에서 부지 조건을 고른 뒤 ‘부지 분석 실행’을 누르면<br>여기에 인허가 체크리스트와 예상 부담금이 나옵니다</div></div>
@@ -1772,6 +1774,16 @@ function removeClickedParcel(pnu){
   removeMeasureGroup(c.groupId); delete clickedParcels[pnu];
 }
 
+(function(){
+  const hook = () => {
+    const el = document.getElementById('roadviewStatus'), wrap = document.getElementById('mapStatusWrap');
+    if(!el || !wrap) return;
+    const sync = () => { wrap.style.display = (el.textContent || '').trim() ? 'flex' : 'none'; wrap.scrollTop = 0; };
+    new MutationObserver(sync).observe(el, { childList: true, characterData: true, subtree: true });
+    sync();
+  };
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
+})();
 function ensureKakaoMap(){
   if(kakaoMapObj) return kakaoMapObj;
   const container = document.getElementById('kakaoMap');
@@ -2301,6 +2313,7 @@ function histUndo(){
   const st = document.getElementById('roadviewStatus');
   if(!S){ if(st) st.textContent = '되돌릴 작업이 없습니다.'; updateHistButtons(); return; }
   histRestore(S);
+  if(typeof S.onUndo === 'function') try{ S.onUndo(); }catch(e){}
   deletedStack.length = 0;
   updateHistButtons();
   if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `↶ "${S.label}" 이전으로 되돌렸습니다.${histStack.length ? ` (더 되돌릴 수 있는 작업 ${histStack.length}개)` : ''}`; }
@@ -4861,17 +4874,68 @@ function drawConfirmedOutline(path, name, extra){
   currentBoundaryName = name && name !== '따라 그린 건물' ? name : '';
   currentBoundaryOfficial = false;
   boundaryNameRef = { path: path.slice(), name: currentBoundaryName };
-  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#C2148A', strokeOpacity: 0.9, fillColor: '#C2148A', fillOpacity: 0.05 });
+  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#C2148A', strokeOpacity: 0.9, fillColor: '#C2148A', fillOpacity: 0.05, zIndex: 1 });
   measureShapes.push(poly);
   const shapes = [poly];
+  attachOutlineDrag(poly, path.slice(), name, extra);
   const area = shoelaceArea(path);
   // 라벨은 테두리 맨 위 꼭짓점 위에 작게 (배치 모듈을 가리지 않도록)
   const top = path.reduce((m, p) => (p.getLat() > m.getLat() ? p : m), path[0]);
   const lab = new kakao.maps.CustomOverlay({ position: top, content: '', yAnchor: 1.4, clickable: true });
   lab.setMap(map); measureShapes.push(lab); shapes.push(lab);
   bldPickGroupId = registerMeasureGroup(shapes);
-  lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:6px;background:rgba(194,20,138,.92);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><button type="button" onclick="event.stopPropagation();startBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="위성사진 건물과 다르면 꼭짓점·변·회전으로 맞추기">↔ 조정</button>${closeBtnHtml(`histCheckpoint('경계 삭제'); removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
+  lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:6px;background:rgba(194,20,138,.92);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><span style="opacity:.85;font-size:10.5px;" title="테두리 안쪽을 마우스로 눌러 끌면 테두리 전체가 이동합니다">✥끌어서 이동</span><button type="button" onclick="event.stopPropagation();startBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="위성사진 건물과 다르면 꼭짓점·변·회전으로 맞추기">↔ 조정</button>${closeBtnHtml(`histCheckpoint('경계 삭제'); removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
   lastAreaPolygonPath = path.slice();
+}
+// ===== 확정 테두리 끌기: 테두리 안쪽을 마우스로 눌러 끌면 테두리 전체(+그 위 배치)가 함께 이동 =====
+let outlineDrag = null;
+function attachOutlineDrag(poly, path, name, extra){
+  const fn = (ev) => {
+    if(mapMode !== 'normal' || bldEdit || !ev || !ev.latLng) return;
+    if(!(lastAreaPolygonPath && sameBoundary(lastAreaPolygonPath, path))) return;
+    const lat0 = path[0].getLat() * Math.PI / 180;
+    outlineDrag = { poly, path, name, extra, lat0, start: solarToXY(ev.latLng, lat0), dx: 0, dy: 0, official: !!currentBoundaryOfficial };
+    try{ ensureKakaoMap().setDraggable(false); }catch(e){}
+    document.addEventListener('mousemove', outlineDragMove);
+    document.addEventListener('mouseup', outlineDragEnd);
+  };
+  poly.__odFn = fn;
+  try{ kakao.maps.event.addListener(poly, 'mousedown', fn); }catch(e){}
+}
+function outlineDragUpdate(ll){
+  const d = outlineDrag; if(!d) return;
+  const c = solarToXY(ll, d.lat0); d.dx = c.x - d.start.x; d.dy = c.y - d.start.y;
+  d.poly.setPath(shiftPath(d.path, d.dx, d.dy, d.lat0));
+  const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `✥ 테두리 이동 중 — 동 ${d.dx.toFixed(2)}m · 북 ${d.dy.toFixed(2)}m (손을 떼면 확정)`; }
+}
+function outlineDragMove(e){ if(!outlineDrag) return; try{ outlineDragUpdate(mapLatLngFromClient(e.clientX, e.clientY)); }catch(x){} }
+function outlineDragEnd(){
+  document.removeEventListener('mousemove', outlineDragMove);
+  document.removeEventListener('mouseup', outlineDragEnd);
+  try{ ensureKakaoMap().setDraggable(true); }catch(x){}
+  const d = outlineDrag; outlineDrag = null;
+  if(!d) return;
+  if(Math.hypot(d.dx, d.dy) < 0.05){ d.poly.setPath(d.path); return; }
+  window.__shapeClickAt = Date.now();
+  histCheckpoint('테두리 이동');
+  const newPath = shiftPath(d.path, d.dx, d.dy, d.lat0);
+  // 이 테두리 위의 배치도 같이 이동
+  let movedLayouts = 0;
+  layoutRegistry.forEach(ed => { if(sameBoundary(ed.boundary, d.path)){ moveLayoutBy(ed, d.dx, d.dy); ed.boundary = shiftPath(ed.boundary, d.dx, d.dy, d.lat0); movedLayouts++; } });
+  if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  drawConfirmedOutline(newPath, d.name, d.extra);
+  currentBoundaryOfficial = d.official;
+  try{ addOutlineEdgeLabels(newPath); refreshAlignEdgeOptions(); updateBoundaryInfo(); }catch(e){}
+  // 공식 건물도형을 옮긴 경우: 이 지역 위성사진 보정값으로 저장 → 다른 건물 외곽선도 같이 맞춰짐
+  if(d.official && Math.hypot(d.dx, d.dy) >= 0.3){
+    const prev = getImageryOffset(newPath[0]);
+    setImageryOffset(newPath[0], { dx: prev.dx + d.dx, dy: prev.dy + d.dy });
+    shiftParcelBuildingsBy(d.dx, d.dy);
+    const top = histStack[histStack.length - 1];
+    if(top && top.label === '테두리 이동') top.onUndo = () => { setImageryOffset(newPath[0], prev); shiftParcelBuildingsBy(-d.dx, -d.dy); };
+  }
+  const st = document.getElementById('roadviewStatus');
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `✥ 테두리를 동 ${d.dx.toFixed(2)}m · 북 ${d.dy.toFixed(2)}m 옮겼습니다${movedLayouts ? ' (그 위 배치도 함께 이동)' : ''}${d.official && Math.hypot(d.dx, d.dy) >= 0.3 ? '. 이 지역 위성사진 보정값으로 저장해 주변 건물 외곽선도 같이 옮겼습니다' : ''}. 크기·모양이 다르면 "↔ 조정", 되돌리기는 "↶ 이전으로".`; }
 }
 // ===== ✏ 건물 따라 그리기: 위성사진의 지붕 모서리를 클릭해 경계를 만든다 (직각·평행 자동 보정, 변 길이 실시간 표시) =====
 let trace = null; // { pts:[{x,y}], lat0, line, preview, poly, labels:[], firstMarker }
