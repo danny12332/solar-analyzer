@@ -533,6 +533,8 @@
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
           <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 오른쪽 클릭하면 완성">✏ 건물 따라 그리기</button>
+          <button type="button" class="preset-btn" id="rect3Btn" onclick="toggleGeomTool('rect3')" title="직사각형 지붕: 위성사진에서 지붕 모서리 2개(한 변)를 클릭하고, 반대편 변 위 아무 곳을 클릭하면 정확한 직사각형 경계가 만들어집니다">▭ 3점 사각형</button>
+          <button type="button" class="preset-btn" id="align2Btn" onclick="toggleGeomTool('align2')" title="잡힌 테두리가 위치·각도·크기가 다를 때: 테두리 꼭짓점 → 위성사진의 같은 모서리, 다른 꼭짓점 → 위성사진의 같은 모서리 순서로 4번 클릭하면 테두리 전체가 이동·회전·확대되어 맞춰집니다">📌 2점 맞춤</button>
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
           <button type="button" class="preset-btn" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
@@ -1784,6 +1786,15 @@ function removeClickedParcel(pnu){
   };
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
 })();
+// 지도 클릭 처리 공통 입구: 지도 자체 클릭과 도형(테두리)에서 넘겨준 클릭이 같은 지점으로 두 번 오면 한 번만 처리
+let __lastMapClick = null;
+function dispatchMapClick(ev){
+  if(!ev || !ev.latLng || !window.__mapClickHandler) return;
+  const t = Date.now(), la = ev.latLng.getLat(), ln = ev.latLng.getLng();
+  if(__lastMapClick && t - __lastMapClick.t < 250 && Math.abs(la - __lastMapClick.la) < 1e-7 && Math.abs(ln - __lastMapClick.ln) < 1e-7) return;
+  __lastMapClick = { t, la, ln };
+  window.__mapClickHandler(ev);
+}
 function ensureKakaoMap(){
   if(kakaoMapObj) return kakaoMapObj;
   const container = document.getElementById('kakaoMap');
@@ -1792,7 +1803,9 @@ function ensureKakaoMap(){
     level: 4,
     mapTypeId: kakao.maps.MapTypeId.HYBRID // 기본값을 위성사진(지명 라벨 포함)으로 설정
   });
-  kakao.maps.event.addListener(kakaoMapObj, 'click', function(mouseEvent){
+  kakao.maps.event.addListener(kakaoMapObj, 'click', ev => dispatchMapClick(ev));
+  window.__mapClickHandler = function(mouseEvent){
+    if(mapMode === 'rect3' || mapMode === 'align2'){ geomToolClick(mouseEvent.latLng); return; }
     if(mapMode === 'distance'){ addDistancePoint(mouseEvent.latLng); }
     else if(mapMode === 'area'){ addAreaPoint(mouseEvent.latLng); }
     else if(mapMode === 'radius'){ addRadiusPoint(mouseEvent.latLng); }
@@ -1815,7 +1828,7 @@ function ensureKakaoMap(){
       // 클릭한 필지의 경계와 면적(㎡·평)을 표시 (여러 필지를 차례로 클릭해 비교 가능, 같은 필지를 다시 클릭하면 숨김)
       try{ toggleClickedParcel(mouseEvent.latLng); }catch(e){ console.warn('clicked parcel', e); }
     }
-  });
+  };;
   // 오른쪽 클릭으로 거리재기·면적재기·반경재기 종료 (버튼을 다시 누르지 않아도 됨)
   kakao.maps.event.addListener(kakaoMapObj, 'rightclick', function(){
     if(mapMode === 'distance'){ toggleDistanceMode(); }
@@ -1827,7 +1840,9 @@ function ensureKakaoMap(){
   container.addEventListener('contextmenu', function(e){
     if(mapMode === 'distance' || mapMode === 'area' || mapMode === 'radius' || mapMode === 'trace'){ e.preventDefault(); }
   });
-  kakao.maps.event.addListener(kakaoMapObj, 'mousemove', function(mouseEvent){
+  kakao.maps.event.addListener(kakaoMapObj, 'mousemove', ev => window.__mapMoveHandler(ev));
+  window.__mapMoveHandler = function(mouseEvent){
+    if(mapMode === 'rect3' || mapMode === 'align2'){ geomToolMove(mouseEvent.latLng); return; }
     if(mapMode === 'trace'){ traceMove(mouseEvent.latLng); }
     else if(mapMode === 'delrow'){ delRowMove(mouseEvent.latLng); }
     else if(mapMode === 'sheetwin'){ sheetWinMove(mouseEvent.latLng); }
@@ -1835,7 +1850,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'radius' && radiusCenter){ updateRadiusPreview(mouseEvent.latLng); }
     else if(mapMode === 'distance' && distancePoints.length > 0){ updateDistancePreview(mouseEvent.latLng); }
     else if(mapMode === 'area' && areaPoints.length > 0){ updateAreaPreview(mouseEvent.latLng); }
-  });
+  };;
   return kakaoMapObj;
 }
 
@@ -1938,8 +1953,8 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow'].includes(mode));
-    [['addModBtn','addmod'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2'].includes(mode));
+    [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
     });
@@ -4887,6 +4902,137 @@ function drawConfirmedOutline(path, name, extra){
   lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:6px;background:rgba(194,20,138,.92);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><span style="opacity:.85;font-size:10.5px;" title="테두리 안쪽을 마우스로 눌러 끌면 테두리 전체가 이동합니다">✥끌어서 이동</span><button type="button" onclick="event.stopPropagation();startBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="위성사진 건물과 다르면 꼭짓점·변·회전으로 맞추기">↔ 조정</button>${closeBtnHtml(`histCheckpoint('경계 삭제'); removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
   lastAreaPolygonPath = path.slice();
 }
+// ===== 새 경계 적용 공통: 이전으로 기록 + 같은 건물 위 배치를 같은 유형으로 다시 배치 =====
+function applyNewBoundary(newPath, name, label, extra){
+  histCheckpoint(label);
+  stopBuildingEdit();
+  const regenList = lastAreaPolygonPath ? removeLayoutsOnOutline(lastAreaPolygonPath) : [];
+  removeLayoutsOnOutline(newPath).forEach(r => regenList.push(r));
+  const regen = regenList.find(r => r.preset || r.mount) || null;
+  if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  drawConfirmedOutline(newPath, name, extra);
+  try{ addOutlineEdgeLabels(newPath); refreshAlignEdgeOptions(); updateBoundaryInfo(); }catch(e){}
+  let ed = null;
+  if(regen){
+    histMuted = true;
+    try{
+      if(regen.preset && LAYOUT_PRESETS[regen.preset]) applyLayoutPreset(regen.preset);
+      else if(regen.mount){ document.getElementById('mountType').value = regen.mount; onMountTypeChange(); }
+      onGenerateLayoutClick();
+    } finally { histMuted = false; }
+    ed = layoutRegistry[layoutRegistry.length - 1];
+    if(!(ed && sameBoundary(ed.boundary, newPath))) ed = null;
+  }
+  return { regen, ed };
+}
+// ===== ▭ 3점 사각형 / 📌 2점 맞춤 =====
+let geomTool = null; // { kind, pts:[], lat0, preview, line, marks:[], base }
+function toggleGeomTool(kind){
+  const st = document.getElementById('roadviewStatus');
+  if(mapMode === kind){ geomToolCancel(); setMode('normal'); st.textContent = ''; return; }
+  if(kind === 'align2' && !(lastAreaPolygonPath && lastAreaPolygonPath.length >= 3)){ st.style.color = '#b3402a'; st.textContent = '❌ 먼저 맞출 테두리를 잡으세요(건물 클릭 또는 🏢 건물 자동 선택).'; return; }
+  geomToolCancel(); stopBuildingEdit(); setMode(kind);
+  geomTool = { kind, pts: [], lat0: null, preview: null, line: null, marks: [], base: kind === 'align2' ? lastAreaPolygonPath.slice() : null, name: currentBoundaryName || '' };
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = kind === 'rect3'
+    ? '▭ 3점 사각형: ① 지붕 모서리 하나 → ② 같은 변의 다른 모서리 → ③ 반대편 변 위 아무 곳을 클릭하세요. 지도를 최대한 확대하면 더 정확합니다. (취소: Esc 또는 버튼 다시)'
+    : '📌 2점 맞춤: ① 분홍 테두리의 꼭짓점(가까운 꼭짓점에 자동으로 붙음) → ② 위성사진에서 그 꼭짓점이 있어야 할 지붕 모서리 → ③ 테두리의 다른 꼭짓점(멀리 떨어진 것일수록 정확) → ④ 위성사진의 그 모서리. 4번 클릭하면 테두리가 이동·회전·크기까지 맞춰집니다. (취소: Esc 또는 버튼 다시)';
+}
+function geomToolCancel(){
+  if(!geomTool) return;
+  [geomTool.preview, geomTool.line].forEach(o => o && o.setMap(null)); geomTool.marks.forEach(o => o.setMap(null));
+  geomTool = null;
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && geomTool){ geomToolCancel(); setMode('normal'); const st = document.getElementById('roadviewStatus'); if(st) st.textContent = '취소했습니다.'; } });
+function geomMark(ll, color){
+  const map = ensureKakaoMap();
+  const o = new kakao.maps.CustomOverlay({ position: ll, content: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);"></div>`, xAnchor: 0.5, yAnchor: 0.5, zIndex: 60 });
+  o.setMap(map); geomTool.marks.push(o);
+}
+function rect3Corners(A, B, C){
+  const ux = B.x - A.x, uy = B.y - A.y, L = Math.hypot(ux, uy) || 1;
+  const nx = -uy / L, ny = ux / L;
+  const h = (C.x - A.x) * nx + (C.y - A.y) * ny;
+  return [A, B, { x: B.x + nx * h, y: B.y + ny * h }, { x: A.x + nx * h, y: A.y + ny * h }];
+}
+function similarityFrom(P1, Q1, P2, Q2){
+  // z' = a·z + b (복소수) : P1→Q1, P2→Q2
+  const dpx = P2.x - P1.x, dpy = P2.y - P1.y, dqx = Q2.x - Q1.x, dqy = Q2.y - Q1.y;
+  const den = dpx * dpx + dpy * dpy || 1;
+  const ar = (dqx * dpx + dqy * dpy) / den, ai = (dqy * dpx - dqx * dpy) / den;
+  return z => ({ x: Q1.x + ar * (z.x - P1.x) - ai * (z.y - P1.y), y: Q1.y + ai * (z.x - P1.x) + ar * (z.y - P1.y) });
+}
+function geomDrawPreview(xyPath, closed){
+  const map = ensureKakaoMap(); const path = xyPath.map(q => solarToLatLng(q.x, q.y, geomTool.lat0));
+  if(closed){
+    if(geomTool.line){ geomTool.line.setMap(null); geomTool.line = null; }
+    if(!geomTool.preview) geomTool.preview = new kakao.maps.Polygon({ map, path, strokeWeight: 2.5, strokeColor: '#00E5FF', strokeOpacity: 1, strokeStyle: 'dash', fillColor: '#00E5FF', fillOpacity: 0.12, zIndex: 55 });
+    else geomTool.preview.setPath(path);
+  } else {
+    if(!geomTool.line) geomTool.line = new kakao.maps.Polyline({ map, path, strokeWeight: 2.5, strokeColor: '#00E5FF', strokeOpacity: 1, strokeStyle: 'dash', zIndex: 55 });
+    else geomTool.line.setPath(path);
+  }
+}
+function nearestVertexXY(q, P){ let bi = 0, bd = Infinity; P.forEach((v, i) => { const d = Math.hypot(v.x - q.x, v.y - q.y); if(d < bd){ bd = d; bi = i; } }); return { i: bi, v: P[bi], d: bd }; }
+function geomToolMove(ll){
+  const g = geomTool; if(!g || !g.lat0) return;
+  const q = solarToXY(ll, g.lat0);
+  const st = document.getElementById('roadviewStatus');
+  if(g.kind === 'rect3'){
+    if(g.pts.length === 1){ geomDrawPreview([g.pts[0], q], false); st.textContent = `▭ 첫 변 ${Math.hypot(q.x - g.pts[0].x, q.y - g.pts[0].y).toFixed(2)}m — 같은 변의 다른 모서리를 클릭하세요.`; }
+    else if(g.pts.length === 2){ const R = rect3Corners(g.pts[0], g.pts[1], q); geomDrawPreview(R, true); st.textContent = `▭ ${Math.hypot(R[1].x - R[0].x, R[1].y - R[0].y).toFixed(2)}m × ${Math.hypot(R[2].x - R[1].x, R[2].y - R[1].y).toFixed(2)}m — 반대편 변 위를 클릭하면 확정.`; }
+  } else {
+    const P = g.base.map(v => solarToXY(v, g.lat0));
+    if(g.pts.length === 1 || g.pts.length === 3){ // 위성사진 위치를 고르는 중: 미리보기
+      const T = g.pts.length === 1 ? (z => ({ x: z.x + q.x - g.pts[0].x, y: z.y + q.y - g.pts[0].y })) : similarityFrom(g.pts[0], g.pts[1], g.pts[2], q);
+      geomDrawPreview(P.map(T), true);
+    }
+  }
+}
+function geomToolClick(ll){
+  const g = geomTool; if(!g) return;
+  if(!g.lat0) g.lat0 = ll.getLat() * Math.PI / 180;
+  let q = solarToXY(ll, g.lat0);
+  const st = document.getElementById('roadviewStatus');
+  if(g.kind === 'rect3'){
+    g.pts.push(q); geomMark(ll, '#00E5FF');
+    if(g.pts.length < 3){ st.textContent = g.pts.length === 1 ? '▭ ② 같은 변의 다른 모서리를 클릭하세요.' : '▭ ③ 반대편 변 위 아무 곳을 클릭하세요.'; return; }
+    const R = rect3Corners(g.pts[0], g.pts[1], g.pts[2]);
+    if(Math.hypot(R[1].x - R[0].x, R[1].y - R[0].y) < 0.5 || Math.hypot(R[2].x - R[1].x, R[2].y - R[1].y) < 0.5){ st.textContent = '❌ 사각형이 너무 작습니다. 다시 클릭하세요.'; geomToolCancel(); setMode('normal'); return; }
+    const path = R.map(c => solarToLatLng(c.x, c.y, g.lat0));
+    // 이름: 사각형 중심이 들어 있는 건물(하늘색 점선)의 이름
+    const cxy = { x: R.reduce((a, c) => a + c.x, 0) / 4, y: R.reduce((a, c) => a + c.y, 0) / 4 };
+    const b = parcelBuildings.find(bb => pointInPolygonXY(cxy, bb.path.map(v => solarToXY(v, g.lat0))));
+    geomToolCancel(); setMode('normal');
+    const res = applyNewBoundary(path, b && b.name ? b.name : '', '3점 사각형');
+    const W = Math.hypot(R[1].x - R[0].x, R[1].y - R[0].y), H = Math.hypot(R[2].x - R[1].x, R[2].y - R[1].y);
+    st.style.color = 'var(--ink-soft)';
+    st.textContent = `✅ 직사각형 경계 ${W.toFixed(2)}m × ${H.toFixed(2)}m = ${Math.round(W * H).toLocaleString('ko-KR')}㎡.` + (res.ed ? ` 이 건물의 배치를 같은 유형으로 다시 배치했습니다 (${res.ed.modules.filter(m => !m.removed).length}장).` : ' ② 배치 유형 → ③ 배치 생성.') + ' 되돌리기는 "↶ 이전으로".';
+    return;
+  }
+  // 2점 맞춤
+  const P = g.base.map(v => solarToXY(v, g.lat0));
+  if(g.pts.length === 0 || g.pts.length === 2){ // 테두리 꼭짓점: 가장 가까운 꼭짓점에 붙임
+    const nv = nearestVertexXY(q, P); q = nv.v;
+    geomMark(solarToLatLng(q.x, q.y, g.lat0), '#FF3B30');
+    g.pts.push(q);
+    st.textContent = g.pts.length === 1 ? '📌 ② 위성사진에서 이 꼭짓점이 있어야 할 지붕 모서리를 클릭하세요 (미리보기 하늘색 점선).' : '📌 ④ 위성사진에서 이 꼭짓점이 있어야 할 지붕 모서리를 클릭하세요.';
+    return;
+  }
+  geomMark(ll, '#00E5FF'); g.pts.push(q);
+  if(g.pts.length === 2){ geomDrawPreview(P.map(z => ({ x: z.x + q.x - g.pts[0].x, y: z.y + q.y - g.pts[0].y })), true); st.textContent = '📌 ③ 테두리의 다른 꼭짓점(첫 꼭짓점과 멀리 떨어진 것)을 클릭하세요. 위치만 맞추면 되면 여기서 Esc 후 테두리를 끌어도 됩니다.'; return; }
+  if(Math.hypot(g.pts[2].x - g.pts[0].x, g.pts[2].y - g.pts[0].y) < 0.5){ st.textContent = '❌ 두 꼭짓점이 같습니다. 다시 시작하세요.'; geomToolCancel(); setMode('normal'); return; }
+  const T = similarityFrom(g.pts[0], g.pts[1], g.pts[2], g.pts[3]);
+  const scale = Math.hypot(g.pts[3].x - g.pts[1].x, g.pts[3].y - g.pts[1].y) / Math.hypot(g.pts[2].x - g.pts[0].x, g.pts[2].y - g.pts[0].y);
+  const ang = (Math.atan2(g.pts[3].y - g.pts[1].y, g.pts[3].x - g.pts[1].x) - Math.atan2(g.pts[2].y - g.pts[0].y, g.pts[2].x - g.pts[0].x)) * 180 / Math.PI;
+  const angN = ((ang + 540) % 360) - 180;
+  const newPath = P.map(T).map(c => solarToLatLng(c.x, c.y, g.lat0));
+  const name = g.name;
+  geomToolCancel(); setMode('normal');
+  const res = applyNewBoundary(newPath, name, '2점 맞춤');
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = `✅ 테두리를 맞췄습니다 — 회전 ${angN.toFixed(1)}°, 크기 ×${scale.toFixed(3)}, 면적 ${Math.round(shoelaceArea(newPath)).toLocaleString('ko-KR')}㎡.` + (res.ed ? ` 이 건물의 배치를 같은 유형으로 다시 배치했습니다 (${res.ed.modules.filter(m => !m.removed).length}장).` : ' ② 배치 유형 → ③ 배치 생성.') + ' 되돌리기는 "↶ 이전으로".';
+}
 // ===== 확정 테두리 끌기: 테두리 안쪽을 마우스로 눌러 끌면 테두리 전체(+그 위 배치)가 함께 이동 =====
 let outlineDrag = null;
 function attachOutlineDrag(poly, path, name, extra){
@@ -4901,6 +5047,8 @@ function attachOutlineDrag(poly, path, name, extra){
   };
   poly.__odFn = fn;
   try{ kakao.maps.event.addListener(poly, 'mousedown', fn); }catch(e){}
+  try{ kakao.maps.event.addListener(poly, 'click', ev => { if(Date.now() - (window.__shapeClickAt || 0) < 300) return; dispatchMapClick(ev); }); }catch(e){}
+  try{ kakao.maps.event.addListener(poly, 'mousemove', ev => { if(ev && ev.latLng && window.__mapMoveHandler) window.__mapMoveHandler(ev); }); }catch(e){}
 }
 function outlineDragUpdate(ll){
   const d = outlineDrag; if(!d) return;
@@ -5153,6 +5301,7 @@ async function loadParcelBuildings(parcelPath){
       if(ll && ['delmod', 'delline', 'movelayout'].includes(mapMode)){ handleModuleModeClick(ll); return; }
       if(ll && mapMode === 'addmod'){ addModuleAt(ll); return; }
       if(ll && mapMode === 'addrow'){ addRowAt(ll); return; }
+      if(ll && (mapMode === 'rect3' || mapMode === 'align2' || mapMode === 'trace')){ dispatchMapClick(ev); return; }
       if(ll && mapMode === 'delrow'){ window.__shapeClickAt = Date.now(); delRowClick(ll); return; }
       if(ll && mapMode === 'splitzone'){ splitClick(ll); return; }
       window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building') selectParcelBuilding(idx);
