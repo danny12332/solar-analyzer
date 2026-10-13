@@ -547,8 +547,8 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('zero')" title="징크판넬·제로솔루션 · 가로배치 · 열 간격 1,700mm · 지붕 끝 700">제로솔루션</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('slab')" title="평슬라브 경사거치 · 세로 2단 · 8°">평슬라브</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('parking')" title="주차면 5,000×2,500 · 2칸마다 기둥 600 · 통로 6m">주차장</button>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 가로 4단 · 10° · 경계 3m">토지 노지 4단</button>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 가로 2단 · 10° · 경계 3m">토지 노지 2단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 정남향(방위각 0°) · 모듈 세로 4단 · 10° · 경계 3m">토지 노지 4단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 정남향(방위각 0°) · 모듈 세로 2단 · 10° · 경계 3m">토지 노지 2단</button>
           <span style="flex:1;"></span>
           <button type="button" class="run" id="mainGenBtn" style="background:var(--sun);color:#2A1A00;font-size:13px;padding:7px 16px;" onclick="onGenerateLayoutClick()">③ 배치 생성</button>
           <button type="button" class="preset-btn" style="background:#C2148A;color:#fff;border-color:#C2148A;" onclick="toggleSheetOpts()" title="위성사진 위에 배치·동별 용량·모듈 표(장수·kW·설치각도)·도면 표제란을 넣은 모듈 배치도 이미지(PNG)로 저장">🖼 배치도 이미지 저장</button>
@@ -590,7 +590,7 @@
           <label id="tiltLabel" style="font-size:11.5px;color:var(--ink-soft);">경사각(°) <input id="panelTilt" type="number" value="10" step="1" style="width:48px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">1장당 용량(W) <input id="panelWatt" type="number" value="645" step="5" style="width:60px;padding:2px 4px;"></label>
           <label style="font-size:11.5px;color:var(--ink-soft);">모듈간격(m) <input id="panelGap" type="number" value="0.01" step="0.005" style="width:50px;padding:2px 4px;" title="그랜드썬 배치도 실측: 모듈 사이 10mm"></label>
-          <label id="modOrientLabel" style="font-size:11.5px;color:var(--ink-soft);" title="가로(눕힘): 모듈 긴 변이 좌우, 짧은 변이 경사 방향으로 N단 쌓임 · 세로(세움): 모듈 긴 변이 경사 방향">모듈 방향 <select id="modOrient" style="padding:2px 4px;"><option value="landscape" selected>가로(눕힘)</option><option value="portrait">세로(세움)</option></select></label>
+          <label id="modOrientLabel" style="font-size:11.5px;color:var(--ink-soft);" title="가로(눕힘): 모듈 긴 변이 좌우, 짧은 변이 경사 방향으로 N단 쌓임 · 세로(세움): 모듈 긴 변이 경사 방향">모듈 방향 <select id="modOrient" style="padding:2px 4px;"><option value="portrait" selected>세로(세움)</option><option value="landscape">가로(눕힘)</option></select></label>
           <label id="alignEdgeLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(줄)을 어느 경계 변과 나란히 놓을지. 자동 = 지상은 주향 설정, 건물은 긴 변 기준. 변 길이는 지도에 표시된 변 길이(m)와 같습니다">방향 기준 변 <select id="alignEdge" style="padding:2px 4px;" onfocus="refreshAlignEdgeOptions()" onmousedown="refreshAlignEdgeOptions()"><option value="auto" selected>자동</option></select></label>
           <label id="showTablesLabel" style="font-size:11.5px;color:var(--ink-soft);" title="테이블(어레이 구조물) 외곽선을 지도에 표시"><input id="showTables" type="checkbox" style="vertical-align:middle;" onchange="toggleTableOverlays()"> 테이블 외곽선</label>
           <label id="setbackLabel" style="font-size:11.5px;color:var(--ink-soft);">경계 이격(m) <input id="panelSetback" type="number" value="3" step="0.5" min="0" style="width:50px;padding:2px 4px;"></label>
@@ -2171,8 +2171,8 @@ function removeSolarLayout(id){
 
 // ===== 배치 유형 프리셋: 배치 대상·모듈 방향·단 수·각도·이격을 한 번에 설정 (값은 실무 기본값이며 설정 줄에서 바로 수정 가능) =====
 const LAYOUT_PRESETS = {
-  ground4:  { mount: 'ground',  orient: 'landscape', rows: 4, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 4단' },
-  ground2:  { mount: 'ground',  orient: 'landscape', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
+  ground4:  { mount: 'ground',  orient: 'portrait', rows: 4, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 4단' },
+  ground2:  { mount: 'ground',  orient: 'portrait', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
   slab:     { mount: 'slab',    orient: 'portrait',  rows: 2, tilt: 8,  setback: 0.5, aisle: 0.6, label: '평슬라브 경사거치' },
   wondan:      { mount: 'wondan', std: true, label: '원단' },
   wondan2:     { mount: 'wondan', std: true, frame: 2, label: '원단 2단' },
@@ -2518,7 +2518,7 @@ function onMountTypeChange(){
       : `경사각(°) <input id="panelTilt" type="number" value="10" step="1" style="width:48px;padding:2px 4px;">`;
   // 모듈 방향: 지상 다단 배치는 가로(눕힘)가 기본, 건물 슬라브는 기존대로 세로(세움)가 기본. 경사지붕은 지붕 형태로 방향이 정해져 선택 숨김.
   const orientEl = document.getElementById('modOrient');
-  if(orientEl){ orientEl.value = (mt === 'ground') ? 'landscape' : 'portrait'; }
+  if(orientEl){ orientEl.value = 'portrait'; } // 기본: 세로(모듈 긴 변이 방위각 방향으로 기울어짐)
   document.getElementById('modOrientLabel').style.display = (mt === 'ground' || mt === 'slab') ? '' : 'none';
   document.getElementById('slabColsLabel').style.display = (mt === 'slab') ? '' : 'none';
   document.getElementById('azimuthLabel').innerHTML = isGable
