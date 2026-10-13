@@ -532,6 +532,7 @@
           <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 오른쪽 클릭하면 완성">✏ 건물 따라 그리기</button>
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
+          <button type="button" class="preset-btn" id="allDongBtn" style="display:none;background:#19B5D6;color:#fff;border-color:#19B5D6;" onclick="generateAllDongs()" title="주소 검색으로 불러온 필지 안 모든 건물에 ②에서 고른 배치 유형으로 한 번에 배치">🏢 모든 동 배치</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
           <span id="boundaryInfo" style="font-weight:600;color:var(--ink);font-size:12px;"></span>
         </div>
@@ -550,7 +551,18 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 가로 2단 · 10° · 경계 3m">토지 노지 2단</button>
           <span style="flex:1;"></span>
           <button type="button" class="run" id="mainGenBtn" style="background:var(--sun);color:#2A1A00;font-size:13px;padding:7px 16px;" onclick="onGenerateLayoutClick()">③ 배치 생성</button>
+          <button type="button" class="preset-btn" style="background:#C2148A;color:#fff;border-color:#C2148A;" onclick="toggleSheetOpts()" title="위성사진 위에 배치·동별 용량·모듈 표(장수·kW·설치각도)·도면 표제란을 넣은 모듈 배치도 이미지(PNG)로 저장">🖼 배치도 이미지 저장</button>
           <button type="button" class="preset-btn" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
+        </div>
+        <div class="panel-bar" id="sheetOpts" style="display:none;gap:8px;">
+          <span>🖼 배치도</span>
+          <label>공사명(주소) <input id="sheetProject" type="text" style="width:220px;" placeholder="비우면 검색한 주소"></label>
+          <label>모듈 <input id="sheetModule" type="text" value="현대 645Wp(양면)" style="width:130px;"></label>
+          <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
+          <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
+          <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
+          <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="exportLayoutSheet()">PNG 저장</button>
+          <span id="sheetStatus" class="hint" style="font-size:11px;"></span>
         </div>
         <details id="layoutDetails" style="margin-bottom:12px;">
         <summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#7A4E05;padding:4px 2px;">⚙ 세부 설정 (모듈 크기·각도·이격·단 수 — 배치 유형을 고르면 자동으로 채워짐)</summary>
@@ -618,6 +630,7 @@
           <button type="button" class="map-fab" id="rvFab" onclick="toggleRoadview()" title="지도에서 지점을 클릭한 뒤 누르면 그 위치의 로드뷰가 열립니다">🚶 로드뷰</button>
           <div class="layout-tools" id="layoutTools" style="display:none;">
             <button type="button" onclick="startBuildingEdit()" title="꼭짓점을 끌어 지붕·부지 모양에 맞춥니다">↔ 꼭짓점 조정</button>
+            <button type="button" id="moveLayoutBtn" onclick="toggleMoveLayoutMode()" title="배치(모듈 묶음)를 클릭해 선택한 뒤 손잡이를 끌거나 화살표로 전체를 이동">✥ 배치 이동</button>
             <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈을 클릭하면 한 장씩 제외/복원)">➕ 모듈 추가</button>
             <span id="addTableWrap" style="display:inline-flex;align-items:center;gap:3px;">
               <button type="button" id="addTableBtn" onclick="toggleAddTableMode()" title="단 수와 가로 장수를 고른 뒤 지도를 클릭하면 그 자리에 테이블 하나가 놓입니다 (기존 배치와 같은 방향·모듈 크기)">➕ 테이블 추가</button>
@@ -1665,6 +1678,7 @@ async function showParcelBoundary(){
 
     parcelGroupId = registerMeasureGroup([poly]); // 경계선만 표시 (주소는 흰색 주소창에서 표시하므로 분홍 라벨은 표시하지 않음)
     try { applyParcelToForm(props, kakaoPath); } catch(e){ console.warn('form autofill', e); }
+    try { loadParcelBuildings(kakaoPath); } catch(e){ console.warn('parcel buildings', e); }
 
     statusEl.textContent = `✅ ${props.addr || props.jibun || ''} 필지 경계를 표시했습니다 (국토교통부 연속지적도 기준, PNU ${props.pnu || '-'}).`;
     statusEl.style.color = 'var(--ink-soft)';
@@ -1742,7 +1756,9 @@ function ensureKakaoMap(){
     else if(mapMode === 'editadd'){ editAddVertexAt(mouseEvent.latLng); }
     else if(mapMode === 'delrect'){ rectDeleteClick(mouseEvent.latLng); }
     else if(mapMode === 'delline'){ /* 모듈 클릭으로만 동작 */ }
+    else if(mapMode === 'movelayout'){ /* 모듈 클릭으로 배치 선택 */ }
     else {
+      if(Date.now() - (window.__shapeClickAt || 0) < 400) return; // 건물(동) 도형을 클릭한 경우
       setMarkerPosition(mouseEvent.latLng);
       // 로드뷰가 열려있는 상태라면 새로 클릭한 지점으로 바로 갱신
       if(roadviewOn){ showRoadviewStage(); }
@@ -1855,6 +1871,7 @@ function updateAddressLabel(pos){
 }
 
 function setMode(mode){
+  if(mapMode === 'movelayout' && mode !== 'movelayout' && typeof endMoveLayout === 'function' && moveSel) endMoveLayout();
   if(mapMode === 'trace' && mode !== 'trace' && trace){ const t = trace; trace = null; [t.line, t.preview, t.previewLabel].forEach(o => o && o.setMap(null)); t.labels.forEach(o => o.setMap(null)); const b = document.getElementById('traceBtn'); if(b) b.classList.remove('on'); }
   mapMode = mode;
   ['distanceBtn','areaBtn','radiusBtn'].forEach(id => {
@@ -1868,8 +1885,8 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd'].includes(mode));
-    [['addModBtn','addmod'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect']].forEach(([id, md]) => {
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout'].includes(mode));
+    [['addModBtn','addmod'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
     });
@@ -2187,6 +2204,161 @@ function applyLayoutPreset(key){
   if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧩 "${P.label}" 설정을 적용했습니다 — ${P.mount === 'ground' ? '지상' : (P.mount === 'slab' ? '평슬라브' : (P.mount === 'roof_ns' ? '남북지붕' : '동서지붕'))}${P.orient ? ' · 모듈 ' + (P.orient === 'landscape' ? '가로' : '세로') : ''} · ${P.rows}단 · ${P.tilt}° · 이격 ${P.setback}m. "③ 배치 생성"을 누르세요. 값은 세부 설정에서 바꿀 수 있습니다.`; }
 }
 
+// ===== 🖼 모듈 배치도 이미지(PNG): 위성사진(VWorld → Esri 순으로 시도) + 경계·모듈·동별 용량 + 모듈 표 + 표제란 =====
+// 지도 화면 캡처가 아니라 배치 좌표로 직접 다시 그림(카카오 지도 타일은 브라우저 보안상 이미지로 저장할 수 없음).
+function toggleSheetOpts(){
+  const el = document.getElementById('sheetOpts'); if(!el) return;
+  const show = el.style.display === 'none';
+  el.style.display = show ? 'flex' : 'none';
+  const pj = document.getElementById('sheetProject');
+  if(show && pj && !pj.value) pj.placeholder = lastJibunAddress || (document.getElementById('siteAddress') || {}).value || '공사명';
+}
+function wmPx(lat, lng, z){ const n = 256 * Math.pow(2, z); const s = Math.sin(lat * Math.PI / 180); return { x: (lng + 180) / 360 * n, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n }; }
+function loadTile(url){
+  return new Promise((resolve, reject) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => resolve(im); im.onerror = () => reject(new Error('tile ' + url)); im.src = url; setTimeout(() => reject(new Error('timeout')), 15000); });
+}
+const SAT_PROVIDERS = [
+  { name: 'VWorld 위성영상', maxZ: 19, url: (z, x, y) => `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/${z}/${y}/${x}.jpeg` },
+  { name: 'Esri World Imagery', maxZ: 19, url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}` },
+];
+async function exportLayoutSheet(){
+  const st = document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
+  if(!layoutRegistry.length){ st.textContent = '❌ 먼저 배치를 생성하세요.'; return; }
+  st.textContent = '배치도를 그리는 중…';
+  const W = 2480, H = 1754; // A4 가로(약 210dpi)
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  // 영역: 바깥 테두리, 지도 영역, 하단 표/표제란
+  const M = { x: 200, y: 110, w: 1980, h: 1110 };
+  // 그릴 도형 수집
+  const layouts = layoutRegistry.map(ed => ({ ed, live: ed.modules.filter(m => !m.removed), vents: ed.modules.filter(m => m.vent && m.removed) }));
+  const allPts = [];
+  layouts.forEach(L => { L.ed.modules.forEach(m => m.poly.getPath().forEach(q => allPts.push(q))); (L.ed.boundary || []).forEach(q => allPts.push(q)); });
+  const lats = allPts.map(q => q.getLat()), lngs = allPts.map(q => q.getLng());
+  const bb = { s: Math.min(...lats), n: Math.max(...lats), w: Math.min(...lngs), e: Math.max(...lngs) };
+  // 줌·배율: 배치 범위가 지도 영역의 약 75%를 차지하도록
+  const p0 = wmPx(bb.n, bb.w, 0), p1 = wmPx(bb.s, bb.e, 0);
+  const bw0 = Math.max(p1.x - p0.x, 1e-9), bh0 = Math.max(p1.y - p0.y, 1e-9);
+  const fit = Math.min(M.w / bw0, M.h / bh0) * 0.75; // 캔버스 px / z0 px
+  let z = Math.min(19, Math.max(1, Math.floor(Math.log2(fit / 1.2))));
+  const k = fit / Math.pow(2, z); // 캔버스 px / z px
+  const c = wmPx((bb.n + bb.s) / 2, (bb.w + bb.e) / 2, z);
+  const toC = (lat, lng) => { const q = wmPx(lat, lng, z); return { x: M.x + M.w / 2 + (q.x - c.x) * k, y: M.y + M.h / 2 + (q.y - c.y) * k }; };
+  // 1) 위성사진
+  let satName = '', satOk = false;
+  if((document.getElementById('sheetSat') || {}).checked !== false){
+    const tl = { x: c.x - M.w / 2 / k, y: c.y - M.h / 2 / k }, br = { x: c.x + M.w / 2 / k, y: c.y + M.h / 2 / k };
+    const tx0 = Math.floor(tl.x / 256), ty0 = Math.floor(tl.y / 256), tx1 = Math.floor(br.x / 256), ty1 = Math.floor(br.y / 256);
+    for(const P of SAT_PROVIDERS){
+      if(z > P.maxZ) continue;
+      try{
+        const jobs = [];
+        for(let tx = tx0; tx <= tx1; tx++) for(let ty = ty0; ty <= ty1; ty++) jobs.push(loadTile(P.url(z, tx, ty)).then(im => ({ im, tx, ty })));
+        const tiles = await Promise.all(jobs);
+        const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; const tg = tmp.getContext('2d');
+        tg.save(); tg.beginPath(); tg.rect(M.x, M.y, M.w, M.h); tg.clip();
+        tiles.forEach(t => tg.drawImage(t.im, M.x + M.w / 2 + (t.tx * 256 - c.x) * k, M.y + M.h / 2 + (t.ty * 256 - c.y) * k, 256 * k + 0.5, 256 * k + 0.5));
+        tg.restore();
+        tmp.toDataURL(); // 보안 오류(CORS 미허용)면 여기서 예외 → 다음 제공처
+        g.drawImage(tmp, 0, 0); satName = P.name; satOk = true; break;
+      }catch(e){ console.warn('sat provider failed', P.name, e); }
+    }
+  }
+  g.save(); g.beginPath(); g.rect(M.x, M.y, M.w, M.h); g.clip();
+  const poly = (path, stroke, fill, lw, dash) => { if(!path || path.length < 2) return; g.beginPath(); path.forEach((q, i) => { const p = toC(q.getLat(), q.getLng()); i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); }); g.closePath(); if(fill){ g.fillStyle = fill; g.fill(); } if(stroke){ g.setLineDash(dash || []); g.lineWidth = lw || 2; g.strokeStyle = stroke; g.stroke(); g.setLineDash([]); } };
+  // 2) 필지·건물 경계
+  if(lastParcelPath && lastParcelPath.length >= 3) poly(lastParcelPath, '#FFD23F', null, 3, [14, 8]);
+  layouts.forEach(L => poly(L.ed.boundary, '#111', null, 3.2));
+  // 3) 모듈(분홍 테두리, 반투명 흰 바탕) + 통풍로(초록 X)
+  layouts.forEach(L => {
+    L.live.forEach(m => poly(m.poly.getPath(), '#FF00FF', 'rgba(255,255,255,0.28)', 1.6));
+    L.vents.forEach(m => { const path = m.poly.getPath(); poly(path, '#11AA22', 'rgba(60,220,60,0.75)', 1.6); if(path.length === 4){ const a = toC(path[0].getLat(), path[0].getLng()), b = toC(path[2].getLat(), path[2].getLng()), c2 = toC(path[1].getLat(), path[1].getLng()), d = toC(path[3].getLat(), path[3].getLng()); g.strokeStyle = '#000'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.moveTo(c2.x, c2.y); g.lineTo(d.x, d.y); g.stroke(); } });
+  });
+  g.restore();
+  // 4) 동별 용량 상자
+  g.textBaseline = 'middle'; g.textAlign = 'center';
+  const placed = [];
+  layouts.forEach((L, i) => {
+    const pts = L.live.flatMap(m => m.poly.getPath()); if(!pts.length) return;
+    const xs = pts.map(q => toC(q.getLat(), q.getLng()));
+    const rx = Math.max(...xs.map(p => p.x)), cy = (Math.min(...xs.map(p => p.y)) + Math.max(...xs.map(p => p.y))) / 2;
+    const n = L.live.length, kw = n * L.ed.wattPerPanel / 1000;
+    const name = L.ed.bldName || `${i + 1}동`;
+    const bw = 300, bh = 130;
+    let bx = Math.min(rx + 30, M.x + M.w - bw - 10), by = Math.max(M.y + 10, Math.min(cy - bh / 2, M.y + M.h - bh - 10));
+    placed.forEach(r => { if(bx < r.x + r.w && bx + bw > r.x && by < r.y + r.h && by + bh > r.y) by = r.y + r.h + 12; });
+    placed.push({ x: bx, y: by, w: bw, h: bh });
+    g.fillStyle = '#fff'; g.fillRect(bx, by, bw, bh); g.lineWidth = 4; g.strokeStyle = '#1E2FD0'; g.strokeRect(bx, by, bw, bh);
+    g.fillStyle = '#000'; g.font = '26px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.fillText(name, bx + bw / 2, by + 26);
+    g.fillStyle = '#E00000'; g.font = 'bold 44px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.fillText(`${kw.toLocaleString('ko-KR', {maximumFractionDigits: 3})}KW`, bx + bw / 2, by + 70);
+    g.fillStyle = '#000'; g.font = '22px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.fillText(`(${L.ed.wattPerPanel}W × ${n}EA)`, bx + bw / 2, by + 108);
+  });
+  // 5) 테두리·방위표·축척 표기
+  g.lineWidth = 2; g.strokeStyle = '#000'; g.strokeRect(M.x, M.y, M.w, M.h);
+  g.lineWidth = 6; g.strokeRect(40, 40, W - 80, H - 80);
+  // 방위표(북쪽 화살표)
+  { const ox = 110, oy = 210; g.fillStyle = '#000'; g.beginPath(); g.moveTo(ox, oy - 70); g.lineTo(ox + 22, oy + 10); g.lineTo(ox, oy - 4); g.lineTo(ox - 22, oy + 10); g.closePath(); g.fill(); g.beginPath(); g.arc(ox, oy - 10, 40, 0, Math.PI * 2); g.lineWidth = 3; g.stroke(); g.font = 'bold 30px sans-serif'; g.textAlign = 'center'; g.fillText('N', ox, oy - 100); }
+  // 축척 막대(실제 거리)
+  { const mPerPx = 156543.03392 * Math.cos(((bb.n + bb.s) / 2) * Math.PI / 180) / Math.pow(2, z) / k; const nice = [5, 10, 20, 50, 100].find(v => v / mPerPx >= 140) || 100; const len = nice / mPerPx; const sx = M.x + 30, sy = M.y + M.h - 40;
+    g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(sx - 12, sy - 36, len + 90, 56); g.fillStyle = '#000'; g.fillRect(sx, sy, len, 8); g.font = '22px sans-serif'; g.textAlign = 'left'; g.fillText(`${nice} m`, sx + len + 12, sy + 4); }
+  if(satOk){ g.font = '18px sans-serif'; g.textAlign = 'right'; g.fillStyle = 'rgba(255,255,255,.9)'; g.fillText(`배경: ${satName}`, M.x + M.w - 10, M.y + M.h - 16); }
+  // 6) 모듈 표
+  const totalN = layouts.reduce((a, L) => a + L.live.length, 0);
+  const watt = layouts[0].ed.wattPerPanel;
+  const totalKw = layouts.reduce((a, L) => a + L.live.length * L.ed.wattPerPanel / 1000, 0);
+  const mod = (document.getElementById('sheetModule') || {}).value || `${watt}Wp`;
+  const Lm = parseFloat((document.getElementById('panelL') || {}).value) || 2.465, Wm = parseFloat((document.getElementById('panelW') || {}).value) || 1.134;
+  const tiltTxt = (document.getElementById('sheetTilt') || {}).value || '';
+  { const tx = 1100, ty = 1250, cw = [420, 220, 260, 220], rh = [80, 150];
+    g.lineWidth = 3; g.strokeStyle = '#000'; g.strokeRect(tx, ty, cw.reduce((a, b) => a + b, 0), rh[0] + rh[1]);
+    g.beginPath(); g.moveTo(tx, ty + rh[0]); g.lineTo(tx + cw.reduce((a, b) => a + b, 0), ty + rh[0]); let xx = tx; [cw[0], cw[1], cw[2]].forEach((w, i) => { xx += w; if(i >= 0){ g.moveTo(xx, i < 2 ? ty + rh[0] : ty); g.lineTo(xx, ty + rh[0] + rh[1]); } }); g.stroke();
+    g.fillStyle = '#000'; g.textAlign = 'center'; g.font = '40px "Noto Sans KR", sans-serif';
+    g.fillText('모     듈', tx + (cw[0] + cw[1] + cw[2]) / 2, ty + rh[0] / 2); g.fillText('설치각도', tx + cw[0] + cw[1] + cw[2] + cw[3] / 2, ty + rh[0] / 2);
+    g.font = '36px "Noto Sans KR", sans-serif';
+    g.fillText(mod, tx + cw[0] / 2, ty + rh[0] + 48); g.fillText(`${Math.round(Lm * 1000).toLocaleString('ko-KR')} x ${Math.round(Wm * 1000).toLocaleString('ko-KR')}`, tx + cw[0] / 2, ty + rh[0] + 102);
+    g.fillText(`${totalN.toLocaleString('ko-KR')}장`, tx + cw[0] + cw[1] / 2, ty + rh[0] + rh[1] / 2);
+    g.fillText(`${totalKw.toLocaleString('ko-KR', {maximumFractionDigits: 3})}kW`, tx + cw[0] + cw[1] + cw[2] / 2, ty + rh[0] + rh[1] / 2);
+    g.fillText(tiltTxt, tx + cw[0] + cw[1] + cw[2] + cw[3] / 2, ty + rh[0] + rh[1] / 2);
+  }
+  // 7) 도면명(좌하단) + 표제란
+  g.textAlign = 'left'; g.fillStyle = '#0000CC'; g.font = 'bold 40px "Noto Sans KR", sans-serif'; g.fillText('모 듈 배 치 도', 330, 1395);
+  g.strokeStyle = '#E07000'; g.lineWidth = 4; g.beginPath(); g.arc(250, 1420, 40, 0, Math.PI * 2); g.moveTo(170, 1420); g.lineTo(700, 1420); g.moveTo(250, 1360); g.lineTo(250, 1480); g.stroke();
+  g.fillStyle = '#0000CC'; g.font = '22px sans-serif'; g.textAlign = 'right'; g.fillText('SCALE: N/S', 700, 1450);
+  { const ty = 1560, th = 154, x0 = 40, x1 = W - 40; g.lineWidth = 5; g.strokeStyle = '#000'; g.beginPath(); g.moveTo(x0, ty); g.lineTo(x1, ty); g.stroke();
+    const cols = [x0, 560, 900, 1470, 1610, 1990, x1];
+    g.lineWidth = 2; g.beginPath(); cols.slice(1, -1).forEach(x => { g.moveTo(x, ty); g.lineTo(x, ty + th); }); g.stroke();
+    g.textAlign = 'left'; g.fillStyle = '#000';
+    const project = ((document.getElementById('sheetProject') || {}).value || '').trim() || lastJibunAddress || ((document.getElementById('siteAddress') || {}).value || '');
+    g.font = '22px "Noto Sans KR", sans-serif'; g.fillText('공 사 명', x0 + 20, ty + 30); g.fillText('PROJECT', x0 + 20, ty + 60);
+    g.font = '26px "Noto Sans KR", sans-serif'; wrapText(g, project, x0 + 160, ty + 40, 380, 32);
+    g.font = '22px "Noto Sans KR", sans-serif'; g.fillText('시 행 청', 580, ty + 30);
+    g.textAlign = 'center'; g.font = '24px "Noto Sans KR", sans-serif'; g.fillText('그랜드썬기술단', (900 + 1470) / 2, ty + 34); g.font = '22px sans-serif'; g.fillText('GRANDSUN ENGINEERING CO., LTD.', (900 + 1470) / 2, ty + 72); g.fillText('TEL : 051-941-7783  FAX : 051-941-7785', (900 + 1470) / 2, ty + 108);
+    g.fillText('1 : none', (1470 + 1610) / 2, ty + 77);
+    g.font = '22px "Noto Sans KR", sans-serif'; g.fillText('책임기술자', 1680, ty + 30); g.fillText('설 계 자', 1680, ty + 80); g.fillText('제 도 자', 1680, ty + 128);
+    g.fillText(((document.getElementById('sheetDesigner') || {}).value || ''), 1870, ty + 80);
+    g.beginPath(); g.moveTo(1610, ty + 52); g.lineTo(1990, ty + 52); g.moveTo(1610, ty + 104); g.lineTo(1990, ty + 104); g.moveTo(1750, ty); g.lineTo(1750, ty + th); g.stroke();
+    g.textAlign = 'left'; g.fillText('도 면 명', 2010, ty + 30); g.fillText('T I T L E', 2010, ty + 60); g.textAlign = 'center'; g.font = '26px "Noto Sans KR", sans-serif'; g.fillText('모 듈 배 치 평 면 도', (2010 + x1) / 2 + 40, ty + 105);
+  }
+  // 저장
+  const name = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_모듈배치도.png';
+  try{
+    cv.toBlob(blob => {
+      if(!blob){ st.textContent = '❌ 이미지 생성 실패'; return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      st.textContent = `✅ ${name} 저장 — 모듈 ${totalN.toLocaleString('ko-KR')}장 · ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits: 3})}kW${satOk ? ` · 배경 ${satName}` : ' · 위성사진은 불러오지 못해 배경 없이 저장(카카오 지도 화면과 영상이 다를 수 있음)'}`;
+    }, 'image/png');
+  }catch(e){ st.textContent = '❌ 이미지 저장 실패: ' + e.message; }
+  window.__lastSheetCanvas = cv;
+  return cv;
+}
+function wrapText(g, text, x, y, maxW, lh){
+  let line = '', yy = y;
+  for(const ch of String(text)){ const t = line + ch; if(g.measureText(t).width > maxW && line){ g.fillText(line, x, yy); line = ch; yy += lh; } else line = t; }
+  if(line) g.fillText(line, x, yy);
+}
+
 // ===== CAD(DXF) 내보내기: 지도 위 모든 배치를 m 단위 평면좌표(AutoCAD R12 호환 POLYLINE/TEXT)로 저장 =====
 // 좌표계: 첫 배치 경계의 중심 위도 기준 등장방형 근사(solarToXY) → 전체 도형의 좌하단이 (0,0)이 되게 평행이동. 1 단위 = 1 m. X=동, Y=북.
 function exportLayoutDxf(){
@@ -2335,7 +2507,7 @@ function applyStdMountUi(mt){
 
 // ===== 배치 레지스트리: 필지·건물마다 만든 배치를 모두 유지하고, 모듈 추가·제거를 배치별로 처리 =====
 const layoutRegistry = []; // [{type, groupId, modules:[{poly,removed}], label, boundary, lat0Rad, azRad, modW, modD, fill, ...}]
-function registerLayout(ed){ layoutRegistry.push(ed); }
+function registerLayout(ed){ if(ed && ed.bldName === undefined) ed.bldName = (typeof currentBoundaryName === 'string' ? currentBoundaryName : '') || ''; layoutRegistry.push(ed); }
 function layoutByModule(m){ return layoutRegistry.find(ed => ed.modules.includes(m)) || null; }
 function layoutByGroup(id){ return layoutRegistry.find(ed => ed.groupId === id) || null; }
 function sameBoundary(a, b){
@@ -2351,6 +2523,29 @@ function replaceLayoutOnSameBoundary(boundary){
   if(solarGroupId && !layoutByGroup(solarGroupId)) solarGroupId = null;
 }
 function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRoofEditLabel(ed); else if(ed.type === 'std') updateStdLabel(ed); else updateGroundLabel(ed); updateTableLabels(ed); }
+// 동별 용량 라벨: 배치(살아 있는 모듈) 오른쪽 가운데에 흰 상자 — 이름(있으면) · 빨간 kW · "645W × 225EA"
+function applyBadge(ed){
+  if(!ed || !ed.modules) return;
+  const map = ensureKakaoMap();
+  const live = ed.modules.filter(m => !m.removed);
+  const n = live.length, kw = n * ed.wattPerPanel / 1000;
+  if(ed.label && ed.label.setMap) ed.label.setMap(null); // 기존 상단 라벨은 숨김
+  const pts = (live.length ? live : ed.modules).flatMap(m => m.poly.getPath());
+  if(!pts.length) return;
+  const maxLng = Math.max(...pts.map(q => q.getLng()));
+  const lats = pts.map(q => q.getLat()); const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const pos = new kakao.maps.LatLng(midLat, maxLng);
+  const html = `<div onmousedown="kakao.maps.event.preventMap();" style="position:relative;transform:translateX(10px);background:#fff;border:2px solid #2048B8;border-radius:6px;padding:4px 10px 4px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25);font-family:'IBM Plex Mono',monospace;white-space:nowrap;text-align:left;">
+    ${ed.bldName ? `<div style="font-size:10.5px;color:#444;font-family:inherit;">${escLand(ed.bldName)}</div>` : ''}
+    <div style="font-size:17px;font-weight:800;color:#D62020;line-height:1.15;">${kw.toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW</div>
+    <div style="font-size:11px;color:#222;">${ed.wattPerPanel}W × ${n.toLocaleString('ko-KR')}EA</div>
+    <span onclick="event.stopPropagation();removeSolarLayout(${ed.groupId})" title="이 배치 삭제" style="position:absolute;top:-8px;right:-8px;width:16px;height:16px;line-height:15px;text-align:center;border-radius:50%;background:#2048B8;color:#fff;font-size:10px;cursor:pointer;">✕</span></div>`;
+  if(!ed.badge){
+    ed.badge = new kakao.maps.CustomOverlay({ position: pos, content: html, xAnchor: 0, yAnchor: 0.5, clickable: true, zIndex: 25 });
+    ed.badge.setMap(map); measureShapes.push(ed.badge);
+    if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(ed.badge);
+  } else { ed.badge.setContent(html); if(!ed.moved) ed.badge.setPosition(pos); }
+}
 
 // ===== 테이블(어레이 구조물) 오버레이: 같은 테이블에 속한 모듈을 묶어 외곽선 + "N단×M장" 라벨을 표시 =====
 // mods: [{poly, removed, table:'r-t', tier:k, ...}], rotToReal: 회전좌표→실좌표 함수, cornersRotOf: 모듈 → 회전좌표 모서리 4개
@@ -2429,7 +2624,7 @@ function addTableAt(latlng){
       const xa = x0 + i * (ed.modW + gap), ya = y0 + k * (ed.modD + gap);
       const cr = [{x: xa, y: ya}, {x: xa + ed.modW, y: ya}, {x: xa + ed.modW, y: ya + ed.modD}, {x: xa, y: ya + ed.modD}];
       const path = cr.map(c => rotateXY(c.x, c.y, ed.azRad)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
-      const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: ed.fill, fillOpacity: 0.62 });
+      const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#5A0A40', strokeOpacity: 0.8, fillColor: ed.fill, fillOpacity: 0.55 });
       measureShapes.push(poly);
       if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(poly);
       const m = { poly, removed: false, face: 'a', added: true, line: 'g-' + id, table: id, tier: k, cornersRot: cr, color: ed.fill };
@@ -2453,12 +2648,13 @@ function tableSummaryText(ed){
 // 모듈 상태 반영
 function setModuleRemoved(m, removed){
   m.removed = removed;
-  m.poly.setOptions({ fillColor: removed ? '#B0B0B0' : m.color, fillOpacity: removed ? 0.25 : 0.62, strokeOpacity: removed ? 0.3 : 0.7 });
+  m.poly.setOptions({ fillColor: removed ? '#B0B0B0' : m.color, fillOpacity: removed ? 0.25 : 0.55, strokeOpacity: removed ? 0.3 : 0.8 });
 }
 // 모듈 클릭: 기본 = 한 장 제외/복원, "줄 단위" 모드 = 같은 줄(열·테이블) 전체 제외/복원
 function moduleClicked(m){
   const ed = layoutByModule(m);
   if(!ed) return;
+  if(mapMode === 'movelayout'){ selectLayoutForMove(ed); return; }
   if(mapMode === 'delline'){
     const target = !m.removed;
     ed.modules.filter(x => x.line === m.line).forEach(x => setModuleRemoved(x, target));
@@ -2472,6 +2668,75 @@ function moduleClicked(m){
     setModuleRemoved(m, !m.removed);
   }
   refreshLayoutLabel(ed);
+}
+// ===== ✥ 배치 이동: 배치를 선택해 손잡이 드래그 또는 화살표(0.1m/0.5m)로 모듈·테이블·라벨 전체를 평행 이동 =====
+let moveSel = null; // { ed, handle, panel, last }
+function toggleMoveLayoutMode(){
+  if(mapMode === 'movelayout'){ endMoveLayout(); setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
+  if(!layoutRegistry.length){ document.getElementById('roadviewStatus').textContent = '먼저 배치를 생성하세요.'; return; }
+  setMode('movelayout');
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = '✥ 옮길 배치의 모듈을 클릭하세요. 가운데 손잡이를 끌거나 화살표 버튼(0.1m·0.5m)으로 전체를 이동하고 "완료"를 누르세요.';
+}
+function layoutCenter(ed){
+  const pts = ed.modules.flatMap(m => m.poly.getPath());
+  return new kakao.maps.LatLng(pts.reduce((a, q) => a + q.getLat(), 0) / pts.length, pts.reduce((a, q) => a + q.getLng(), 0) / pts.length);
+}
+function shiftPath(path, dx, dy, lat0){ return path.map(q => { const xy = solarToXY(q, lat0); return solarToLatLng(xy.x + dx, xy.y + dy, lat0); }); }
+// dx·dy: 동·북 방향 m
+function moveLayoutBy(ed, dx, dy){
+  const lat0 = ed.lat0Rad;
+  const dr = rotateXY(dx, dy, -ed.azRad); // 배치 회전좌표계에서의 이동량
+  ed.modules.forEach(m => {
+    m.poly.setPath(shiftPath(m.poly.getPath(), dx, dy, lat0));
+    if(m.cornersRot) m.cornersRot = m.cornersRot.map(c => ({ x: c.x + dr.x, y: c.y + dr.y }));
+  });
+  (ed.tables || []).forEach(t => { try{ t.outline.setPath(shiftPath(t.outline.getPath(), dx, dy, lat0)); }catch(e){} });
+  [ed.label, ed.badge].forEach(o => { if(o && o.getPosition){ try{ o.setPosition(shiftPath([o.getPosition()], dx, dy, lat0)[0]); }catch(e){} } });
+  ed.moved = { dx: ((ed.moved && ed.moved.dx) || 0) + dx, dy: ((ed.moved && ed.moved.dy) || 0) + dy };
+}
+function selectLayoutForMove(ed){
+  endMoveLayout();
+  const map = ensureKakaoMap();
+  const c = layoutCenter(ed);
+  const handle = new kakao.maps.Marker({ map, position: c, draggable: true, image: new kakao.maps.MarkerImage(MOVE_IMG, new kakao.maps.Size(30, 30), { offset: new kakao.maps.Point(15, 15) }), zIndex: 40 });
+  const b = (txt, js) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" style="border:1px solid #C2148A;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 6px;cursor:pointer;font-size:11.5px;min-width:24px;">${txt}</button>`;
+  const panel = new kakao.maps.CustomOverlay({ position: c, yAnchor: -0.35, clickable: true, zIndex: 41, content: `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:3px;background:rgba(194,20,138,.95);padding:4px 6px;border-radius:5px;color:#fff;font-size:11px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);">
+      <span>✥ 이동</span>${b('←', 'nudgeLayout(-1,0)')}${b('→', 'nudgeLayout(1,0)')}${b('↑', 'nudgeLayout(0,1)')}${b('↓', 'nudgeLayout(0,-1)')}
+      <select id="nudgeStep" onmousedown="event.stopPropagation();kakao.maps.event.preventMap();" style="font-size:11px;padding:0 2px;"><option value="0.1">0.1m</option><option value="0.5">0.5m</option><option value="1">1m</option></select>
+      ${b('완료', 'endMoveLayout(true)')}</div>` });
+  panel.setMap(map);
+  moveSel = { ed, handle, panel, last: null };
+  kakao.maps.event.addListener(handle, 'dragstart', () => { moveSel.last = solarToXY(handle.getPosition(), ed.lat0Rad); });
+  const drag = () => {
+    if(!moveSel) return;
+    const cur = solarToXY(handle.getPosition(), ed.lat0Rad);
+    if(!moveSel.last) moveSel.last = cur;
+    moveLayoutBy(ed, cur.x - moveSel.last.x, cur.y - moveSel.last.y);
+    moveSel.last = cur; panel.setPosition(handle.getPosition());
+  };
+  kakao.maps.event.addListener(handle, 'drag', drag);
+  kakao.maps.event.addListener(handle, 'dragend', () => { drag(); if(moveSel) moveSel.last = null; });
+  ed.modules.forEach(m => { if(!m.removed) m.poly.setOptions({ strokeColor: '#FFD23F', strokeWeight: 2 }); });
+}
+function nudgeLayout(sx, sy){
+  if(!moveSel) return;
+  const step = parseFloat((document.getElementById('nudgeStep') || {}).value) || 0.1;
+  moveLayoutBy(moveSel.ed, sx * step, sy * step);
+  const c = layoutCenter(moveSel.ed); moveSel.handle.setPosition(c); moveSel.panel.setPosition(c);
+}
+function endMoveLayout(done){
+  if(!moveSel) return;
+  const ed = moveSel.ed;
+  moveSel.handle.setMap(null); moveSel.panel.setMap(null);
+  ed.modules.forEach(m => m.poly.setOptions({ strokeColor: '#5A0A40', strokeWeight: 1 }));
+  moveSel = null;
+  if(done){
+    setMode('normal');
+    const mv = ed.moved || { dx: 0, dy: 0 };
+    const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+    st.textContent = `✥ 배치를 이동했습니다 (동쪽 ${mv.dx.toFixed(2)}m, 북쪽 ${mv.dy.toFixed(2)}m). 건물 경계 밖으로 나간 모듈은 직접 확인해 "영역 제거"나 모듈 클릭으로 빼세요.`;
+  }
 }
 function toggleLineDeleteMode(){
   if(mapMode === 'delline'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
@@ -2571,7 +2836,7 @@ function addModuleAt(latlng){
   const hw = ed.modW / 2, hd = ed.modD / 2;
   const cr = [{x: cx - hw, y: cy - hd}, {x: cx + hw, y: cy - hd}, {x: cx + hw, y: cy + hd}, {x: cx - hw, y: cy + hd}];
   const path = cr.map(c => rotateXY(c.x, c.y, ed.azRad)).map(pt => solarToLatLng(pt.x, pt.y, ed.lat0Rad));
-  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: ed.fill, fillOpacity: 0.62 });
+  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 1, strokeColor: '#5A0A40', strokeOpacity: 0.8, fillColor: ed.fill, fillOpacity: 0.55 });
   measureShapes.push(poly);
   if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(poly);
   // 격자에 맞춘 경우: 기준 모듈과 같은 테이블·같은 단(y가 같으면)으로 편입 → 테이블 외곽선이 늘어남. 아니면 'added'
@@ -2602,6 +2867,7 @@ function updateGroundLabel(ed){
     <div style="display:flex;align-items:center;gap:8px;"><b style="font-size:14px;">${kw.toLocaleString('ko-KR', {maximumFractionDigits:2})} kW</b><span style="opacity:.85;">${groundEdit.wattPerPanel}W × ${live.toLocaleString('ko-KR')}EA</span>${closeBtnHtml(`removeSolarLayout(${groundEdit.groupId})`)}</div>
     <div style="font-size:10.5px;opacity:.85;">${groundEdit.arrRows ? `${groundEdit.orient === 'landscape' ? '가로' : '세로'} ${groundEdit.arrRows}단 테이블 ${(groundEdit.tables || []).length}개 · ` : ''}부지이용률 ${util}% · 열간격 ${groundEdit.pitch.toFixed(2)}m${removed ? ` · 제외 ${removed}장` : ''}</div></div>`);
   lastSolarStats = Object.assign(lastSolarStats || {}, { panelCount: live, totalKw: kw, utilization: util });
+  applyBadge(groundEdit);
 }
 // ---- 실무 밀도 기준: 건물 지붕 200평당 100kW, 토지 300평당 100kW (사용자 제공 실무 기준, 2026.09.29) ----
 // 기하학적으로 들어가는 모듈 수가 기준 용량을 넘으면, 행(row)을 균등한 간격으로 골라 남기는 방식으로 기준 용량에 맞춤
@@ -2889,6 +3155,7 @@ function updateStdLabel(ed){
     <div style="display:flex;align-items:center;gap:8px;"><b style="font-size:14px;">${kw.toLocaleString('ko-KR', {maximumFractionDigits: 2})} kW</b><span style="opacity:.85;">${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}EA</span>${closeBtnHtml(`removeSolarLayout(${ed.groupId})`)}</div>
     <div style="font-size:10.5px;opacity:.85;">${nm} · 테이블 ${(ed.tables || []).length}개${vents ? ` · 통풍로 ${vents}` : ''}${removed ? ` · 제외 ${removed}장` : ''}</div></div>`);
   lastSolarStats = { rows: 0, cols: 0, panelCount: live, totalKw: kw, utilization: 0 };
+  applyBadge(ed);
 }
 function generateBuildingRoofLayout(kind){
   const statusEl = document.getElementById('roadviewStatus');
@@ -3060,10 +3327,10 @@ function generateBuildingRoofLayout(kind){
       chosen = applyDensityRule(cands.map(c => Object.assign({}, c, { row: c.block })), tc).chosen;
     }
   }
-  const fill = '#4A5A1B';
-  const fillB = '#2F6B4F'; // 두 번째 면(북향·서향 면)은 다른 색으로 구분
+  const fill = '#C2148A';
+  const fillB = '#8E1068'; // 두 번째 면(북향·서향 면)은 조금 진한 분홍으로 구분
   const modules = chosen.map(c => {
-    const poly = new kakao.maps.Polygon({ map, path: c.corners.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad)), strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7, fillColor: (kind !== 'slab' && c.face === 'b') ? fillB : fill, fillOpacity: 0.62 });
+    const poly = new kakao.maps.Polygon({ map, path: c.corners.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad)), strokeWeight: 1, strokeColor: '#5A0A40', strokeOpacity: 0.8, fillColor: (kind !== 'slab' && c.face === 'b') ? fillB : fill, fillOpacity: 0.55 });
     measureShapes.push(poly);
     const m = { poly, face: c.face, removed: false, line: c.line, table: c.table, tier: c.tier, cornersRot: c.cornersRot, color: (kind !== 'slab' && c.face === 'b') ? fillB : fill };
     try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
@@ -3118,6 +3385,7 @@ function updateRoofEditLabel(ed){
     <div style="font-size:10.5px;opacity:.85;">${sub}</div></div>`);
   const area = roofEdit.projectedAreaM2;
   lastSolarStats = { rows: 0, cols: 0, panelCount: n, totalKw: n * roofEdit.wattPerPanel / 1000, utilization: Math.round(n * (parseFloat(document.getElementById('panelW').value) || 1.134) * (parseFloat(document.getElementById('panelL').value) || 2.465) / Math.max(area, 1) * 100) };
+  applyBadge(roofEdit);
 }
 
 function onGenerateLayoutClick(){
@@ -3485,14 +3753,14 @@ function generateSolarLayout(){
   chosen.forEach(c => {
     const path = c.cornersReal.map(pt => solarToLatLng(pt.x, pt.y, lat0Rad));
     const poly = new kakao.maps.Polygon({
-      map, path, strokeWeight: 1, strokeColor: '#0F2A44', strokeOpacity: 0.7,
-      fillColor: '#1B3A5C', fillOpacity: 0.62
+      map, path, strokeWeight: 1, strokeColor: '#5A0A40', strokeOpacity: 0.8,
+      fillColor: '#C2148A', fillOpacity: 0.55
     });
     measureShapes.push(poly);
     panelShapes.push(poly);
     panelCount++;
     rowCounts[c.row] = (rowCounts[c.row] || 0) + 1;
-    const m = { poly, removed: false, line: 'g-' + c.table, table: c.table, tier: c.tier, cornersRot: c.cornersRot, color: '#1B3A5C' };
+    const m = { poly, removed: false, line: 'g-' + c.table, table: c.table, tier: c.tier, cornersRot: c.cornersRot, color: '#C2148A' };
     groundMods.push(m);
     try{ kakao.maps.event.addListener(poly, 'click', () => moduleClicked(m)); }catch(e){}
   });
@@ -3526,7 +3794,7 @@ function generateSolarLayout(){
   measureShapes.push(label);
   measureGroups[solarGroupId].shapes.push(label);
   const thisGround = { type: 'ground', modules: groundMods, mods: groundMods, label, wattPerPanel, siteAreaM2, panelW, panelL, groupId: solarGroupId, pitch, arrRows, arrCols, orient,
-    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: azimuthRad, modW: modAcross, modD: footprintNS, fill: '#1B3A5C' };
+    boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: azimuthRad, modW: modAcross, modD: footprintNS, fill: '#C2148A' };
   groundEdit = thisGround;
   registerLayout(thisGround);
   // 테이블(구조물) 외곽선 + 라벨
@@ -3833,6 +4101,7 @@ function finishBuildingEdit(){
 // 확정 테두리 + 변 길이 + 라벨(조정 버튼 포함) 그리기 — 건물 선택과 조정 완료에서 공통 사용
 function drawConfirmedOutline(path, name, extra){
   const map = ensureKakaoMap();
+  currentBoundaryName = name && name !== '따라 그린 건물' ? name : '';
   const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#C2148A', strokeOpacity: 0.9, fillColor: '#C2148A', fillOpacity: 0.05 });
   measureShapes.push(poly);
   const shapes = [poly];
@@ -3986,6 +4255,87 @@ function toggleBuildingPickMode(){
   const st = document.getElementById('roadviewStatus');
   st.style.color = 'var(--ink-soft)';
   st.textContent = '🏢 지도에서 지붕을 올릴 건물을 클릭하세요. 건물 외곽선이 자동으로 경계가 되고 변 길이가 표시됩니다. (끝내려면 버튼을 다시 누르세요)';
+}
+// ===== 필지 안 건물(동) 목록: 주소 검색 시 연속지적 필지와 겹치는 도로명주소 건물도형(LT_C_SPBD)을 하늘색 점선으로 표시 =====
+let parcelBuildings = []; // [{ path, name, poly, label }]
+let parcelBldGroupId = null;
+let currentBoundaryName = '';
+function clearParcelBuildings(){ if(parcelBldGroupId){ removeMeasureGroup(parcelBldGroupId); parcelBldGroupId = null; } parcelBuildings = []; }
+async function loadParcelBuildings(parcelPath){
+  clearParcelBuildings();
+  if(!parcelPath || parcelPath.length < 3) return;
+  const lats = parcelPath.map(q => q.getLat()), lngs = parcelPath.map(q => q.getLng());
+  const pad = 0.00005;
+  let feats = [];
+  try{
+    const data = await vworldJsonp({
+      service: 'data', version: '2.0', request: 'GetFeature', format: 'json', errorformat: 'json', size: '50', page: '1',
+      data: 'LT_C_SPBD', geomFilter: `BOX(${Math.min(...lngs) - pad},${Math.min(...lats) - pad},${Math.max(...lngs) + pad},${Math.max(...lats) + pad})`,
+      geometry: 'true', attribute: 'true', crs: 'EPSG:4326', domain: VWORLD_DOMAIN, key: VWORLD_KEY
+    }, 12000);
+    const resp = data && data.response;
+    feats = (resp && resp.status === 'OK' && resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
+  }catch(e){ console.warn('LT_C_SPBD box', e); return; }
+  const lat0 = lats.reduce((a, b) => a + b, 0) / lats.length * Math.PI / 180;
+  const parcelXY = parcelPath.map(q => solarToXY(q, lat0));
+  const map = ensureKakaoMap();
+  const shapes = [];
+  feats.forEach(f => {
+    const ring = parseVworldGeom(f.geometry || (f.properties && f.properties.ag_geom));
+    if(!ring || ring.length < 3) return;
+    const path = [];
+    ring.forEach(q => { const pt = new kakao.maps.LatLng(q.lat, q.lng); const last = path[path.length - 1]; if(!last || haversineMeters(last, pt) > 0.3) path.push(pt); });
+    if(path.length > 3 && haversineMeters(path[0], path[path.length - 1]) < 0.3) path.pop();
+    if(path.length < 3) return;
+    // 필지와 겹치는 건물만: 건물 중심 또는 꼭짓점 절반 이상이 필지 안
+    const xy = path.map(q => solarToXY(q, lat0));
+    const c = { x: xy.reduce((a, q) => a + q.x, 0) / xy.length, y: xy.reduce((a, q) => a + q.y, 0) / xy.length };
+    const insideCnt = xy.filter(q => pointInPolygonXY(q, parcelXY)).length;
+    if(!pointInPolygonXY(c, parcelXY) && insideCnt < xy.length / 2) return;
+    const props = f.properties || {};
+    const name = [props.buld_nm || props.BULD_NM || '', props.buld_nm_dc || props.BULD_NM_DC || ''].filter(Boolean).join(' ').trim();
+    const floors = props.gro_flo_co || props.GRO_FLO_CO || '';
+    const idx = parcelBuildings.length;
+    const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#19B5D6', strokeOpacity: 0.95, strokeStyle: 'shortdash', fillColor: '#19B5D6', fillOpacity: 0.12, zIndex: 1 });
+    try{ kakao.maps.event.addListener(poly, 'click', () => { window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building') selectParcelBuilding(idx); }); }catch(e){}
+    shapes.push(poly);
+    parcelBuildings.push({ path, name, floors, poly, area: shoelaceArea(path) });
+  });
+  if(shapes.length){ shapes.forEach(sh => measureShapes.push(sh)); parcelBldGroupId = registerMeasureGroup(shapes); }
+  const st = document.getElementById('roadviewStatus');
+  if(st && parcelBuildings.length){
+    st.style.color = 'var(--ink-soft)';
+    st.textContent = `🏢 필지 안 건물 ${parcelBuildings.length}동을 하늘색 점선으로 표시했습니다${parcelBuildings.some(b => b.name) ? ' (' + parcelBuildings.map(b => b.name || '이름 없음').join(', ') + ')' : ''}. 배치할 건물을 클릭하거나, ② 배치 유형을 고른 뒤 "🏢 모든 동 배치"를 누르세요.`;
+  }
+  updateAllDongBtn();
+}
+function updateAllDongBtn(){ const b = document.getElementById('allDongBtn'); if(b) b.style.display = parcelBuildings.length ? '' : 'none'; }
+function selectParcelBuilding(i){
+  const b = parcelBuildings[i]; if(!b) return;
+  stopBuildingEdit();
+  if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  drawConfirmedOutline(b.path.slice(), b.name, b.floors ? ' · 지상 ' + b.floors + '층' : '');
+  try{ addOutlineEdgeLabels(b.path); refreshAlignEdgeOptions(); updateBoundaryInfo(); }catch(e){}
+  setMode('normal');
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = `✅ ${b.name || '건물'} 외곽선을 경계로 잡았습니다 — ${Math.round(b.area).toLocaleString('ko-KR')}㎡. 어긋나면 라벨의 "↔ 조정", 맞으면 ② 배치 유형을 고르고 "③ 배치 생성".`;
+}
+// 필지 안 모든 동에 현재 선택한 배치 유형으로 한 번에 배치
+function generateAllDongs(){
+  const st = document.getElementById('roadviewStatus');
+  if(!parcelBuildings.length){ st.style.color = '#b3402a'; st.textContent = '❌ 필지 안 건물 목록이 없습니다. 주소를 검색하면 자동으로 불러옵니다.'; return; }
+  const mt = document.getElementById('mountType').value;
+  if(mt === 'ground'){ st.style.color = '#b3402a'; st.textContent = '❌ 건물 배치 유형(원단·인삼밭 플랫·제로솔루션·평슬라브 등)을 ② 에서 먼저 고르세요.'; return; }
+  let ok = 0;
+  parcelBuildings.forEach((b, i) => {
+    selectParcelBuilding(i);
+    const before = layoutRegistry.length;
+    try{ onGenerateLayoutClick(); }catch(e){ console.warn('all dong', e); }
+    if(layoutRegistry.length > before) ok++;
+  });
+  const total = layoutRegistry.reduce((a, ed) => a + ed.modules.filter(m => !m.removed).length * ed.wattPerPanel / 1000, 0);
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = `✅ ${parcelBuildings.length}동 중 ${ok}동에 배치했습니다 — 지도 위 전체 배치 합계 ${total.toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW. 동별 kW·장수는 각 건물 옆 라벨에 표시됩니다. 위치를 옮기려면 "✥ 배치 이동".`;
 }
 async function pickBuildingAt(latlng){
   const st = document.getElementById('roadviewStatus');
