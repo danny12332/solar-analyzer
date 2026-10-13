@@ -532,7 +532,6 @@
           <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 오른쪽 클릭하면 완성">✏ 건물 따라 그리기</button>
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
-          <button type="button" class="preset-btn" id="allDongBtn" style="display:none;background:#19B5D6;color:#fff;border-color:#19B5D6;" onclick="generateAllDongs()" title="주소 검색으로 불러온 필지 안 모든 건물에 ②에서 고른 배치 유형으로 한 번에 배치">🏢 모든 동 배치</button>
           <button type="button" class="preset-btn" onclick="startFromParcel()" title="검색한 필지 경계를 배치 경계로 가져온 뒤 바로 조정 모드로 — 지붕이 필지를 거의 다 덮는 공장 등에서 노란 네모(변)를 끌어 지붕선에 맞추기">▭ 필지 경계로 시작</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
           <span id="boundaryInfo" style="font-weight:600;color:var(--ink);font-size:12px;"></span>
@@ -2110,9 +2109,11 @@ function rotateXY(x, y, angleRad){
 function refreshAlignEdgeOptions(){
   const sel = document.getElementById('alignEdge'); if(!sel) return;
   const path = (lastAreaPolygonPath && lastAreaPolygonPath.length >= 3) ? lastAreaPolygonPath : ((lastParcelPath && lastParcelPath.length >= 3) ? lastParcelPath : null);
-  const cur = sel.value;
   const n = path ? path.length : 0;
-  if(sel.dataset.n === String(n) && sel.options.length === n + 1 && n > 0) return; // 같은 경계면 그대로
+  const sig = path ? path.map(q => q.getLat().toFixed(6) + ',' + q.getLng().toFixed(6)).join(';') : '';
+  if(sel.dataset.sig === sig && n > 0) return; // 같은 경계면 그대로
+  const cur = sel.dataset.sig ? 'auto' : sel.value; // 경계가 바뀌면 이전 경계에서 고른 변은 버리고 '자동'
+  sel.dataset.sig = sig;
   sel.innerHTML = '<option value="auto">자동</option>';
   if(!path){ sel.dataset.n = '0'; sel.value = 'auto'; return; }
   for(let i = 0; i < n; i++){
@@ -3001,14 +3002,26 @@ function drawnAreaIsOnBuilding(){
 //   N행 묶음 + 묶음 사이 통로(점검로)는 입력값으로 조절.
 // 용량 조절: "목표 용량(kW)"을 넣으면 묶음(띠) 단위로 고르게 빼서 맞춤 / 지도에서 모듈을 클릭하면 개별 제외·복원.
 let roofEdit = null; // { modules:[{poly, face, removed}], label, wattPerPanel, faces:{a:{name}, b:{name}} }
+// 건물 축: 외곽선을 감싸는 최소 면적 사각형의 긴 변 방향(라디안, x=동쪽 기준 반시계).
+// (예전: 가장 긴 "한 변" 방향 → 공식 외곽선처럼 긴 변 중간에 꺾인 점이 있으면 짧은 변을 축으로 잘못 잡아 90° 돌아간 배치가 나옴)
 function principalAxes(polyXY){
-  let bestLenSq = -1, ang = 0;
-  for(let i = 0; i < polyXY.length; i++){
-    const a = polyXY[i], b = polyXY[(i + 1) % polyXY.length];
-    const dx = b.x - a.x, dy = b.y - a.y, l = dx*dx + dy*dy;
-    if(l > bestLenSq){ bestLenSq = l; ang = Math.atan2(dy, dx); }
+  const pts = polyXY.map(p => ({ x: p.x, y: p.y })).sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [], upper = [];
+  pts.forEach(p => { while(lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); });
+  for(let i = pts.length - 1; i >= 0; i--){ const p = pts[i]; while(upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+  if(hull.length < 3) return 0;
+  let best = null;
+  for(let i = 0; i < hull.length; i++){
+    const a = hull[i], b = hull[(i + 1) % hull.length];
+    const th = Math.atan2(b.y - a.y, b.x - a.x), c = Math.cos(th), s = Math.sin(th);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    hull.forEach(p => { const u = p.x * c + p.y * s, v = -p.x * s + p.y * c; x0 = Math.min(x0, u); x1 = Math.max(x1, u); y0 = Math.min(y0, v); y1 = Math.max(y1, v); });
+    const area = (x1 - x0) * (y1 - y0);
+    if(!best || area < best.area - 1e-9) best = { area, th, w: x1 - x0, h: y1 - y0 };
   }
-  return ang; // 가장 긴 변의 방향(라디안, x=동쪽 기준 반시계)
+  return best.w >= best.h ? best.th : best.th + Math.PI / 2;
 }
 function normAxis(rad){ // 방향 없는 축 → -90°~90° 범위
   let d = rad * 180 / Math.PI;
@@ -3108,20 +3121,35 @@ function generateStdLayout(kind){
       // 통풍로: 3단 이상 틀에만, 그 틀의 가운데 단에 (2단 틀에는 만들지 않음)
       const ventTiers = new Set();
       { let j0 = 0; sizes.forEach(k => { if(k >= 3) ventTiers.add(j0 + Math.floor((k - 1) / 2)); j0 += k; }); }
-      let x = X0 + sb; // 건물 끝에서 이격거리만큼 떨어진 곳부터 배치
-      for(let done = 0; done < nX; ){
-        const n = Math.min(blockN, nX - done);
-        const vents = new Set([Math.floor(n / 4), Math.floor(n * 3 / 4)]); // 블록마다 통풍로 2개
-        for(let i = 0; i < n; i++){
-          for(let j = 0; j < nY; j++){
-            const cr = rect(x, yAt(j), dX, dY);
-            if(fits(cr)) cands.push({ cr, table: face + '-' + blk + '-' + offs[j].fi, tier: j, vent: ventTiers.has(j) && vents.has(i) && n >= 4 });
+      // 외곽선에 꺾인 점·돌출부가 있어도 줄이 빠지지 않도록: 시작 위치를 조금씩(경사 0~1.5m, 용마루 방향 0~모듈폭) 옮겨 보며 가장 많이 들어가는 위치를 고름
+      const placeFace = (ys, xs, commit) => {
+        let x = X0 + sb + xs, count = 0, b = blk;
+        const sgn = face === 'b' ? -1 : 1;
+        for(let done = 0; done < nX; ){
+          const n = Math.min(blockN, nX - done);
+          const vents = new Set([Math.floor(n / 4), Math.floor(n * 3 / 4)]); // 블록마다 통풍로 2개
+          for(let i = 0; i < n; i++){
+            for(let j = 0; j < nY; j++){
+              const cr = rect(x, yAt(j) + sgn * ys, dX, dY);
+              if(fits(cr)){ count++; if(commit) cands.push({ cr, table: face + '-' + b + '-' + offs[j].fi, tier: j, vent: ventTiers.has(j) && vents.has(i) && n >= 4 }); }
+            }
+            x += dX + (i === n - 1 ? 0 : gap);
           }
-          x += dX + (i === n - 1 ? 0 : gap);
+          done += n; b++;
+          x += Math.max(blockGap, gap); // 블록 사이: 기본은 모듈간격과 같게(빈 공간 없음)
         }
-        done += n; blk++;
-        x += Math.max(blockGap, gap); // 블록 사이: 기본은 모듈간격과 같게(빈 공간 없음)
+        if(commit) blk = b;
+        return count;
+      };
+      let best = { c: -1, ys: 0, xs: 0 };
+      const ySlack = Math.max(0, Math.min(1.5, D - totalW(m)));
+      for(let ys = 0; ys <= ySlack + 1e-6; ys += 0.05){
+        for(let xs = 0; xs < dX + gap - 1e-6; xs += 0.1){
+          const c = placeFace(ys, xs, false);
+          if(c > best.c){ best = { c, ys, xs }; }
+        }
       }
+      placeFace(best.ys, best.xs, true);
     });
     summary = `원단 ${frameN}단 — ${flat ? '' : '면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tilt}°, 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 통풍로 2개(3단 이상 틀만)${blockGap > 0 ? ` + ${blockGap}m 이격` : ', 블록 사이 빈 공간 없음'}, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
   } else if(kind === 'insam' || kind === 'insam_flat' || kind === 'zero'){
@@ -4415,7 +4443,7 @@ async function loadParcelBuildings(parcelPath){
   const st = document.getElementById('roadviewStatus');
   if(st && parcelBuildings.length){
     st.style.color = 'var(--ink-soft)';
-    st.textContent = `🏢 필지 안 건물 ${parcelBuildings.length}동을 하늘색 점선으로 표시했습니다${parcelBuildings.some(b => b.name) ? ' (' + parcelBuildings.map(b => b.name || '이름 없음').join(', ') + ')' : ''}. 배치할 건물을 클릭하거나, ② 배치 유형을 고른 뒤 "🏢 모든 동 배치"를 누르세요.`;
+    st.textContent = `🏢 필지 안 건물 ${parcelBuildings.length}동을 하늘색 점선으로 표시했습니다${parcelBuildings.some(b => b.name) ? ' (' + parcelBuildings.map(b => b.name || '이름 없음').join(', ') + ')' : ''}. 배치할 건물을 클릭 → ② 배치 유형 → "③ 배치 생성"을 건물마다 반복하세요(앞서 만든 배치는 유지).`;
   }
   updateAllDongBtn();
   updateOffsetInfo(parcelPath[0]);
