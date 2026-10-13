@@ -551,6 +551,7 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('slab')" title="평슬라브 경사거치 · 세로 2단 · 8°">평슬라브</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('parking')" title="주차면 5,000×2,500 · 2칸마다 기둥 600 · 통로 6m">주차장</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 모듈 세로 4단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 4단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground3')" title="지상(개활지) · 모듈 세로 3단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 3단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 모듈 세로 2단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 2단</button>
           <label id="groundDirWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="경계선에 맞춤: 테이블 줄을 부지(그린 경계)의 변과 나란히 놓아 줄 끝이 끊기지 않고 면적을 채움(남향에서 최대 45° 틀어질 수 있음). 정남: 줄을 정동-정서로 놓음(경계가 기울어 있으면 줄 끝이 비스듬히 잘림)">줄 방향 <select id="groundDir" style="font-size:11.5px;padding:0 2px;"><option value="axis" selected>경계선에 맞춤 (끊김 없음)</option><option value="south">정남</option></select></label>
           <label id="denseWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="설치기준 열 간격(음영 간격) 대신 열을 바짝 붙여 지붕 끝 이격 안을 가득 채웁니다. 그늘이 질 줄·모듈은 배치 후 ✂ 모듈 삭제 / ⋯더보기 → 🗑 테이블 제거로 직접 빼세요."><input type="checkbox" id="stdDense" style="vertical-align:middle;"> 빈틈없이 채우기(음영은 직접 삭제) · 열 사이 <input id="stdDenseGap" type="number" value="0.5" step="0.1" min="0" style="width:42px;padding:1px 3px;">m</label>
@@ -2358,6 +2359,7 @@ function removeSolarLayout(id){
 const LAYOUT_PRESETS = {
   ground4:  { mount: 'ground',  orient: 'portrait', rows: 4, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 4단' },
   ground2:  { mount: 'ground',  orient: 'portrait', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
+  ground3:  { mount: 'ground',  orient: 'portrait', rows: 3, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 3단' },
   slab:     { mount: 'slab',    orient: 'portrait',  rows: 2, tilt: 8,  setback: 0.5, aisle: 0.6, label: '평슬라브 경사거치' },
   wondan:      { mount: 'wondan', std: true, label: '원단' },
   wondan2:     { mount: 'wondan', std: true, frame: 2, label: '원단 2단' },
