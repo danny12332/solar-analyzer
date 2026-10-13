@@ -657,6 +657,7 @@
             <button type="button" onclick="resetAllLayout()" title="배치·경계·구역을 모두 지우고 주소 검색 직후 상태로" style="color:#b3402a;">⟲ 원상복구</button>
             <span style="width:1px;align-self:stretch;background:rgba(0,0,0,.15);margin:0 2px;"></span>
             <button type="button" id="delModBtn" onclick="toggleDeleteModuleMode()" title="켠 뒤 모듈을 클릭하면 한 장씩 삭제 (↶ 이전으로 / Ctrl+Z 로 되살리기)">✂ 모듈 삭제</button>
+            <span style="display:inline-flex;align-items:center;gap:2px;"><button type="button" id="delRowBtn" onclick="toggleDelRowMode()" title="모듈을 클릭하면 그 줄 전체 삭제 · 빈 곳을 두 번 클릭해 선을 그으면 선이 지나는 줄을 한꺼번에 삭제 (↶ 이전으로 복구)">🗑 줄 삭제</button><select id="delRowUnit" title="삭제 단위" style="font-size:11px;padding:0 2px;"><option value="table" selected>N단 묶음</option><option value="tier">모듈 1줄</option></select></span>
             <button type="button" id="moveLayoutBtn" onclick="toggleMoveLayoutMode()" title="배치(모듈 묶음)를 클릭해 선택한 뒤 손잡이를 끌거나 화살표로 전체를 이동">✥ 배치 이동</button>
             <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈을 클릭하면 한 장씩 제외/복원)">➕ 모듈 추가</button>
             <button type="button" id="addRowBtn" onclick="toggleAddRowMode()" title="이격 기준 때문에 못 들어간 줄을 강제로 추가: 줄을 넣을 빈 자리를 클릭하면 가장 가까운 줄과 똑같은 줄이 그 자리에 놓입니다">➕ 줄 추가</button>
@@ -1786,6 +1787,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'addmod'){ addModuleAt(mouseEvent.latLng); }
     else if(mapMode === 'addtable'){ addTableAt(mouseEvent.latLng); }
     else if(mapMode === 'addrow'){ addRowAt(mouseEvent.latLng); }
+    else if(mapMode === 'delrow'){ if(Date.now() - (window.__shapeClickAt || 0) >= 300) delRowClick(mouseEvent.latLng); }
     else if(mapMode === 'trace'){ traceClick(mouseEvent.latLng); }
     else if(mapMode === 'editadd'){ editAddVertexAt(mouseEvent.latLng); }
     else if(mapMode === 'sheetwin'){ sheetWinClick(mouseEvent.latLng); }
@@ -1814,6 +1816,7 @@ function ensureKakaoMap(){
   });
   kakao.maps.event.addListener(kakaoMapObj, 'mousemove', function(mouseEvent){
     if(mapMode === 'trace'){ traceMove(mouseEvent.latLng); }
+    else if(mapMode === 'delrow'){ delRowMove(mouseEvent.latLng); }
     else if(mapMode === 'sheetwin'){ sheetWinMove(mouseEvent.latLng); }
     else if(mapMode === 'splitzone' && splitFirst){ const m0 = ensureKakaoMap(); const pp = [splitFirst, mouseEvent.latLng]; if(!splitPreview) splitPreview = new kakao.maps.Polyline({ map: m0, path: pp, strokeWeight: 3, strokeColor: '#FF3B30', strokeOpacity: 0.95, strokeStyle: 'shortdash', zIndex: 20 }); else splitPreview.setPath(pp); }
     else if(mapMode === 'radius' && radiusCenter){ updateRadiusPreview(mouseEvent.latLng); }
@@ -1922,8 +1925,8 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow'].includes(mode));
-    [['addModBtn','addmod'],['addRowBtn','addrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow'].includes(mode));
+    [['addModBtn','addmod'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
     });
@@ -2238,6 +2241,8 @@ function updateHistButtons(){
 }
 function histRestore(S){
   histMuted = true;
+  const keepMode = ['delmod', 'delrow'].includes(mapMode) ? mapMode : null; // 삭제 도구는 이전으로 후에도 계속 켜 둠
+  if(keepMode === 'delrow') delRowReset();
   try{
     stopBuildingEdit();
     if(typeof moveSel !== 'undefined' && moveSel) endMoveLayout();
@@ -2287,6 +2292,7 @@ function histRestore(S){
     applyEdgeLabelVisibility();
     try{ refreshAlignEdgeOptions(); }catch(e){}
     try{ updateBoundaryInfo(); }catch(e){}
+    if(keepMode && layoutRegistry.length) setMode(keepMode);
   } finally { histMuted = false; }
 }
 function histUndo(){
@@ -2865,6 +2871,72 @@ function moduleDragEnd(e){
   moveSel.ghost.setPath(moveSel.outlineXY().map(q => solarToLatLng(q.x, q.y, d.ed.lat0Rad))); moveSel.distLabel.setContent('');
   const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `✥ 구역 전체를 동 ${d.dx.toFixed(2)}m · 북 ${d.dy.toFixed(2)}m 옮겼습니다. 계속 끌거나 화살표로 미세 조정, 끝나면 "완료". 되돌리기는 "↶ 이전으로".`; }
 }
+// ===== 🗑 줄 삭제: 모듈 클릭 = 그 줄 전체 삭제 · 빈 곳 두 번 클릭(선) = 선이 지나는 줄 모두 삭제 =====
+let delRowFirst = null, delRowLine = null;
+function toggleDelRowMode(){
+  const st = document.getElementById('roadviewStatus');
+  if(mapMode === 'delrow'){ setMode('normal'); delRowReset(); st.textContent = ''; return; }
+  if(!layoutRegistry.length){ st.textContent = '먼저 배치를 생성하세요.'; return; }
+  setMode('delrow'); delRowReset(); layoutRegistry.forEach(raiseModules);
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = '🗑 줄 삭제: ① 모듈을 클릭하면 그 줄 전체가 삭제됩니다. ② 여러 줄을 한 번에 지우려면 빈 곳을 한 번 클릭하고, 지울 줄들을 가로질러 반대편을 클릭하세요(선이 지나는 줄이 모두 삭제). 옆의 선택으로 "N단 묶음(테이블 한 줄)" / "모듈 1줄" 단위를 고릅니다. 잘못 지우면 "↶ 이전으로".';
+}
+function delRowReset(){ delRowFirst = null; if(delRowLine){ delRowLine.setMap(null); delRowLine = null; } }
+function rowKeyOf(ed, m){
+  const unit = (document.getElementById('delRowUnit') || {}).value || 'table';
+  let k = m.table || m.line || '';
+  if(ed.type === 'ground' && /^\d+-\d+$/.test(k)) k = k.split('-')[0]; // 노지: 같은 줄의 테이블들을 한 줄로
+  return unit === 'tier' ? k + '|' + m.tier : k;
+}
+function deleteRowsOf(ed, keys, label){
+  const targets = ed.modules.filter(m => keys.has(rowKeyOf(ed, m)));
+  if(!targets.length) return 0;
+  histCheckpoint(label || '줄 삭제');
+  histMuted = true;
+  try{ targets.forEach(m => deleteModule(ed, m)); } finally { histMuted = false; }
+  deletedStack.length = 0;
+  return targets.length;
+}
+function segHitsPoly(A, B, P){
+  const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const inter = (p1, p2, p3, p4) => { const d1 = cr(p3, p4, p1), d2 = cr(p3, p4, p2), d3 = cr(p1, p2, p3), d4 = cr(p1, p2, p4); return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0)); };
+  for(let i = 0; i < P.length; i++) if(inter(A, B, P[i], P[(i + 1) % P.length])) return true;
+  return pointInPolygonXY(A, P) || pointInPolygonXY(B, P);
+}
+function delRowClick(ll, mod){
+  const st = document.getElementById('roadviewStatus');
+  if(delRowFirst){
+    const a = delRowFirst, b = ll; delRowReset();
+    let total = 0, rows = 0, first = true;
+    layoutRegistry.slice().forEach(ed => {
+      const A = solarToXY(a, ed.lat0Rad), B = solarToXY(b, ed.lat0Rad);
+      const keys = new Set();
+      ed.modules.forEach(m => { if(segHitsPoly(A, B, m.poly.getPath().map(q => solarToXY(q, ed.lat0Rad)))) keys.add(rowKeyOf(ed, m)); });
+      if(!keys.size) return;
+      if(!first) histMuted = true; // 여러 배치에 걸쳐도 기록은 한 번
+      try{ total += deleteRowsOf(ed, keys, '줄 삭제(선)'); } finally { if(!first) histMuted = false; }
+      first = false; rows += keys.size;
+    });
+    st.textContent = total ? `🗑 선이 지나간 ${rows}줄(모듈 ${total}장)을 삭제했습니다. 계속하거나 버튼을 다시 눌러 끝내세요. 복구는 "↶ 이전으로".` : '선이 지나간 모듈이 없습니다. 지울 줄을 가로지르게 다시 그어 주세요.';
+    return;
+  }
+  const hit = mod ? { ed: layoutByModule(mod), m: mod } : moduleAt(ll);
+  if(hit && hit.ed){
+    const key = rowKeyOf(hit.ed, hit.m);
+    const n = deleteRowsOf(hit.ed, new Set([key]), '줄 삭제');
+    const live = hit.ed.modules.filter(x => !x.removed).length;
+    st.textContent = `🗑 1줄(모듈 ${n}장) 삭제 — 이 배치 ${live.toLocaleString('ko-KR')}장 · ${(live * hit.ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW. 계속 클릭하거나, 빈 곳 두 번 클릭으로 여러 줄을 한 번에. 복구는 "↶ 이전으로".`;
+    return;
+  }
+  delRowFirst = ll;
+  st.textContent = '🗑 시작점을 찍었습니다. 지울 줄들을 가로질러 끝점을 클릭하세요 (취소: 버튼 다시 누르기).';
+}
+function delRowMove(ll){
+  if(!delRowFirst) return;
+  const map = ensureKakaoMap();
+  if(!delRowLine) delRowLine = new kakao.maps.Polyline({ map, path: [delRowFirst, ll], strokeWeight: 3, strokeColor: '#E00000', strokeOpacity: 0.9, strokeStyle: 'dash', zIndex: 20 });
+  else delRowLine.setPath([delRowFirst, ll]);
+}
 // ===== ➕ 줄 추가(강제): 이격 기준 때문에 못 들어간 줄을 사용자가 직접 추가 =====
 let addRowSeq = 0;
 function toggleAddRowMode(){
@@ -3167,6 +3239,7 @@ function moduleClicked(m){
   window.__shapeClickAt = Date.now(); // 모듈 클릭이 지도 클릭(주소 표시·필지 선택)으로 이어지지 않게
   if(mapMode === 'movelayout'){ if(!(moveSel && moveSel.ed === ed)) selectLayoutForMove(ed); return; }
   if(mapMode === 'delmod'){ deleteModule(ed, m); return; }
+  if(mapMode === 'delrow'){ const P = m.poly.getPath(); delRowClick(new kakao.maps.LatLng(P.reduce((a, q) => a + q.getLat(), 0) / P.length, P.reduce((a, q) => a + q.getLng(), 0) / P.length), m); return; }
   if(mapMode === 'delline'){
     histCheckpoint('테이블 제거');
     const target = !m.removed;
@@ -5014,6 +5087,7 @@ async function loadParcelBuildings(parcelPath){
       if(ll && ['delmod', 'delline', 'movelayout'].includes(mapMode)){ handleModuleModeClick(ll); return; }
       if(ll && mapMode === 'addmod'){ addModuleAt(ll); return; }
       if(ll && mapMode === 'addrow'){ addRowAt(ll); return; }
+      if(ll && mapMode === 'delrow'){ window.__shapeClickAt = Date.now(); delRowClick(ll); return; }
       if(ll && mapMode === 'splitzone'){ splitClick(ll); return; }
       window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building') selectParcelBuilding(idx);
     }); }catch(e){}
@@ -5060,7 +5134,7 @@ function splitClick(ll){
   splitZones = parts.map((xy, i) => {
     const zp = xy.map(q => solarToLatLng(q.x, q.y, lat0));
     const poly = new kakao.maps.Polygon({ map, path: zp, strokeWeight: 2.5, strokeColor: colors[i], strokeOpacity: 1, strokeStyle: 'solid', fillColor: colors[i], fillOpacity: 0.18, zIndex: 0 });
-    try{ kakao.maps.event.addListener(poly, 'click', (ev) => { const l2 = ev && ev.latLng; if(l2 && ['delmod', 'delline', 'movelayout'].includes(mapMode)){ handleModuleModeClick(l2); return; } if(l2 && mapMode === 'addrow'){ addRowAt(l2); return; } window.__shapeClickAt = Date.now(); if(mapMode === 'normal') selectSplitZone(i); }); }catch(e){}
+    try{ kakao.maps.event.addListener(poly, 'click', (ev) => { const l2 = ev && ev.latLng; if(l2 && ['delmod', 'delline', 'movelayout'].includes(mapMode)){ handleModuleModeClick(l2); return; } if(l2 && mapMode === 'addrow'){ addRowAt(l2); return; } if(l2 && mapMode === 'delrow'){ window.__shapeClickAt = Date.now(); delRowClick(l2); return; } window.__shapeClickAt = Date.now(); if(mapMode === 'normal') selectSplitZone(i); }); }catch(e){}
     const cxy = xy.reduce((o, q) => ({ x: o.x + q.x / xy.length, y: o.y + q.y / xy.length }), { x: 0, y: 0 });
     const lab = new kakao.maps.CustomOverlay({ position: solarToLatLng(cxy.x, cxy.y, lat0), content: `<div onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();selectSplitZone(${i})" style="cursor:pointer;background:${colors[i]};color:#fff;font-weight:700;font-size:12px;padding:2px 8px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.3);">${names[i]} ${Math.round(shoelaceArea(zp)).toLocaleString('ko-KR')}㎡ · 클릭해서 선택</div>`, clickable: true, zIndex: 9 });
     lab.setMap(map);
