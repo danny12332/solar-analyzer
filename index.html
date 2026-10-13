@@ -1757,7 +1757,8 @@ async function toggleClickedParcel(latlng){
   label.setMap(map);
   measureShapes.push(poly, label);
   const groupId = registerMeasureGroup([poly, label]);
-  clickedParcels[pnu] = { groupId, path: kakaoPath, area };
+  clickedParcels[pnu] = { groupId, path: kakaoPath, area, jibun: jibunShort };
+  boundaryNameRef = { path: kakaoPath.slice(), name: jibunShort };
   // 클릭한 필지를 "☀️ 태양광 배치"의 경계로 설정 → 바로 "배치 생성"을 누르면 이 필지에 배치됨 (다른 필지의 기존 배치는 유지)
   lastAreaPolygonPath = kakaoPath.slice();
   try{ refreshAlignEdgeOptions(); }catch(e){}
@@ -2277,6 +2278,7 @@ function histRestore(S){
     lastAreaPolygonPath = S.bnd.path ? S.bnd.path.slice() : null;
     currentBoundaryName = S.bnd.name || '';
     currentBoundaryOfficial = !!S.bnd.official;
+    boundaryNameRef = S.bnd.path ? { path: S.bnd.path.slice(), name: currentBoundaryName } : null;
     // 구역 나누기
     if(splitGroupId && !(S.split.grp && S.split.grp.id === splitGroupId)) removeMeasureGroup(splitGroupId);
     splitGroupId = S.split.grp ? S.split.grp.id : null;
@@ -2798,7 +2800,26 @@ function applyStdMountUi(mt){
 
 // ===== 배치 레지스트리: 필지·건물마다 만든 배치를 모두 유지하고, 모듈 추가·제거를 배치별로 처리 =====
 const layoutRegistry = []; // [{type, groupId, modules:[{poly,removed}], label, boundary, lat0Rad, azRad, modW, modD, fill, ...}]
-function registerLayout(ed){ if(ed && ed.bldName === undefined) ed.bldName = (typeof currentBoundaryName === 'string' ? currentBoundaryName : '') || ''; layoutRegistry.push(ed); raiseModules(ed); }
+function registerLayout(ed){ if(ed && ed.bldName === undefined) ed.bldName = layoutNameFor(ed.boundary); layoutRegistry.push(ed); raiseModules(ed); }
+// 동별 용량 라벨 이름: ① 이 경계를 잡을 때 붙은 건물명(구역명) ② 클릭한 필지의 지번 ③ 검색한 필지의 지번 ④ 경계 중심이 들어 있는 필지의 지번
+let boundaryNameRef = null; // { path, name }
+function jibunShortOf(addr){ return String(addr || '').trim().split(/\s+/).slice(-2).join(' '); }
+function layoutNameFor(boundary){
+  if(!boundary || boundary.length < 3) return '';
+  if(boundaryNameRef && boundaryNameRef.name && sameBoundary(boundaryNameRef.path, boundary)) return boundaryNameRef.name;
+  const cps = Object.values(typeof clickedParcels === 'object' && clickedParcels ? clickedParcels : {});
+  const hit = cps.find(c => c.jibun && sameBoundary(c.path, boundary));
+  if(hit) return hit.jibun;
+  if(lastParcelPath && lastJibunAddress && sameBoundary(lastParcelPath, boundary)) return jibunShortOf(lastJibunAddress);
+  const lat0 = boundary[0].getLat() * Math.PI / 180;
+  const B = boundary.map(q => solarToXY(q, lat0));
+  const c = { x: B.reduce((a, q) => a + q.x, 0) / B.length, y: B.reduce((a, q) => a + q.y, 0) / B.length };
+  const inside = path => path && path.length >= 3 && pointInPolygonXY(c, path.map(q => solarToXY(q, lat0)));
+  const cp = cps.find(x => x.jibun && inside(x.path));
+  if(cp) return cp.jibun;
+  if(lastJibunAddress && inside(lastParcelPath)) return jibunShortOf(lastJibunAddress);
+  return '';
+}
 // 모듈 도형을 맨 위로(건물 점선·경계선이 클릭을 가로채지 않게)
 function raiseModules(ed){ (ed && ed.modules || []).forEach(m => { try{ m.poly.setZIndex(6); }catch(e){} attachModuleDrag(m); }); }
 // ===== ✥ 배치 이동 모드에서 모듈을 직접 눌러 끌기: 그 구역(배치)의 모듈 전체가 함께 이동 =====
@@ -2962,6 +2983,27 @@ function sameBoundary(a, b){
   if(!a || !b || a.length !== b.length) return false;
   for(let i = 0; i < a.length; i++){ if(haversineMeters(a[i], b[i]) > 0.5) return false; }
   return true;
+}
+// 경계 조정용: 같은 경계이거나, 서로의 중심이 서로 안에 있는(같은 건물로 보이는) 배치를 지우고 그 배치 유형을 돌려줌
+function removeLayoutsOnOutline(boundary){
+  const removed = [];
+  if(!boundary || boundary.length < 3) return removed;
+  const lat0 = boundary[0].getLat() * Math.PI / 180;
+  const XY = path => path.map(q => solarToXY(q, lat0));
+  const cen = P => ({ x: P.reduce((a, q) => a + q.x, 0) / P.length, y: P.reduce((a, q) => a + q.y, 0) / P.length });
+  const B = XY(boundary), cB = cen(B);
+  for(let i = layoutRegistry.length - 1; i >= 0; i--){
+    const ed = layoutRegistry[i];
+    if(!ed.boundary || ed.boundary.length < 3) continue;
+    const E = XY(ed.boundary);
+    if(sameBoundary(ed.boundary, boundary) || (pointInPolygonXY(cen(E), B) && pointInPolygonXY(cB, E))){
+      removed.push({ preset: ed.genPreset || null, mount: ed.genMount || null, live: ed.modules.filter(m => !m.removed).length });
+      try{ removeMeasureGroup(ed.groupId); }catch(e){}
+      layoutRegistry.splice(i, 1);
+    }
+  }
+  if(solarGroupId && !layoutByGroup(solarGroupId)) solarGroupId = null;
+  return removed;
 }
 function replaceLayoutOnSameBoundary(boundary){
   for(let i = layoutRegistry.length - 1; i >= 0; i--){
@@ -3958,9 +4000,12 @@ function updateRoofEditLabel(ed){
 function onGenerateLayoutClick(){
   const sig0 = histSig();
   histCheckpoint('배치 생성');
+  const before = new Set(layoutRegistry);
   try{ onGenerateLayoutClickInner(); }
   finally{
     if(histSig() === sig0 && histStack.length){ histStack.pop(); updateHistButtons(); }
+    const mt = (document.getElementById('mountType') || {}).value;
+    layoutRegistry.forEach(ed => { if(!before.has(ed)){ ed.genPreset = activePreset; ed.genMount = mt; } });
   }
   // 구역 나누기 중이면 다음 구역 안내
   if(splitZones.length === 2 && layoutRegistry.length){
@@ -4570,7 +4615,7 @@ function startBuildingEdit(){
   if(!bldEdit) histCheckpoint('꼭짓점 조정');
   stopBuildingEdit();
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
-  replaceLayoutOnSameBoundary(lastAreaPolygonPath);
+  const regen = removeLayoutsOnOutline(lastAreaPolygonPath);
   const map = ensureKakaoMap();
   const original = lastAreaPolygonPath.slice();
   const lat0 = original.reduce((s, q) => s + q.getLat(), 0) / original.length * Math.PI / 180;
@@ -4581,7 +4626,7 @@ function startBuildingEdit(){
   const mk = (pos, img, size, z) => new kakao.maps.Marker({ map, position: pos, draggable: true, image: new kakao.maps.MarkerImage(img, new kakao.maps.Size(size, size), { offset: new kakao.maps.Point(size / 2, size / 2) }), zIndex: z || 10 });
   const label = new kakao.maps.CustomOverlay({ position: original[0], content: '', yAnchor: 1.25, clickable: true, zIndex: 30 });
   label.setMap(map);
-  bldEdit = { origRef, poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: v => { P = v; rebuild(); }, toLL, toXY, addMode: false, moved: { dx: 0, dy: 0 }, name: currentBoundaryName, fromOfficial: !!currentBoundaryOfficial };
+  bldEdit = { regen, origRef, poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: v => { P = v; rebuild(); }, toLL, toXY, addMode: false, moved: { dx: 0, dy: 0 }, name: currentBoundaryName, fromOfficial: !!currentBoundaryOfficial };
   const centroidXY = () => ({ x: P.reduce((s, q) => s + q.x, 0) / P.length, y: P.reduce((s, q) => s + q.y, 0) / P.length });
   const draw = () => {
     const path = P.map(toLL);
@@ -4704,6 +4749,7 @@ function finishBuildingEdit(){
   if(mapMode === 'editadd') setMode('normal');
   const path = bldEdit.path.slice();
   const mv = bldEdit.moved, keepName = bldEdit.name, official = bldEdit.fromOfficial;
+  const regen = (bldEdit.regen || []).find(r => r.preset || r.mount) || null;
   stopBuildingEdit();
   // 조정된 테두리를 확정선으로 다시 그림 (이전 건물 선택 표시는 지움)
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
@@ -4719,12 +4765,27 @@ function finishBuildingEdit(){
   document.getElementById('panelAzimuth').value = suggestAzimuthFromPath(path);
   const st = document.getElementById('roadviewStatus');
   st.textContent = `✅ 조정한 테두리를 경계로 잡았습니다 — ${Math.round(shoelaceArea(path)).toLocaleString('ko-KR')}㎡ (${Math.round(shoelaceArea(path) / 3.305785).toLocaleString('ko-KR')}평). ② 배치 유형을 고르고 "③ 배치 생성"을 누르세요.`;
+  // 조정 전에 이 건물에 배치가 있었다면 같은 유형으로 새 테두리에 다시 배치 (↶ 이전으로 한 번이면 조정 전으로)
+  if(regen){
+    histMuted = true;
+    try{
+      if(regen.preset && LAYOUT_PRESETS[regen.preset]) applyLayoutPreset(regen.preset);
+      else if(regen.mount){ document.getElementById('mountType').value = regen.mount; onMountTypeChange(); }
+      onGenerateLayoutClick();
+    } finally { histMuted = false; }
+    const ed = layoutRegistry[layoutRegistry.length - 1];
+    if(ed && sameBoundary(ed.boundary, path)){
+      const live = ed.modules.filter(m => !m.removed).length;
+      st.textContent = `✅ 조정한 테두리(${Math.round(shoelaceArea(path)).toLocaleString('ko-KR')}㎡)에 같은 유형으로 다시 배치했습니다 — 조정 전 ${regen.live.toLocaleString('ko-KR')}장 → ${live.toLocaleString('ko-KR')}장 (${(live * ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW). 조정 전으로 돌아가려면 "↶ 이전으로".`;
+    }
+  }
 }
 // 확정 테두리 + 변 길이 + 라벨(조정 버튼 포함) 그리기 — 건물 선택과 조정 완료에서 공통 사용
 function drawConfirmedOutline(path, name, extra){
   const map = ensureKakaoMap();
   currentBoundaryName = name && name !== '따라 그린 건물' ? name : '';
   currentBoundaryOfficial = false;
+  boundaryNameRef = { path: path.slice(), name: currentBoundaryName };
   const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#C2148A', strokeOpacity: 0.9, fillColor: '#C2148A', fillOpacity: 0.05 });
   measureShapes.push(poly);
   const shapes = [poly];
