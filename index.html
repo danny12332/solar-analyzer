@@ -533,8 +533,10 @@
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
           <button type="button" class="preset-btn" id="allDongBtn" style="display:none;background:#19B5D6;color:#fff;border-color:#19B5D6;" onclick="generateAllDongs()" title="주소 검색으로 불러온 필지 안 모든 건물에 ②에서 고른 배치 유형으로 한 번에 배치">🏢 모든 동 배치</button>
+          <button type="button" class="preset-btn" onclick="startFromParcel()" title="검색한 필지 경계를 배치 경계로 가져온 뒤 바로 조정 모드로 — 지붕이 필지를 거의 다 덮는 공장 등에서 노란 네모(변)를 끌어 지붕선에 맞추기">▭ 필지 경계로 시작</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
           <span id="boundaryInfo" style="font-weight:600;color:var(--ink);font-size:12px;"></span>
+          <span id="offsetInfo" style="font-size:11px;color:#7A4E05;"></span>
         </div>
         <div class="panel-bar" id="presetBar" style="gap:6px;">
           <span>② 배치 유형</span>
@@ -4040,7 +4042,7 @@ function startBuildingEdit(){
   const mk = (pos, img, size, z) => new kakao.maps.Marker({ map, position: pos, draggable: true, image: new kakao.maps.MarkerImage(img, new kakao.maps.Size(size, size), { offset: new kakao.maps.Point(size / 2, size / 2) }), zIndex: z || 10 });
   const label = new kakao.maps.CustomOverlay({ position: original[0], content: '', yAnchor: 1.25, clickable: true, zIndex: 30 });
   label.setMap(map);
-  bldEdit = { poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: v => { P = v; rebuild(); }, toLL, toXY, addMode: false };
+  bldEdit = { poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: v => { P = v; rebuild(); }, toLL, toXY, addMode: false, moved: { dx: 0, dy: 0 }, name: currentBoundaryName, fromOfficial: !!currentBoundaryOfficial };
   const centroidXY = () => ({ x: P.reduce((s, q) => s + q.x, 0) / P.length, y: P.reduce((s, q) => s + q.y, 0) / P.length });
   const draw = () => {
     const path = P.map(toLL);
@@ -4105,7 +4107,7 @@ function startBuildingEdit(){
   bldEdit.moveHandle = mv;
   let mvLast = null;
   kakao.maps.event.addListener(mv, 'dragstart', () => { mvLast = toXY(mv.getPosition()); });
-  const moveAll = () => { if(!mvLast) mvLast = toXY(mv.getPosition()); const c = toXY(mv.getPosition()); const dx = c.x - mvLast.x, dy = c.y - mvLast.y; P = P.map(q => ({ x: q.x + dx, y: q.y + dy })); mvLast = c; draw(); };
+  const moveAll = () => { if(!mvLast) mvLast = toXY(mv.getPosition()); const c = toXY(mv.getPosition()); const dx = c.x - mvLast.x, dy = c.y - mvLast.y; P = P.map(q => ({ x: q.x + dx, y: q.y + dy })); bldEdit.moved.dx += dx; bldEdit.moved.dy += dy; mvLast = c; draw(); };
   kakao.maps.event.addListener(mv, 'drag', moveAll);
   kakao.maps.event.addListener(mv, 'dragend', () => { moveAll(); mvLast = null; });
   rebuild();
@@ -4160,10 +4162,18 @@ function finishBuildingEdit(){
   if(!bldEdit) return;
   if(mapMode === 'editadd') setMode('normal');
   const path = bldEdit.path.slice();
+  const mv = bldEdit.moved, keepName = bldEdit.name, official = bldEdit.fromOfficial;
   stopBuildingEdit();
   // 조정된 테두리를 확정선으로 다시 그림 (이전 건물 선택 표시는 지움)
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
-  drawConfirmedOutline(path, '');
+  drawConfirmedOutline(path, keepName);
+  // 공식 건물 외곽선을 통째로 옮겨 맞췄다면 = 이 지역 위성사진과 건물도형의 위치 차이 → 보정값으로 저장해 다른 건물에도 자동 적용
+  if(official && Math.hypot(mv.dx, mv.dy) >= 0.3){
+    const c = path[0];
+    const prev = getImageryOffset(c);
+    setImageryOffset(c, { dx: prev.dx + mv.dx, dy: prev.dy + mv.dy });
+    shiftParcelBuildingsBy(mv.dx, mv.dy);
+  }
   addOutlineEdgeLabels(path);
   document.getElementById('panelAzimuth').value = suggestAzimuthFromPath(path);
   const st = document.getElementById('roadviewStatus');
@@ -4173,6 +4183,7 @@ function finishBuildingEdit(){
 function drawConfirmedOutline(path, name, extra){
   const map = ensureKakaoMap();
   currentBoundaryName = name && name !== '따라 그린 건물' ? name : '';
+  currentBoundaryOfficial = false;
   const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#C2148A', strokeOpacity: 0.9, fillColor: '#C2148A', fillOpacity: 0.05 });
   measureShapes.push(poly);
   const shapes = [poly];
@@ -4329,6 +4340,29 @@ function toggleBuildingPickMode(){
 }
 // ===== 필지 안 건물(동) 목록: 주소 검색 시 연속지적 필지와 겹치는 도로명주소 건물도형(LT_C_SPBD)을 하늘색 점선으로 표시 =====
 let parcelBuildings = []; // [{ path, name, poly, label }]
+let currentBoundaryOfficial = false; // 현재 경계가 공식 건물도형(도로명주소 건물)에서 온 것인지
+// ===== 위성사진 ↔ 건물도형 위치 보정값: 지역(약 1km 격자)마다 동·북 이동량(m)을 브라우저에 저장 =====
+function offsetKey(ll){ return 'solarImgOffset:' + ll.getLat().toFixed(2) + ',' + ll.getLng().toFixed(2); }
+function getImageryOffset(ll){ try{ const v = JSON.parse(localStorage.getItem(offsetKey(ll)) || 'null'); if(v && Number.isFinite(v.dx) && Number.isFinite(v.dy)) return v; }catch(e){} return { dx: 0, dy: 0 }; }
+function setImageryOffset(ll, v){ try{ if(Math.hypot(v.dx, v.dy) < 0.05) localStorage.removeItem(offsetKey(ll)); else localStorage.setItem(offsetKey(ll), JSON.stringify({ dx: v.dx, dy: v.dy, t: Date.now() })); }catch(e){} updateOffsetInfo(ll); }
+function offsetPath(path, off){ if(!off || (!off.dx && !off.dy)) return path; const lat0 = path[0].getLat() * Math.PI / 180; return path.map(q => { const xy = solarToXY(q, lat0); return solarToLatLng(xy.x + off.dx, xy.y + off.dy, lat0); }); }
+function updateOffsetInfo(ll){
+  const el = document.getElementById('offsetInfo'); if(!el) return;
+  const ref = ll || (lastParcelPath && lastParcelPath[0]) || null;
+  const off = ref ? getImageryOffset(ref) : { dx: 0, dy: 0 };
+  if(!off.dx && !off.dy){ el.innerHTML = ''; return; }
+  el.innerHTML = `위성사진 보정 적용 중(동 ${off.dx.toFixed(1)}m · 북 ${off.dy.toFixed(1)}m) <button type="button" class="preset-btn" style="padding:1px 6px;font-size:11px;" onclick="resetImageryOffset()">보정 해제</button>`;
+}
+function resetImageryOffset(){
+  const ref = (lastParcelPath && lastParcelPath[0]) || (lastAreaPolygonPath && lastAreaPolygonPath[0]); if(!ref) return;
+  const off = getImageryOffset(ref);
+  setImageryOffset(ref, { dx: 0, dy: 0 });
+  shiftParcelBuildingsBy(-off.dx, -off.dy);
+  const st = document.getElementById('roadviewStatus'); if(st) st.textContent = '위성사진 보정값을 지웠습니다. 건물 외곽선이 원래(공식 자료) 위치로 돌아갑니다.';
+}
+function shiftParcelBuildingsBy(dx, dy){
+  parcelBuildings.forEach(b => { b.path = offsetPath(b.path, { dx, dy }); try{ b.poly.setPath(b.path); }catch(e){} });
+}
 let parcelBldGroupId = null;
 let currentBoundaryName = '';
 function clearParcelBuildings(){ if(parcelBldGroupId){ removeMeasureGroup(parcelBldGroupId); parcelBldGroupId = null; } parcelBuildings = []; }
@@ -4364,6 +4398,8 @@ async function loadParcelBuildings(parcelPath){
     const insideCnt = xy.filter(q => pointInPolygonXY(q, parcelXY)).length;
     if(!pointInPolygonXY(c, parcelXY) && insideCnt < xy.length / 2) return;
     const props = f.properties || {};
+    const off0 = getImageryOffset(path[0]);
+    if(off0.dx || off0.dy){ const moved = offsetPath(path, off0); path.length = 0; moved.forEach(q => path.push(q)); }
     const name = [props.buld_nm || props.BULD_NM || '', props.buld_nm_dc || props.BULD_NM_DC || ''].filter(Boolean).join(' ').trim();
     const floors = props.gro_flo_co || props.GRO_FLO_CO || '';
     const idx = parcelBuildings.length;
@@ -4379,13 +4415,25 @@ async function loadParcelBuildings(parcelPath){
     st.textContent = `🏢 필지 안 건물 ${parcelBuildings.length}동을 하늘색 점선으로 표시했습니다${parcelBuildings.some(b => b.name) ? ' (' + parcelBuildings.map(b => b.name || '이름 없음').join(', ') + ')' : ''}. 배치할 건물을 클릭하거나, ② 배치 유형을 고른 뒤 "🏢 모든 동 배치"를 누르세요.`;
   }
   updateAllDongBtn();
+  updateOffsetInfo(parcelPath[0]);
 }
 function updateAllDongBtn(){ const b = document.getElementById('allDongBtn'); if(b) b.style.display = parcelBuildings.length ? '' : 'none'; }
+function startFromParcel(){
+  const st = document.getElementById('roadviewStatus');
+  if(!lastParcelPath || lastParcelPath.length < 3){ st.style.color = '#b3402a'; st.textContent = '❌ 먼저 주소를 검색해 필지 경계를 불러오세요.'; return; }
+  stopBuildingEdit();
+  if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  drawConfirmedOutline(lastParcelPath.slice(), '');
+  startBuildingEdit();
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = '▭ 필지 경계를 가져왔습니다. 노란 네모(변 가운데)를 끌어 위성사진의 지붕 끝선까지 변을 평행 이동하고, 필요하면 "▭ 사각형으로"·회전으로 다듬은 뒤 "완료"를 누르세요.';
+}
 function selectParcelBuilding(i){
   const b = parcelBuildings[i]; if(!b) return;
   stopBuildingEdit();
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
   drawConfirmedOutline(b.path.slice(), b.name, b.floors ? ' · 지상 ' + b.floors + '층' : '');
+  currentBoundaryOfficial = true;
   try{ addOutlineEdgeLabels(b.path); refreshAlignEdgeOptions(); updateBoundaryInfo(); }catch(e){}
   setMode('normal');
   const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
@@ -4438,11 +4486,13 @@ async function pickBuildingAt(latlng){
   const path = [];
   ring.forEach(q => { const p = new kakao.maps.LatLng(q.lat, q.lng); const last = path[path.length - 1]; if(!last || haversineMeters(last, p) > 0.3) path.push(p); });
   if(path.length > 3 && haversineMeters(path[0], path[path.length - 1]) < 0.3) path.pop();
+  { const off = getImageryOffset(path[0]); if(off.dx || off.dy){ const moved = offsetPath(path, off); path.length = 0; moved.forEach(q => path.push(q)); } }
   const area = shoelaceArea(path);
   const props = f.properties || {};
   const name = props.buld_nm || props.BULD_NM || '';
   const floors = props.gro_flo_co || props.GRO_FLO_CO;
   drawConfirmedOutline(path, name, floors ? ' · 지상 ' + floors + '층' : '');
+  currentBoundaryOfficial = true;
   try{ addOutlineEdgeLabels(path); refreshAlignEdgeOptions(); updateBoundaryInfo(); }catch(e){}
   // 배치용 경계로 등록 + 방위각 자동 + 지붕 유형 기본값
   lastAreaPolygonPath = path.slice();
