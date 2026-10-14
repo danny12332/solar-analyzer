@@ -3713,7 +3713,14 @@ function generateStdLayout(kind){
   const X0 = Math.min(...xs), X1 = Math.max(...xs), Y0 = Math.min(...ys), Y1 = Math.max(...ys);
   const ymid = (Y0 + Y1) / 2; // 용마루(대칭 박공 가정)
   const real = (x, y) => rotateXY(x, y, axis);
-  const flat = kind === 'insam_flat' || ridgeHalf <= 0; // 용마루 이격 0 = 편경사·평지붕처럼 한 면으로 취급
+  let flat = kind === 'insam_flat' || ridgeHalf <= 0; // 용마루 이격 0 = 편경사·평지붕처럼 한 면으로 취급
+  let autoFlat = false;
+  if(!flat && (kind === 'wondan' || kind === 'wondan_barn')){
+    // 면(처마~용마루) 폭에 2줄 틀도 안 들어가면 용마루로 나누지 않고 한 면 전체에 배치 (예: 폭 10m 이하 건물·토지)
+    const fN = Math.min(2, Math.max(1, Math.round(num('stdFrameRows', 3)))); // 최소 틀(2줄)도 안 들어갈 때만
+    const dY0 = L * cosT, faceD = (ymid - ridgeHalf) - (Y0 + setback);
+    if(faceD < fN * dY0 + (fN - 1) * gap - 1e-6){ flat = true; autoFlat = true; }
+  }
   const insideRidge = c => !(ridgeHalf > 0 && kind !== 'parking' && !flat && Math.abs(c.y - ymid) < ridgeHalf - 0.005);
   const sb = setback; // 반복 시작점을 경계 이격만큼 안쪽에서 시작(첫 열이 이격 띠에 걸려 사라지지 않게)
   const fits = cr => cr.every(c => { const r = real(c.x, c.y); return pointInPolygonXY(r, polyXY) && (setback <= 0 || distToPolygonBoundary(r, polyXY) >= setback - 0.02) && insideRidge(c); }); // 2cm 허용오차: 지적·건물 외곽선이 완전한 직사각형이 아니어서 첫 열이 통째로 빠지는 것 방지
@@ -3738,6 +3745,8 @@ function generateStdLayout(kind){
       let m = 0; while(totalW(m + 1) <= D + 1e-6) m++;
       // 기본도면 예시(2단+2단, 2+3+3단, 3+3+3+4단 …)처럼 틀은 최소 2단 — 1단짜리 틀이 남으면 그 1장은 빼고 배치
       if(frameN >= 2 && m > frameN && (m % frameN) === 1) m -= 1;
+      if(frameN === 2 && m % 2 === 1) m -= 1;   // 원단 2단: 항상 2줄씩 붙인 틀만
+      if(frameN >= 2 && m < 2) return;          // 1줄짜리 틀은 만들지 않음
       if(m < 1) return;
       const fCount = Math.ceil(m / frameN), rem = m - (fCount - 1) * frameN;
       const sizes = [rem].concat(Array(fCount - 1).fill(frameN)); // 처마 쪽부터
@@ -3782,7 +3791,7 @@ function generateStdLayout(kind){
       }
       placeFace(best.ys, best.xs, true);
     });
-    summary = `원단 ${frameN}단 — ${flat ? '' : '면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tilt}°, 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 통풍로 2개(3단 이상 틀만)${blockGap > 0 ? ` + ${blockGap}m 이격` : ', 블록 사이 빈 공간 없음'}, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
+    summary = `원단 ${frameN}단 — ${autoFlat ? '(면 폭이 좁아 용마루 없이 한 면으로) ' : ''}${flat ? '' : '면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tilt}°, 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 통풍로 2개(3단 이상 틀만)${blockGap > 0 ? ` + ${blockGap}m 이격` : ', 블록 사이 빈 공간 없음'}, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
   } else if(kind === 'insam' || kind === 'insam_flat' || kind === 'zero'){
     // 남북 축에 가까운 축을 열 피치(기울임) 방향으로: axis 방향 벡터 (cos,sin) 의 남북 성분 |sin| 이 크면 x'가 남북
     const xIsNS = Math.abs(Math.sin(axis)) >= Math.abs(Math.cos(axis));
@@ -4925,13 +4934,23 @@ function drawConfirmedOutline(path, name, extra){
   measureShapes.push(poly);
   const shapes = [poly];
   attachOutlineDrag(poly, path.slice(), name, extra);
+  try{
+    const cxy = (() => { const la = path[0].getLat() * Math.PI / 180; const P = path.map(q => solarToXY(q, la)); return solarToLatLng(P.reduce((a, q) => a + q.x, 0) / P.length, P.reduce((a, q) => a + q.y, 0) / P.length, la); })();
+    const mh = new kakao.maps.Marker({ map, position: cxy, draggable: true, image: new kakao.maps.MarkerImage(MOVE_IMG, new kakao.maps.Size(28, 28), { offset: new kakao.maps.Point(14, 14) }), zIndex: 7, title: '끌어서 테두리를 건물 위치로 이동' });
+    measureShapes.push(mh); shapes.push(mh);
+    const pth = path.slice();
+    kakao.maps.event.addListener(mh, 'dragstart', () => { beginOutlineDrag(poly, pth, name, extra, mh.getPosition(), true); });
+    kakao.maps.event.addListener(mh, 'drag', () => { outlineDragUpdate(mh.getPosition()); });
+    kakao.maps.event.addListener(mh, 'dragend', () => { outlineDragEnd(); });
+    poly.__moveHandle = mh;
+  }catch(e){}
   const area = shoelaceArea(path);
   // 라벨은 테두리 맨 위 꼭짓점 위에 작게 (배치 모듈을 가리지 않도록)
   const top = path.reduce((m, p) => (p.getLat() > m.getLat() ? p : m), path[0]);
   const lab = new kakao.maps.CustomOverlay({ position: top, content: '', yAnchor: 1.4, clickable: true });
   lab.setMap(map); measureShapes.push(lab); shapes.push(lab);
   bldPickGroupId = registerMeasureGroup(shapes);
-  lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:6px;background:rgba(194,20,138,.92);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><span style="opacity:.85;font-size:10.5px;" title="테두리 안쪽을 마우스로 눌러 끌면 테두리 전체가 이동합니다">✥끌어서 이동</span><button type="button" onclick="event.stopPropagation();startBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="위성사진 건물과 다르면 꼭짓점·변·회전으로 맞추기">↔ 조정</button>${closeBtnHtml(`histCheckpoint('경계 삭제'); removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
+  lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:6px;background:rgba(194,20,138,.92);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><span style="opacity:.85;font-size:10.5px;" title="테두리 가운데 ✥ 손잡이(또는 테두리 안쪽)를 끌면 테두리 전체가 이동합니다">✥ 손잡이로 이동</span><button type="button" onclick="event.stopPropagation();startBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="위성사진 건물과 다르면 꼭짓점·변·회전으로 맞추기">↔ 조정</button>${closeBtnHtml(`histCheckpoint('경계 삭제'); removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
   lastAreaPolygonPath = path.slice();
 }
 // ===== 새 경계 적용 공통: 이전으로 기록 + 같은 건물 위 배치를 같은 유형으로 다시 배치 =====
@@ -5070,17 +5089,22 @@ let outlineDrag = null;
 function attachOutlineDrag(poly, path, name, extra){
   const fn = (ev) => {
     if(mapMode !== 'normal' || bldEdit || !ev || !ev.latLng) return;
-    if(!(lastAreaPolygonPath && sameBoundary(lastAreaPolygonPath, path))) return;
-    const lat0 = path[0].getLat() * Math.PI / 180;
-    outlineDrag = { poly, path, name, extra, lat0, start: solarToXY(ev.latLng, lat0), dx: 0, dy: 0, official: !!currentBoundaryOfficial };
-    try{ ensureKakaoMap().setDraggable(false); }catch(e){}
-    document.addEventListener('mousemove', outlineDragMove);
-    document.addEventListener('mouseup', outlineDragEnd);
+    beginOutlineDrag(poly, path, name, extra, ev.latLng, false);
   };
   poly.__odFn = fn;
   try{ kakao.maps.event.addListener(poly, 'mousedown', fn); }catch(e){}
   try{ kakao.maps.event.addListener(poly, 'click', ev => { if(Date.now() - (window.__shapeClickAt || 0) < 300) return; dispatchMapClick(ev); }); }catch(e){}
   try{ kakao.maps.event.addListener(poly, 'mousemove', ev => { if(ev && ev.latLng && window.__mapMoveHandler) window.__mapMoveHandler(ev); }); }catch(e){}
+}
+function beginOutlineDrag(poly, path, name, extra, ll, byHandle){
+  if(!(lastAreaPolygonPath && sameBoundary(lastAreaPolygonPath, path))) return;
+  const lat0 = path[0].getLat() * Math.PI / 180;
+  outlineDrag = { poly, path, name, extra, lat0, start: solarToXY(ll, lat0), dx: 0, dy: 0, official: !!currentBoundaryOfficial };
+  if(!byHandle){
+    try{ ensureKakaoMap().setDraggable(false); }catch(e){}
+    document.addEventListener('mousemove', outlineDragMove);
+    document.addEventListener('mouseup', outlineDragEnd);
+  }
 }
 function outlineDragUpdate(ll){
   const d = outlineDrag; if(!d) return;
