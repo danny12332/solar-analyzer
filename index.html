@@ -98,6 +98,33 @@
   .rail::-webkit-scrollbar-thumb{background:#BFD0DE;border-radius:3px;}
   .main-col{display:flex;flex-direction:column;gap:18px;min-width:0;}
 
+  /* 왼쪽 패널 탭: 컨설팅 · 배치도 · 제안서 */
+  .rail-tabs{position:sticky;top:0;z-index:3;display:flex;gap:2px;background:#1C2430;border-radius:var(--r-md);padding:4px;box-shadow:var(--shadow);}
+  .rail-tab-btn{flex:1;border:none;background:transparent;color:#B8C2CE;font-family:inherit;font-size:14px;font-weight:700;padding:9px 6px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;}
+  .rail-tab-btn:hover{color:#fff;background:rgba(255,255,255,.06);}
+  .rail-tab-btn.active{background:var(--sun);color:#2A1A00;}
+  .rail-pane{display:none;flex-direction:column;gap:18px;}
+  .rail-pane.active{display:flex;}
+  /* 패널 안에서는 ①②③ 도구 줄을 세로로 쌓음 */
+  .rail .panel-bar{margin-bottom:10px;}
+  .rail .panel-bar > span:first-child{flex-basis:100%;font-size:13px;margin-bottom:2px;}
+  .rail .panel-bar .grp{flex-basis:100%;padding:4px 0 0;}
+  .rail .panel-bar .bar-break{display:none;}
+  .rail .opt-row{flex-direction:column;gap:8px;}
+  .rail .opt-row details{width:100%;}
+  .rail #mainGenBtn{width:100%;padding:11px 16px;font-size:14px;margin-top:4px;}
+  .rail .hist-row{display:flex;gap:6px;flex-basis:100%;}
+  .rail .hist-row .preset-btn{flex:1;}
+  .rail #sheetOpts{flex-direction:column;align-items:stretch;}
+  .rail #sheetOpts label{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .rail #sheetOpts label:has(input[type=checkbox]){justify-content:flex-start;}
+  .rail .panel-bar select, .rail .panel-bar input{max-width:100%;}
+  .rail #mountType{width:100%;}
+  .rail #boundaryInfo, .rail #offsetInfo, .rail #stdNote{flex-basis:100%;white-space:normal;}
+  .rail #sheetOpts input[type=text]{width:100% !important;max-width:200px;}
+  .rail .export-row{display:flex;flex-direction:column;gap:8px;}
+  .rail .export-row button.run{width:100%;margin:0;}
+
   /* 카드: 큰 틀은 둥글게, 안쪽 상자는 덜 둥글게 */
   .card, .toolbar-card, .stamp-band{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);}
   .card{padding:22px 24px 24px;}
@@ -354,6 +381,14 @@
 
     <!-- LEFT: sticky rail -->
     <div class="rail">
+      <div class="rail-tabs" id="railTabs">
+        <button type="button" class="rail-tab-btn active" data-pane="railPaneConsult" onclick="switchRailTab('railPaneConsult')">컨설팅</button>
+        <button type="button" class="rail-tab-btn" data-pane="railPaneLayout" onclick="switchRailTab('railPaneLayout')">배치도</button>
+        <button type="button" class="rail-tab-btn" data-pane="railPaneProposal" onclick="switchRailTab('railPaneProposal')">제안서</button>
+      </div>
+
+      <!-- ▣ 컨설팅: 주소 검색 + 부지 조건 -->
+      <div class="rail-pane active" id="railPaneConsult">
       <!-- 주소 검색 -->
       <div class="toolbar-card">
         <h2>주소로 위치 확인</h2>
@@ -525,25 +560,13 @@
 
       <button class="run" onclick="runAnalysis()">부지 분석 실행</button>
     </div>
+      </div><!-- /railPaneConsult -->
 
-    </div><!-- /rail -->
-
-    <!-- MAIN: results -->
-    <div class="main-col">
-      <div class="card" id="mapEmbedWrap" style="display:none;">
-        <div class="map-head">
-          <h2>주소 위치 지도</h2>
-          <div class="map-tools">
-            <button type="button" class="run" id="satBtn" style="background:var(--ink);color:#F6F7F3;" onclick="toggleSatellite()">🛰 위성보기</button>
-            <button type="button" class="run" id="cadBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
-            <button type="button" class="run" id="rvRoadBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadviewRoads()">🛣 로드뷰 가능 도로</button>
-            <button type="button" class="run" id="roadviewBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadview()">🚶 로드뷰</button>
-            <button type="button" class="run" id="distanceBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleDistanceMode()">📏 거리재기</button>
-            <button type="button" class="run" id="areaBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleAreaMode()">📐 면적재기</button>
-            <button type="button" class="run" id="radiusBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRadiusMode()">📍 반경재기</button>
-            <button type="button" class="run" style="background:var(--surface-2);color:var(--ink-soft);" onclick="clearMeasurements()">🧹 측정 지우기</button>
-          </div>
-        </div>
+      <!-- ▣ 배치도: 경계 → 배치 유형 → 배치 생성 → 편집 -->
+      <div class="rail-pane" id="railPaneLayout">
+      <div class="card" style="padding:16px 16px 14px;">
+        <h2 style="margin-bottom:12px;">모듈 배치도</h2>
+        <p class="hint" style="margin:0 0 10px;">오른쪽 지도에서 건물(하늘색 점선)을 클릭하거나 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치 후 편집(모듈 삭제·이동·추가)은 지도 위 도구 띠에서 합니다.</p>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
           <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 오른쪽 클릭하면 완성">✏ 건물 따라 그리기</button>
@@ -573,7 +596,6 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('slab')" title="평슬라브 경사거치 · 세로 2단 · 8°">평슬라브</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('parking')" title="주차면 5,000×2,500 · 2칸마다 기둥 600 · 통로 6m">주차장</button>
           <div class="bar-break"></div>
-          <span style="visibility:hidden;">② 배치 유형</span>
           <span class="grp">토지</span>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 모듈 세로 4단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 4단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground3')" title="지상(개활지) · 모듈 세로 3단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 3단</button>
@@ -584,25 +606,10 @@
           <label id="denseWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="설치기준 열 간격(음영 간격) 대신 열을 바짝 붙여 지붕 끝 이격 안을 가득 채웁니다. 그늘이 질 줄·모듈은 배치 후 ✂ 모듈 삭제 / ⋯더보기 → 🗑 테이블 제거로 직접 빼세요."><input type="checkbox" id="stdDense" style="vertical-align:middle;"> 빈틈없이 채우기(음영은 직접 삭제) · 열 사이 <input id="stdDenseGap" type="number" value="0.5" step="0.1" min="0" style="width:42px;padding:1px 3px;">m</label>
           <div class="bar-break"></div>
           <button type="button" class="run" id="mainGenBtn" style="background:var(--sun);color:#2A1A00;font-size:13px;padding:7px 16px;" onclick="onGenerateLayoutClick()">③ 배치 생성</button>
+          <span class="hist-row">
           <button type="button" class="preset-btn hist-undo" onclick="histUndo()" title="마지막 작업 1개를 취소 (배치 생성·모듈 삭제·이동·추가·경계·구역 나누기) · Ctrl+Z" disabled>↶ 이전으로</button>
           <button type="button" class="preset-btn" onclick="resetAllLayout()" title="배치·경계·구역을 모두 지우고 주소 검색 직후 상태로 (실수로 눌러도 ↶ 이전으로 복구 가능)" style="color:#b3402a;border-color:#e3b3a8;">⟲ 원상복구</button>
-          <span style="flex:1;"></span>
-          <button type="button" class="preset-btn" style="background:#C2148A;color:#fff;border-color:#C2148A;" onclick="toggleSheetOpts()" title="위성사진 위에 배치·동별 용량·모듈 표(장수·kW·설치각도)·도면 표제란을 넣은 모듈 배치도 이미지(PNG)로 저장">🖼 배치도 이미지 저장</button>
-          <button type="button" class="preset-btn" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
-        </div>
-        <div class="panel-bar" id="sheetOpts" style="display:none;gap:8px;">
-          <span>🖼 배치도</span>
-          <label>공사명(주소) <input id="sheetProject" type="text" style="width:220px;" placeholder="비우면 검색한 주소"></label>
-          <label>모듈 <input id="sheetModule" type="text" value="현대 645Wp(양면)" style="width:130px;"></label>
-          <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
-          <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
-          <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
-          <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
-          <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
-          <span id="sheetWinInfo" style="font-size:11px;color:var(--ink-soft);">범위: 자동(배치 전체)</span>
-          <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="exportLayoutSheet('png')">PNG 저장</button>
-          <button type="button" class="run" style="background:#7A0E58;color:#fff;" onclick="exportLayoutSheet('pdf')">PDF 저장 (A4 가로)</button>
-          <span id="sheetStatus" class="hint" style="font-size:11px;"></span>
+          </span>
         </div>
         <div class="opt-row">
         <details id="layoutHelp" style="margin:0;">
@@ -678,6 +685,53 @@
           <button type="button" id="solarIllustrationBtn" style="display:none!important;" hidden></button>
         </div>
         </details>
+        </div>
+      </div>
+      </div><!-- /railPaneLayout -->
+
+      <!-- ▣ 제안서: 배치도 이미지·PDF·CAD 출력 -->
+      <div class="rail-pane" id="railPaneProposal">
+      <div class="card" style="padding:16px 16px 14px;">
+        <h2 style="margin-bottom:12px;">제안서 · 배치도 출력</h2>
+        <p class="hint" style="margin:0 0 10px;">배치도 탭에서 배치를 만든 뒤, 위성사진 위에 배치·동별 용량·모듈 표·도면 표제란을 넣은 배치도를 저장합니다.</p>
+        <div class="panel-bar" id="sheetOpts" style="display:flex;gap:8px;">
+          <span>🖼 배치도</span>
+          <label>공사명(주소) <input id="sheetProject" type="text" style="width:220px;" placeholder="비우면 검색한 주소"></label>
+          <label>모듈 <input id="sheetModule" type="text" value="현대 645Wp(양면)" style="width:130px;"></label>
+          <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
+          <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
+          <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
+          <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
+          <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
+          <span id="sheetWinInfo" style="font-size:11px;color:var(--ink-soft);">범위: 자동(배치 전체)</span>
+          <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="exportLayoutSheet('png')">PNG 저장</button>
+          <button type="button" class="run" style="background:#7A0E58;color:#fff;" onclick="exportLayoutSheet('pdf')">PDF 저장 (A4 가로)</button>
+          <span id="sheetStatus" class="hint" style="font-size:11px;"></span>
+        </div>
+        <div class="export-row">
+          <button type="button" class="run" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
+          <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
+        </div>
+      </div>
+      </div><!-- /railPaneProposal -->
+
+    </div><!-- /rail -->
+
+    <!-- MAIN: results -->
+    <div class="main-col">
+      <div class="card" id="mapEmbedWrap" style="display:none;">
+        <div class="map-head">
+          <h2>주소 위치 지도</h2>
+          <div class="map-tools">
+            <button type="button" class="run" id="satBtn" style="background:var(--ink);color:#F6F7F3;" onclick="toggleSatellite()">🛰 위성보기</button>
+            <button type="button" class="run" id="cadBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleCadastral()">🗺 지적편집도</button>
+            <button type="button" class="run" id="rvRoadBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadviewRoads()">🛣 로드뷰 가능 도로</button>
+            <button type="button" class="run" id="roadviewBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRoadview()">🚶 로드뷰</button>
+            <button type="button" class="run" id="distanceBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleDistanceMode()">📏 거리재기</button>
+            <button type="button" class="run" id="areaBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleAreaMode()">📐 면적재기</button>
+            <button type="button" class="run" id="radiusBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRadiusMode()">📍 반경재기</button>
+            <button type="button" class="run" style="background:var(--surface-2);color:var(--ink-soft);" onclick="clearMeasurements()">🧹 측정 지우기</button>
+          </div>
         </div>
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
         <div class="map-stage" id="mapStage">
@@ -1537,6 +1591,16 @@ async function autoAnalyzeFromParcel(){
   autoKepcoAfterAnalysis(my);
 }
 
+function switchRailTab(paneId){
+  document.querySelectorAll('#railTabs .rail-tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-pane') === paneId));
+  document.querySelectorAll('.rail > .rail-pane').forEach(p => p.classList.toggle('active', p.id === paneId));
+  const rail = document.querySelector('.rail'); if(rail) rail.scrollTop = 0;
+  if(paneId === 'railPaneProposal'){
+    const pj = document.getElementById('sheetProject');
+    if(pj && !pj.value) pj.placeholder = (typeof lastJibunAddress !== 'undefined' && lastJibunAddress) || (document.getElementById('siteAddress') || {}).value || '공사명';
+  }
+  try{ localStorage.setItem('solarRailTab', paneId); }catch(e){}
+}
 function switchRefTab(tabId){
   document.querySelectorAll('.ref-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   document.querySelectorAll('.ref-pane').forEach(p => p.classList.toggle('active', p.id === tabId));
@@ -7550,6 +7614,7 @@ function renderResults(r){
 const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역시청 부근(기본 위치)' };
 (function initMapOnLoad(){
   const run = () => {
+    try{ const t = localStorage.getItem('solarRailTab'); if(t && document.getElementById(t)) switchRailTab(t); }catch(e){}
     try{ onMountTypeChange(); }catch(e){ console.warn('mount opts init', e); } // 단 수·테이블당 가로 등 배치 대상별 옵션을 첫 화면부터 표시
     if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.Map){ return; }
     let saved = null;
