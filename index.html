@@ -619,8 +619,7 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan4')" title="원단 4단 틀 (예: 3+4+4단)">원단 4단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan5')" title="원단 5단 틀 (04-0801 생산동 실측: 5단 연속·줄 가운데 통로 약 1m·통풍로 가운데 단)">원단 5단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan_barn')" title="축사 지붕 · 지붕 끝 1,000mm 이격">원단(축사)</button>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insam1')" title="일반 인삼밭 1단 · 면마다 처마부터 열 배치 · 용마루 300mm · 지붕 끝 700mm · 열 피치 10° 세로 3,500mm (설치기준 시트)">인삼밭 1단</button>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insam2')" title="일반 인삼밭 2단 · 면마다 처마부터 열 배치 · 용마루 300mm · 지붕 끝 700mm · 열 피치 10° 세로 3,500mm×2 (설치기준 시트)">인삼밭 2단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insam')" title="인삼밭 (기본도면 '인삼밭 측면도 15도~8도': 모듈 10° 세로배치 · 모듈간격 3,500mm · 용마루 300mm · 지붕 끝 700mm)">인삼밭</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('insamflat1')" title="인삼밭 1단 플랫 · 용마루 넘어 폭 전체 · 세로 · 10° · 지붕 끝 500 · 열 간격 3,500mm">인삼밭 1단 플랫</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('insamflat2')" title="인삼밭 2단 플랫 · 용마루 넘어 폭 전체 · 지붕 끝 500 · 열 간격 7,000mm (10-0617 가동 46.44kW 실측)">인삼밭 2단 플랫</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('zero')" title="징크판넬·제로솔루션 · 가로배치 · 열 간격 1,700mm · 지붕 끝 700">제로솔루션</button>
@@ -1655,8 +1654,8 @@ function presetThumbSvg(key){
     body = `<rect x="2" y="4" width="60" height="32" fill="${R}"/><line x1="2" y1="20" x2="62" y2="20" stroke="${K}" stroke-width="1"/>` +
       rows(5, 6, 54, Math.min(n, 4), (12 / Math.min(n, 4)) - 1, 1) + rows(5, 22, 54, Math.min(n, 4), (12 / Math.min(n, 4)) - 1, 1) +
       (key === 'wondan_barn' ? `<rect x="0" y="0" width="64" height="40" fill="none" stroke="${G}" stroke-width="2"/>` : '');
-  } else if(key === 'insam1' || key === 'insam2'){
-    const two = key === 'insam2';
+  } else if(key === 'insam'){
+    const two = false;
     // 일반 인삼밭: 용마루 양쪽 면에 각각 열 배치(용마루 쪽 띄움)
     body = `<rect x="2" y="4" width="60" height="32" fill="${R}"/><line x1="2" y1="20" x2="62" y2="20" stroke="${K}" stroke-width="1"/>` +
       (two ? rows(5, 7, 54, 2, 3, 1) + rows(5, 14, 54, 2, 3, 1).replace(/y="(\d+)"/g, (m0, y) => `y="${y}"`) + rows(5, 23, 54, 2, 3, 1) + rows(5, 30, 54, 2, 3, 1)
@@ -2620,8 +2619,7 @@ const LAYOUT_PRESETS = {
   wondan4:     { mount: 'wondan', std: true, frame: 4, label: '원단 4단' },
   wondan5:     { mount: 'wondan', std: true, frame: 5, label: '원단 5단' },
   wondan_barn: { mount: 'wondan_barn', std: true, label: '원단(축사)' },
-  insam1:      { mount: 'insam', std: true, rows: 1, orient: 'portrait', label: '인삼밭 1단' },
-  insam2:      { mount: 'insam', std: true, rows: 2, orient: 'portrait', label: '인삼밭 2단' },
+  insam:       { mount: 'insam', std: true, rows: 1, orient: 'portrait', label: '인삼밭' },
   insamflat1:  { mount: 'insam_flat', std: true, rows: 1, orient: 'portrait', label: '인삼밭 1단 플랫' },
   insamflat2:  { mount: 'insam_flat', std: true, rows: 2, orient: 'portrait', label: '인삼밭 2단 플랫' },
   zero:        { mount: 'zero', std: true, label: '제로솔루션' },
@@ -8244,11 +8242,11 @@ const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역�
       map.setLevel(4);
       const input = document.getElementById('siteAddress');
       if(input && !input.value && saved.addr) input.placeholder = `마지막 검색: ${saved.addr}`;
-      if(st && !st.textContent) st.textContent = `마지막으로 검색한 위치(${saved.addr || '좌표'}) 주변입니다. 지도에서 건물이나 땅을 클릭하면 그 지점의 지번·도로명 주소가 나오고, 위쪽에 주소를 넣어 검색하면 바로 분석이 시작됩니다.`;
+      // 첫 화면 안내 띠는 띄우지 않음(사용자 요청 2026-10-15)
     } else {
       map.setCenter(new kakao.maps.LatLng(DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng));
       map.setLevel(5);
-      if(st && !st.textContent) st.textContent = `${DEFAULT_MAP_CENTER.label}을 표시했습니다. 지도에서 건물이나 땅을 클릭하면 그 지점의 지번·도로명 주소가 나오고, 위쪽에 주소를 넣어 검색하면 바로 분석이 시작됩니다.`;
+      // 기본 위치 안내 띠도 띄우지 않음(사용자 요청 2026-10-15)
     }
     setTimeout(() => { try{ map.relayout(); }catch(e){} }, 100);
   };
