@@ -87,9 +87,9 @@
   @media (max-width:700px){header.top .meta{text-align:left;}}
 
   /* ---------- 본문 틀 ---------- */
-  .shell{max-width:1720px;margin:0 auto;padding:26px clamp(18px,3vw,40px) 90px;}
+  .shell{max-width:none;margin:0 auto;padding:16px 14px 60px;}
 
-  .app-grid{display:grid;grid-template-columns:minmax(320px,390px) 1fr;gap:22px;align-items:start;}
+  .app-grid{display:grid;grid-template-columns:minmax(320px,380px) 1fr;gap:14px;align-items:start;}
   @media (max-width:980px){.app-grid{grid-template-columns:1fr;}}
 
   .rail{position:sticky;top:calc(var(--header-h) + 14px);display:flex;flex-direction:column;gap:18px;max-height:calc(100vh - var(--header-h) - 28px);overflow-y:auto;padding-right:4px;}
@@ -104,6 +104,8 @@
   .rail-tab-btn:hover{color:#fff;background:rgba(255,255,255,.06);}
   .rail-tab-btn.active{background:var(--sun);color:#2A1A00;}
   .rail-pane{display:none;flex-direction:column;gap:18px;}
+  /* 컨설팅 탭에서는 지도 위 배치 편집 띠(이전으로·모듈 삭제·줄 추가…)를 숨김 */
+  body[data-rail="railPaneConsult"] #layoutTools{display:none !important;}
   .rail-pane.active{display:flex;}
   /* 패널 안에서는 ①②③ 도구 줄을 세로로 쌓음 */
   .rail .panel-bar{margin-bottom:10px;}
@@ -154,7 +156,7 @@
 
   /* 카드: 큰 틀은 둥글게, 안쪽 상자는 덜 둥글게 */
   .card, .toolbar-card, .stamp-band{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);}
-  .card{padding:22px 24px 24px;}
+  .card{padding:18px 18px 20px;}
   .card h2{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line);}
 
   /* 주소 검색 띠 (헤더 바로 아래, 전체 폭) */
@@ -200,7 +202,7 @@
   .panel-bar label{font-size:11.5px;color:var(--ink-soft);}
   .panel-bar input, .panel-bar select{padding:3px 5px;border:1px solid #E2CFA3;border-radius:4px;background:#fff;font-family:inherit;font-size:12px;color:var(--ink);}
   .panel-bar button.run{width:auto;margin:0;padding:6px 12px;font-size:12px;border-radius:var(--r-sm);}
-  #kakaoMap{width:100%;height:clamp(560px, 80vh, 920px);border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
+  #kakaoMap{width:100%;height:clamp(560px, calc(100vh - 215px), 1200px);border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
   .map-stage{position:relative;}
   #kakaoRoadviewWrap{display:none;position:absolute;inset:0;z-index:5;border-radius:var(--r-md);overflow:hidden;background:#111;}
   /* 분할 보기: 왼쪽 로드뷰 · 오른쪽 지도 (지도를 클릭해 로드뷰 위치를 옮길 수 있음) */
@@ -368,7 +370,7 @@
 </style>
   <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=de36da69d21e4e4b2fa5a454db03c557&libraries=services"></script>
 </head>
-<body>
+<body data-rail="railPaneConsult">
 <header class="top">
   <div class="brand">
     <div class="sunmark" aria-hidden="true"></div>
@@ -1702,6 +1704,7 @@ function decoratePresetButtons(){
 function switchRailTab(paneId){
   document.querySelectorAll('#railTabs .rail-tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-pane') === paneId));
   document.querySelectorAll('.rail > .rail-pane').forEach(p => p.classList.toggle('active', p.id === paneId));
+  document.body.setAttribute('data-rail', paneId);
   if(paneId === 'railPaneLayout' && typeof autoLayoutPending !== 'undefined' && autoLayoutPending){ autoLayoutPending = false; setTimeout(() => { try{ autoLayoutAfterSearch(); }catch(e){} }, 50); }
   const rail = document.querySelector('.rail'); if(rail) rail.scrollTop = 0;
   if(paneId === 'railPaneProposal'){
