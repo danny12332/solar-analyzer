@@ -145,6 +145,12 @@
   .lay-card .lc-btns button{border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
   .lay-card .lc-btns button.del{color:#b3402a;border-color:#e3b3a8;}
   .lay-empty{color:var(--ink-faint);font-size:12px;padding:8px 2px;}
+  .annot-list{display:flex;flex-direction:column;gap:4px;flex-basis:100%;}
+  .annot-row{display:flex;align-items:center;gap:6px;font-size:12px;background:#fff;border:1px solid var(--card-line);border-radius:6px;padding:4px 7px;}
+  .annot-row .ar-name{flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .annot-row button{border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:1px 6px;font-size:11px;cursor:pointer;font-family:inherit;}
+  .annot-row button.del{color:#b3402a;border-color:#e3b3a8;}
+  .annot-row input{width:44px;padding:1px 3px;font-size:11px;}
 
   /* 카드: 큰 틀은 둥글게, 안쪽 상자는 덜 둥글게 */
   .card, .toolbar-card, .stamp-band{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);}
@@ -613,6 +619,8 @@
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan4')" title="원단 4단 틀 (예: 3+4+4단)">원단 4단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan5')" title="원단 5단 틀 (04-0801 생산동 실측: 5단 연속·줄 가운데 통로 약 1m·통풍로 가운데 단)">원단 5단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('wondan_barn')" title="축사 지붕 · 지붕 끝 1,000mm 이격">원단(축사)</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insam1')" title="일반 인삼밭 1단 · 면마다 처마부터 열 배치 · 용마루 300mm · 지붕 끝 700mm · 열 피치 10° 세로 3,500mm (설치기준 시트)">인삼밭 1단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('insam2')" title="일반 인삼밭 2단 · 면마다 처마부터 열 배치 · 용마루 300mm · 지붕 끝 700mm · 열 피치 10° 세로 3,500mm×2 (설치기준 시트)">인삼밭 2단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('insamflat1')" title="인삼밭 1단 플랫 · 용마루 넘어 폭 전체 · 세로 · 10° · 지붕 끝 500 · 열 간격 3,500mm">인삼밭 1단 플랫</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('insamflat2')" title="인삼밭 2단 플랫 · 용마루 넘어 폭 전체 · 지붕 끝 500 · 열 간격 7,000mm (10-0617 가동 46.44kW 실측)">인삼밭 2단 플랫</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('zero')" title="징크판넬·제로솔루션 · 가로배치 · 열 간격 1,700mm · 지붕 끝 700">제로솔루션</button>
@@ -642,6 +650,16 @@
           <span>④ 배치한 동 목록 <small style="font-weight:400;color:#9A7A3A;">(카드를 끌어 순서 변경 — 도면의 동 번호 순서)</small></span>
           <div class="lay-cards" id="layCards"><div class="lay-empty">아직 배치가 없습니다.</div></div>
         </div>
+        <div class="panel-bar" id="annotBar" style="gap:6px;">
+          <span>⑤ 부속물 (사다리 · 전기실 등)</span>
+          <button type="button" class="preset-btn" id="annotLadderBtn" onclick="startAnnot('ladder')" title="켠 뒤 지도에서 놓을 자리를 클릭 — 사다리 기호(기본 0.6×1.2m). 놓은 뒤 끌어서 옮길 수 있습니다">🪜 사다리</button>
+          <button type="button" class="preset-btn" id="annotElecBtn" onclick="startAnnot('elec')" title="켠 뒤 지도에서 놓을 자리를 클릭 — 전기실(기본 2.5×3.0m)">⚡ 전기실</button>
+          <button type="button" class="preset-btn" id="annotInvBtn" onclick="startAnnot('inverter')" title="켠 뒤 지도에서 놓을 자리를 클릭 — 인버터(기본 0.8×0.4m)">🔌 인버터</button>
+          <button type="button" class="preset-btn" id="annotCustomBtn" onclick="startAnnot('custom')" title="이름을 넣어 놓는 사각형 부속물(기본 2×2m)">📦 기타</button>
+          <label title="새로 놓을 부속물 크기(m)">크기 <input id="annotW" type="number" value="0.6" step="0.1" min="0.1" style="width:46px;">×<input id="annotH" type="number" value="1.2" step="0.1" min="0.1" style="width:46px;">m</label>
+          <label title="배치(모듈 줄) 방향에 맞춰 돌림. 비우면 가장 가까운 배치의 방향"><input id="annotAlign" type="checkbox" checked style="vertical-align:middle;"> 배치 방향에 맞춤</label>
+          <div class="annot-list" id="annotList"></div>
+        </div>
         <div class="opt-row">
         <details id="layoutHelp" style="margin:0;">
           <summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#2048B8;padding:2px;">❓ 사용 방법</summary>
@@ -668,6 +686,7 @@
               <option value="roof_ew">건물 동서지붕 (용마루 남북 방향)</option>
               <option value="wondan">[설치기준] 원단 — 경사지붕 위 연속 배치</option>
               <option value="wondan_barn">[설치기준] 원단(축사) — 지붕 끝 1m 이격</option>
+              <option value="insam">[설치기준] 인삼밭 (일반·면별) — 용마루 300mm · 지붕 끝 700mm · 열 피치 3,500/1,750</option>
               <option value="insam_flat">[설치기준] 인삼밭 플랫 (1단·2단) — 용마루 넘어 건물 폭 전체 열 배치</option>
               <option value="zero">[설치기준] 징크판넬·제로솔루션 — 가로배치 열</option>
               <option value="parking">[설치기준] 주차장 캐노피</option>
@@ -740,6 +759,7 @@
           <span id="sheetStatus" class="hint" style="font-size:11px;"></span>
         </div>
         <div class="export-row">
+          <button type="button" class="run" style="background:#0F2A44;color:#fff;font-size:14px;" onclick="exportProposalPdf()" title="표지(위성사진 조감도 + 동지 음영) · 모듈 배치도 · 동별 집계표를 한 PDF(A4 가로)로">📑 제안서 PDF 자동 생성 (표지 조감도 · 배치도 · 집계표)</button>
           <button type="button" class="run" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
           <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
         </div>
@@ -1634,6 +1654,12 @@ function presetThumbSvg(key){
     body = `<rect x="2" y="4" width="60" height="32" fill="${R}"/><line x1="2" y1="20" x2="62" y2="20" stroke="${K}" stroke-width="1"/>` +
       rows(5, 6, 54, Math.min(n, 4), (12 / Math.min(n, 4)) - 1, 1) + rows(5, 22, 54, Math.min(n, 4), (12 / Math.min(n, 4)) - 1, 1) +
       (key === 'wondan_barn' ? `<rect x="0" y="0" width="64" height="40" fill="none" stroke="${G}" stroke-width="2"/>` : '');
+  } else if(key === 'insam1' || key === 'insam2'){
+    const two = key === 'insam2';
+    // 일반 인삼밭: 용마루 양쪽 면에 각각 열 배치(용마루 쪽 띄움)
+    body = `<rect x="2" y="4" width="60" height="32" fill="${R}"/><line x1="2" y1="20" x2="62" y2="20" stroke="${K}" stroke-width="1"/>` +
+      (two ? rows(5, 7, 54, 2, 3, 1) + rows(5, 14, 54, 2, 3, 1).replace(/y="(\d+)"/g, (m0, y) => `y="${y}"`) + rows(5, 23, 54, 2, 3, 1) + rows(5, 30, 54, 2, 3, 1)
+           : rows(5, 7, 54, 1, 3, 0) + rows(5, 13, 54, 1, 3, 0) + rows(5, 23, 54, 1, 3, 0) + rows(5, 29, 54, 1, 3, 0));
   } else if(key === 'insamflat1' || key === 'insamflat2'){
     const two = key === 'insamflat2';
     body = `<rect x="2" y="4" width="60" height="32" fill="${R}"/><line x1="2" y1="20" x2="62" y2="20" stroke="${K}" stroke-width="1" stroke-dasharray="2 2"/>` +
@@ -2000,6 +2026,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'delrect'){ rectDeleteClick(mouseEvent.latLng); }
     else if(mapMode === 'delline' || mapMode === 'movelayout' || mapMode === 'delmod'){ handleModuleModeClick(mouseEvent.latLng); }
     else if(mapMode === 'splitzone'){ splitClick(mouseEvent.latLng); }
+    else if(mapMode === 'annot'){ annotPlace(mouseEvent.latLng); }
     else {
       if(Date.now() - (window.__shapeClickAt || 0) < 400) return; // 건물(동) 도형을 클릭한 경우
       setMarkerPosition(mouseEvent.latLng);
@@ -2135,7 +2162,9 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline'].includes(mode));
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot'].includes(mode));
+    if(mode !== 'annot') annotPending = null;
+    try{ annotBtnState(); }catch(e){}
     [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
@@ -2433,6 +2462,7 @@ function histSnapshot(label){
       boundary: ed.boundary ? ed.boundary.slice() : null
     })),
     solarGroupId,
+    annots: annots.map(a => ({ a, center: a.center, rot: a.rot, w: a.w, h: a.h })),
     bnd: { grp: snapGroup(bldPickGroupId), path: lastAreaPolygonPath ? lastAreaPolygonPath.slice() : null, name: currentBoundaryName, official: currentBoundaryOfficial },
     split: { grp: snapGroup(splitGroupId), zones: splitZones.slice(), base: splitBaseName }
   };
@@ -2503,6 +2533,12 @@ function histRestore(S){
     splitGroupId = S.split.grp ? S.split.grp.id : null;
     if(S.split.grp) restoreGroup(S.split.grp);
     splitZones = S.split.zones.slice(); splitBaseName = S.split.base || '';
+    // 부속물
+    { const keepA = new Set((S.annots || []).map(x => x.a));
+      annots.slice().forEach(a => { if(!keepA.has(a)) annotRemove(a.id, true); });
+      const map = ensureKakaoMap();
+      (S.annots || []).forEach(x => { if(!annots.includes(x.a)){ annots.push(x.a); try{ x.a.poly.setMap(map); x.a.lab.setMap(map); }catch(e){} } x.a.center = x.center; x.a.rot = x.rot; x.a.w = x.w; x.a.h = x.h; annotRedraw(x.a); });
+      renderAnnotList(); }
     applyEdgeLabelVisibility();
     try{ refreshAlignEdgeOptions(); }catch(e){}
     try{ updateBoundaryInfo(); }catch(e){}
@@ -2521,7 +2557,7 @@ function histUndo(){
 }
 function resetAllLayout(){
   const st = document.getElementById('roadviewStatus');
-  if(!layoutRegistry.length && !(lastAreaPolygonPath && lastAreaPolygonPath.length) && !splitGroupId && !bldEdit){ if(st) st.textContent = '이미 처음 상태입니다 (지울 배치·경계가 없습니다).'; return; }
+  if(!layoutRegistry.length && !(lastAreaPolygonPath && lastAreaPolygonPath.length) && !splitGroupId && !bldEdit && !annots.length){ if(st) st.textContent = '이미 처음 상태입니다 (지울 배치·경계가 없습니다).'; return; }
   if(typeof confirm === 'function' && !confirm('배치·경계·구역을 모두 지우고 주소 검색 직후 상태로 되돌릴까요?\n(잘못 눌렀다면 "↶ 이전으로"로 다시 살릴 수 있습니다)')) return;
   histCheckpoint('원상복구');
   histMuted = true;
@@ -2531,6 +2567,7 @@ function resetAllLayout(){
     setMode('normal');
     if(splitPreview){ splitPreview.setMap(null); splitPreview = null; } splitFirst = null;
     layoutRegistry.slice().forEach(ed => removeSolarLayout(ed.groupId));
+    annots.slice().forEach(a => annotRemove(a.id, true));
     if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
     if(splitGroupId){ removeMeasureGroup(splitGroupId); splitGroupId = null; }
     splitZones = []; splitBaseName = '';
@@ -2582,6 +2619,8 @@ const LAYOUT_PRESETS = {
   wondan4:     { mount: 'wondan', std: true, frame: 4, label: '원단 4단' },
   wondan5:     { mount: 'wondan', std: true, frame: 5, label: '원단 5단' },
   wondan_barn: { mount: 'wondan_barn', std: true, label: '원단(축사)' },
+  insam1:      { mount: 'insam', std: true, rows: 1, orient: 'portrait', label: '인삼밭 1단' },
+  insam2:      { mount: 'insam', std: true, rows: 2, orient: 'portrait', label: '인삼밭 2단' },
   insamflat1:  { mount: 'insam_flat', std: true, rows: 1, orient: 'portrait', label: '인삼밭 1단 플랫' },
   insamflat2:  { mount: 'insam_flat', std: true, rows: 2, orient: 'portrait', label: '인삼밭 2단 플랫' },
   zero:        { mount: 'zero', std: true, label: '제로솔루션' },
@@ -2661,7 +2700,8 @@ const SAT_PROVIDERS = [
   { name: 'VWorld 위성영상', maxZ: 19, url: (z, x, y) => `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Satellite/${z}/${y}/${x}.jpeg` },
   { name: 'Esri World Imagery', maxZ: 19, url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}` },
 ];
-async function exportLayoutSheet(fmt){
+async function exportLayoutSheet(fmt, opts){
+  opts = opts || {};
   const st = document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
   if(!layoutRegistry.length){ st.textContent = '❌ 먼저 배치를 생성하세요.'; return; }
   st.textContent = '배치도를 그리는 중…';
@@ -2710,10 +2750,24 @@ async function exportLayoutSheet(fmt){
   // 2) 필지·건물 경계
   if(lastParcelPath && lastParcelPath.length >= 3) poly(lastParcelPath, '#FFD23F', null, 3, [14, 8]);
   layouts.forEach(L => poly(L.ed.boundary, '#111', null, 3.2));
+  // 2-1) 음영(동지 12/21 · 9시·12시·15시 태양 위치로 계산한 테이블 그림자) — 제안서 조감도용
+  if(opts.shadow){
+    layouts.forEach(L => {
+      const sh = layoutShadowPaths(L.ed, opts.shadowHours || [9, 12, 15]);
+      sh.forEach(path => poly(path, null, 'rgba(10,10,60,0.16)'));
+    });
+  }
   // 3) 모듈(분홍 테두리, 반투명 흰 바탕) + 통풍로(초록 X)
   layouts.forEach(L => {
     L.live.forEach(m => poly(m.poly.getPath(), '#FF00FF', 'rgba(255,255,255,0.28)', 1.6));
     L.vents.forEach(m => { const path = m.poly.getPath(); poly(path, '#11AA22', 'rgba(60,220,60,0.75)', 1.6); if(path.length === 4){ const a = toC(path[0].getLat(), path[0].getLng()), b = toC(path[2].getLat(), path[2].getLng()), c2 = toC(path[1].getLat(), path[1].getLng()), d = toC(path[3].getLat(), path[3].getLng()); g.strokeStyle = '#000'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.moveTo(c2.x, c2.y); g.lineTo(d.x, d.y); g.stroke(); } });
+  });
+  // 3-2) 부속물(사다리·전기실 등): 색 사각형 + 이름
+  annotsForExport().forEach(({ a, path, K }) => {
+    poly(path, K.stroke, K.fill, 2.4);
+    const c = toC(a.center.getLat(), a.center.getLng());
+    g.font = 'bold 22px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 5; g.strokeStyle = '#fff'; g.strokeText(a.name, c.x, c.y - 26); g.fillStyle = '#000'; g.fillText(a.name, c.x, c.y - 26);
   });
   g.restore();
   const placed = [];
@@ -2832,6 +2886,7 @@ async function exportLayoutSheet(fmt){
   }
   // 저장
   const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_모듈배치도';
+  if(fmt === 'canvas'){ window.__lastSheetCanvas = cv; cv.__M = M; cv.__satOk = satOk; cv.__totals = { totalN, totalKw }; return cv; }
   if(fmt === 'pdf'){
     try{
       const pdfBlob = canvasToPdfA4(cv);
@@ -2854,10 +2909,9 @@ async function exportLayoutSheet(fmt){
   window.__lastSheetCanvas = cv;
   return cv;
 }
-// 캔버스 → A4 가로 PDF(1쪽, JPEG 이미지 1장). 외부 라이브러리 없이 PDF 구조를 직접 작성
-function canvasToPdfA4(cv){
-  const jpg = atob(cv.toDataURL('image/jpeg', 0.92).split(',')[1]);
-  const img = new Uint8Array(jpg.length); for(let i = 0; i < jpg.length; i++) img[i] = jpg.charCodeAt(i);
+// 캔버스 → A4 가로 PDF(JPEG 이미지, 여러 쪽 가능). 외부 라이브러리 없이 PDF 구조를 직접 작성
+function canvasToPdfA4(cv){ return canvasesToPdfA4([cv]); }
+function canvasesToPdfA4(cvs){
   const PW = 841.89, PH = 595.28; // A4 가로(pt)
   const enc = str => new TextEncoder().encode(str);
   const parts = [], offs = [];
@@ -2865,17 +2919,177 @@ function canvasToPdfA4(cv){
   const push = b => { parts.push(b); len += b.length; };
   push(enc('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'));
   const obj = (n, body) => { offs[n] = len; push(enc(`${n} 0 obj\n`)); if(typeof body === 'string') push(enc(body)); else body.forEach(push); push(enc('\nendobj\n')); };
-  const content = `q\n${PW} 0 0 ${PH} 0 0 cm\n/Im0 Do\nQ\n`;
+  const n = cvs.length;
+  // 1: 카탈로그, 2: 페이지 트리, 그다음 쪽마다 [페이지, 이미지, 내용] 3개
+  const pageIds = cvs.map((_, i) => 3 + i * 3);
   obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
-  obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
-  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
-  obj(4, [enc(`<< /Type /XObject /Subtype /Image /Width ${cv.width} /Height ${cv.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`), img, enc('\nendstream')]);
-  obj(5, `<< /Length ${content.length} >>\nstream\n${content}endstream`);
+  obj(2, `<< /Type /Pages /Kids [${pageIds.map(id => id + ' 0 R').join(' ')}] /Count ${n} >>`);
+  cvs.forEach((cv, i) => {
+    const pid = pageIds[i], iid = pid + 1, cid = pid + 2;
+    const jpg = atob(cv.toDataURL('image/jpeg', 0.92).split(',')[1]);
+    const img = new Uint8Array(jpg.length); for(let k = 0; k < jpg.length; k++) img[k] = jpg.charCodeAt(k);
+    const content = `q\n${PW} 0 0 ${PH} 0 0 cm\n/Im0 Do\nQ\n`;
+    obj(pid, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${iid} 0 R >> >> /Contents ${cid} 0 R >>`);
+    obj(iid, [enc(`<< /Type /XObject /Subtype /Image /Width ${cv.width} /Height ${cv.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`), img, enc('\nendstream')]);
+    obj(cid, `<< /Length ${content.length} >>\nstream\n${content}endstream`);
+  });
+  const total = 2 + n * 3;
   const xref = len;
-  let x = 'xref\n0 6\n0000000000 65535 f \n';
-  for(let i = 1; i <= 5; i++) x += String(offs[i]).padStart(10, '0') + ' 00000 n \n';
-  push(enc(x + `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
+  let x = `xref\n0 ${total + 1}\n0000000000 65535 f \n`;
+  for(let i = 1; i <= total; i++) x += String(offs[i]).padStart(10, '0') + ' 00000 n \n';
+  push(enc(x + `trailer\n<< /Size ${total + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
   return new Blob(parts, { type: 'application/pdf' });
+}
+
+// ===== 음영: 동지(12/21) 태양 위치(고도·방위)로 테이블 뒤쪽 높이의 그림자를 계산 =====
+function sunPosition(latDeg, hour){
+  const phi = latDeg * Math.PI / 180, dec = -23.44 * Math.PI / 180, h = (hour - 12) * 15 * Math.PI / 180;
+  const sinA = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(h);
+  const alt = Math.asin(Math.max(-1, Math.min(1, sinA)));
+  // 방위각(북=0, 동=90): 오전은 동남, 오후는 서남
+  const cosAz = (Math.sin(dec) - Math.sin(phi) * sinA) / (Math.cos(phi) * Math.cos(alt));
+  let az = Math.acos(Math.max(-1, Math.min(1, cosAz))); if(hour > 12) az = 2 * Math.PI - az;
+  return { alt, az };
+}
+// ed 하나의 테이블(없으면 모듈)마다 그림자 다각형(위경도 경로) 목록 — 시각별로 한 장씩
+function layoutShadowPaths(ed, hours){
+  const latDeg = ed.lat0Rad * 180 / Math.PI;
+  const panelL = (typeof ed.panelL === 'number' && ed.panelL) || parseFloat((document.getElementById('panelL') || {}).value) || 2.465;
+  const tilt = ((typeof ed.tilt === 'number' ? ed.tilt : parseFloat((document.getElementById('panelTilt') || {}).value)) || 10) * Math.PI / 180;
+  const baseH = ed.type === 'ground' ? 1.0 : 0.5; // 구조물 앞쪽 높이(지상 1m · 지붕 0.5m) — 가정값
+  const units = (ed.tables && ed.tables.length) ? ed.tables.filter(t => t.mods && t.mods.some(m => !m.removed)).map(t => ({ path: t.outline ? t.outline.getPath() : null, tiers: t.tiers || 1 }))
+    : ed.modules.filter(m => !m.removed).map(m => ({ path: m.poly.getPath(), tiers: 1 }));
+  const out = [];
+  (hours || [9, 12, 15]).forEach(hr => {
+    const sp = sunPosition(latDeg, hr); if(sp.alt <= 0.02) return;
+    units.forEach(u => {
+      if(!u.path || u.path.length < 3) return;
+      const H = baseH + u.tiers * panelL * Math.sin(tilt);
+      const len = H / Math.tan(sp.alt);
+      // 그림자 방향 = 태양 반대편 (북=0 기준 방위)
+      const dir = sp.az + Math.PI;
+      const dx = len * Math.sin(dir), dy = len * Math.cos(dir);
+      const moved = shiftPath(u.path, dx, dy, ed.lat0Rad);
+      // 원래 윤곽 + 옮긴 윤곽의 볼록 껍질 ≈ 그림자 영역
+      const pts = u.path.concat(moved).map(q => solarToXY(q, ed.lat0Rad));
+      const hull = convexHullXY(pts);
+      out.push(hull.map(q => solarToLatLng(q.x, q.y, ed.lat0Rad)));
+    });
+  });
+  return out;
+}
+function convexHullXY(pts){
+  const P = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  if(P.length < 3) return P;
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [], up = [];
+  P.forEach(q => { while(lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); });
+  P.slice().reverse().forEach(q => { while(up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); });
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+
+// ===== 📑 제안서 PDF 자동 생성: 표지(조감도+음영) · 모듈 배치도 · 동별 집계표 =====
+async function exportProposalPdf(){
+  const st = document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
+  if(!layoutRegistry.length){ st.textContent = '❌ 먼저 배치를 생성하세요.'; return; }
+  st.textContent = '제안서를 만드는 중… (1/3 조감도)';
+  const W = 2480, H = 1754;
+  const g0 = id => ((document.getElementById(id) || {}).value || '').trim();
+  const project = g0('sheetProject') || lastJibunAddress || g0('siteAddress') || '';
+  const moduleName = g0('sheetModule') || '현대 645Wp(양면)';
+  const designer = g0('sheetDesigner');
+  const today = new Date(); const dateStr = `${today.getFullYear()}. ${today.getMonth() + 1}. ${today.getDate()}.`;
+  const layouts = layoutRegistry.map((ed, i) => { const live = ed.modules.filter(m => !m.removed).length; return { ed, i, name: ed.bldName || `${i + 1}동`, live, kw: live * ed.wattPerPanel / 1000, area: layoutAreaM2(ed), type: layoutTypeLabel(ed) }; });
+  const totalN = layouts.reduce((a, L) => a + L.live, 0), totalKw = layouts.reduce((a, L) => a + L.kw, 0);
+  const fmtKw = v => v.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  // 1) 조감도(음영 포함) 캔버스 → 표지
+  const shadeCv = await exportLayoutSheet('canvas', { shadow: true });
+  if(!shadeCv) return;
+  const M = shadeCv.__M;
+  const cover = document.createElement('canvas'); cover.width = W; cover.height = H;
+  { const g = cover.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#0F2A44'; g.fillRect(0, 0, W, 250);
+    g.fillStyle = '#FFB000'; g.fillRect(0, 250, W, 10);
+    g.fillStyle = '#fff'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.font = 'bold 74px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.fillText('태양광 발전설비 설치 제안서', 120, 135);
+    g.font = '34px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.fillStyle = '#C9D8E8'; g.fillText(project ? `${project}` : '', 124, 205);
+    g.textAlign = 'right'; g.fillStyle = '#fff'; g.font = 'bold 40px "Noto Sans KR", sans-serif'; g.fillText('그랜드썬기술단', W - 120, 125);
+    g.font = '26px sans-serif'; g.fillStyle = '#C9D8E8'; g.fillText('GRANDSUN ENGINEERING CO., LTD.', W - 120, 170);
+    // 조감도(배치도 지도 영역을 잘라 넣음)
+    const fw = 1900, fh = 1000, fx = (W - fw) / 2, fy = 320;
+    g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 30; g.shadowOffsetY = 10; g.fillStyle = '#fff'; g.fillRect(fx - 12, fy - 12, fw + 24, fh + 24); g.restore();
+    const sc = Math.min(fw / M.w, fh / M.h); const dw = M.w * sc, dh = M.h * sc;
+    g.drawImage(shadeCv, M.x, M.y, M.w, M.h, fx + (fw - dw) / 2, fy + (fh - dh) / 2, dw, dh);
+    g.strokeStyle = '#0F2A44'; g.lineWidth = 4; g.strokeRect(fx + (fw - dw) / 2, fy + (fh - dh) / 2, dw, dh);
+    g.fillStyle = 'rgba(15,42,68,.85)'; g.fillRect(fx + (fw - dw) / 2, fy + (fh - dh) / 2 + dh - 54, dw, 54);
+    g.fillStyle = '#fff'; g.font = '26px "Noto Sans KR", sans-serif'; g.textAlign = 'left';
+    g.fillText(`조감도 — 위성사진 위 모듈 배치 · 음영: 동지(12/21) 9시·12시·15시 태양 위치 기준 테이블 그림자(반투명)${shadeCv.__satOk ? '' : ' · 위성사진 미표시'}`, fx + (fw - dw) / 2 + 20, fy + (fh - dh) / 2 + dh - 18);
+    // 하단 요약
+    const y0 = 1400;
+    g.fillStyle = '#F4F6F8'; g.fillRect(120, y0, W - 240, 220);
+    g.fillStyle = '#0F2A44'; g.textAlign = 'left';
+    g.font = 'bold 34px "Noto Sans KR", sans-serif'; g.fillText('총 설치용량', 170, y0 + 70);
+    g.fillStyle = '#D62020'; g.font = 'bold 82px "IBM Plex Mono", "Noto Sans KR", monospace'; g.fillText(`${fmtKw(totalKw)} kW`, 170, y0 + 165);
+    g.fillStyle = '#0F2A44'; g.font = '32px "Noto Sans KR", sans-serif';
+    g.fillText(`모듈 ${moduleName} × ${totalN.toLocaleString('ko-KR')}장`, 900, y0 + 70);
+    g.fillText(`배치 ${layouts.length}개${annots.length ? ` · 부속물 ${annots.length}개` : ''}`, 900, y0 + 125);
+    g.fillText(`작성일 ${dateStr}${designer ? ` · 설계 ${designer}` : ''}`, 900, y0 + 180);
+    g.textAlign = 'right'; g.fillStyle = '#7A4E05'; g.font = '24px "Noto Sans KR", sans-serif';
+    g.fillText('※ 위성사진·공공 건물도형 기준 예비 배치안 — 현장 실측·구조 검토 후 확정', W - 150, y0 + 190);
+  }
+  // 2) 모듈 배치도(음영 없이, 기존 도면)
+  st.textContent = '제안서를 만드는 중… (2/3 배치도)';
+  const sheetCv = await exportLayoutSheet('canvas', {});
+  // 3) 동별 집계표
+  st.textContent = '제안서를 만드는 중… (3/3 집계표)';
+  const tbl = document.createElement('canvas'); tbl.width = W; tbl.height = H;
+  { const g = tbl.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#0F2A44'; g.fillRect(0, 0, W, 120); g.fillStyle = '#FFB000'; g.fillRect(0, 120, W, 8);
+    g.fillStyle = '#fff'; g.font = 'bold 46px "Noto Sans KR", sans-serif'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText('동별 설치 내역', 120, 82);
+    g.textAlign = 'right'; g.font = '28px "Noto Sans KR", sans-serif'; g.fillText(project, W - 120, 80);
+    const cols = [120, 220, 820, 1300, 1600, 1950, 2360]; // No · 동 · 유형 · 면적 · 모듈 · kW
+    const heads = ['No', '동(건물)', '배치 유형', '면적(㎡ / 평)', '모듈(장)', '용량(kW)'];
+    let y = 200; const rh = 64;
+    g.fillStyle = '#E8EEF4'; g.fillRect(cols[0], y - 44, cols[cols.length - 1] - cols[0], rh);
+    g.fillStyle = '#0F2A44'; g.font = 'bold 28px "Noto Sans KR", sans-serif';
+    heads.forEach((h, i) => { g.textAlign = i >= 3 ? 'right' : 'left'; g.fillText(h, i >= 3 ? cols[i + 1] - 20 : cols[i] + 16, y); });
+    y += rh;
+    g.font = '28px "Noto Sans KR", sans-serif';
+    const maxRows = 16;
+    layouts.slice(0, maxRows).forEach((L, k) => {
+      if(k % 2) { g.fillStyle = '#F7F9FB'; g.fillRect(cols[0], y - 44, cols[cols.length - 1] - cols[0], rh); }
+      g.fillStyle = '#111';
+      const cells = [String(k + 1), L.name, L.type, L.area ? `${Math.round(L.area).toLocaleString('ko-KR')} / ${Math.round(L.area / 3.305785).toLocaleString('ko-KR')}` : '-', L.live.toLocaleString('ko-KR'), fmtKw(L.kw)];
+      cells.forEach((c, i) => { g.textAlign = i >= 3 ? 'right' : 'left'; const tx = i >= 3 ? cols[i + 1] - 20 : cols[i] + 16; const maxW = cols[i + 1] - cols[i] - 36; let t = c; while(g.measureText(t).width > maxW && t.length > 2) t = t.slice(0, -2) + '…'; g.fillText(t, tx, y); });
+      y += rh;
+    });
+    if(layouts.length > maxRows){ g.fillStyle = '#666'; g.textAlign = 'left'; g.fillText(`… 외 ${layouts.length - maxRows}개 (배치도 참조)`, cols[0] + 16, y); y += rh; }
+    g.strokeStyle = '#0F2A44'; g.lineWidth = 3; g.beginPath(); g.moveTo(cols[0], y - 44); g.lineTo(cols[cols.length - 1], y - 44); g.stroke();
+    g.fillStyle = '#0F2A44'; g.font = 'bold 30px "Noto Sans KR", sans-serif'; g.textAlign = 'left'; g.fillText('합계', cols[0] + 16, y + 6);
+    g.textAlign = 'right'; g.fillText(totalN.toLocaleString('ko-KR'), cols[5] - 20, y + 6); g.fillStyle = '#D62020'; g.fillText(fmtKw(totalKw), cols[6] - 20, y + 6);
+    y += rh + 40;
+    g.fillStyle = '#0F2A44'; g.textAlign = 'left'; g.font = 'bold 30px "Noto Sans KR", sans-serif'; g.fillText('모듈 · 설치 기준', cols[0], y); y += 48;
+    g.fillStyle = '#222'; g.font = '26px "Noto Sans KR", sans-serif';
+    const pw = parseFloat(g0('panelW')) || 1.134, pl = parseFloat(g0('panelL')) || 2.465, gap = parseFloat(g0('panelGap')) || 0.01, tiltV = g0('sheetTilt') || '5~10도';
+    [`모듈: ${moduleName} · ${Math.round(pl * 1000).toLocaleString('ko-KR')} × ${Math.round(pw * 1000).toLocaleString('ko-KR')}mm · 모듈 사이 간격 ${Math.round(gap * 1000)}mm · 설치각도 ${tiltV}`,
+     `배치 기준: 그랜드썬 설치기준(원단 지붕 끝 500mm · 축사 1,000mm · 인삼밭 700mm/용마루 300mm · 제로솔루션 700mm · 통풍로 20장마다 2개) — 세부 값은 배치도 참조`,
+     annots.length ? `부속물: ${annots.map(a => `${a.name} ${a.w}×${a.h}m`).join(', ')}` : '',
+     `음영: 표지 조감도의 반투명 그림자는 동지(12/21) 9시·12시·15시 태양 고도·방위로 계산한 테이블(뒤쪽 높이 = 구조물 기준 높이 + 단 수 × 모듈 길이 × sin(경사각)) 그림자이며, 주변 건물·수목 등 외부 장애물 음영은 포함하지 않음`]
+      .filter(Boolean).forEach(line => { wrapText(g, line, cols[0], y, cols[cols.length - 1] - cols[0], 36); y += 36 * Math.max(1, Math.ceil(g.measureText(line).width / (cols[cols.length - 1] - cols[0]))) + 10; });
+    g.fillStyle = '#888'; g.font = '22px "Noto Sans KR", sans-serif'; g.textAlign = 'right'; g.fillText(`그랜드썬기술단 · ${dateStr}`, W - 120, H - 60);
+  }
+  const pages = [cover, sheetCv, tbl].filter(Boolean);
+  const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_제안서';
+  try{
+    const blob = canvasesToPdfA4(pages);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.pdf'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    st.textContent = `✅ ${base}.pdf 저장 — 표지(조감도·음영) + 모듈 배치도 + 동별 집계표, ${pages.length}쪽 · ${fmtKw(totalKw)}kW`;
+  }catch(e){ st.textContent = '❌ 제안서 PDF 저장 실패: ' + e.message; }
+  window.__lastProposalPages = pages;
+  return pages;
 }
 function wrapText(g, text, x, y, maxW, lh){
   let line = '', yy = y;
@@ -2889,7 +3103,8 @@ function exportLayoutDxf(){
   const st = document.getElementById('roadviewStatus');
   const items = []; // { layer, color, path:[{x,y}] , closed, text? }
   const lat0Rad = layoutRegistry.length ? layoutRegistry[0].lat0Rad
-    : ((lastAreaPolygonPath && lastAreaPolygonPath.length) ? lastAreaPolygonPath.reduce((a, p) => a + p.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180 : null);
+    : ((lastAreaPolygonPath && lastAreaPolygonPath.length) ? lastAreaPolygonPath.reduce((a, p) => a + p.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180
+    : (annots.length ? annots[0].center.getLat() * Math.PI / 180 : null));
   if(lat0Rad === null){ if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 내보낼 배치나 경계가 없습니다. 배치를 먼저 생성하세요.'; } return; }
   const xy = ll => solarToXY(ll, lat0Rad);
   const pathOf = poly => { const p = poly.getPath(); return (Array.isArray(p) ? p : []).map(xy); };
@@ -2911,6 +3126,10 @@ function exportLayoutDxf(){
     const b = ed.boundary.map(xy); const cx = b.reduce((a, q) => a + q.x, 0) / b.length, cy = Math.max(...b.map(q => q.y)) + 2;
     items.push({ layer: 'TEXT', text: `${live.length}EA x ${ed.wattPerPanel}W = ${kw.toFixed(2)}kW`, x: cx, y: cy, h: 1.2 });
   });
+  annotsForExport().forEach(({ a, path }) => {
+    items.push({ layer: 'ANNOT', path: path.map(xy), closed: true });
+    const c = xy(a.center); items.push({ layer: 'ANNOT', text: `${a.name} ${a.w}x${a.h}m`, x: c.x, y: c.y, h: 0.5 });
+  });
   if(!items.length){ if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 내보낼 도형이 없습니다.'; } return; }
   // 좌하단을 원점으로 평행이동
   let minX = Infinity, minY = Infinity;
@@ -2919,8 +3138,8 @@ function exportLayoutDxf(){
   const U = 1000;
   const f = n => (Math.round(n * U * 10) / 10).toFixed(1);
   // 레이어 이름은 R12 DXF 호환을 위해 영문(한글 레이어명은 CAD 버전에 따라 깨짐)
-  const LN = { MODULE: 'GS-MODULE', TABLE: 'GS-TABLE', BOUNDARY: 'GS-BOUNDARY', PARCEL: 'GS-PARCEL', TEXT: 'GS-TEXT', VENT: 'GS-VENT' };
-  const layers = { [LN.BOUNDARY]: 6, [LN.PARCEL]: 30, [LN.MODULE]: 6, [LN.TABLE]: 2, [LN.TEXT]: 7, [LN.VENT]: 8 };
+  const LN = { MODULE: 'GS-MODULE', TABLE: 'GS-TABLE', BOUNDARY: 'GS-BOUNDARY', PARCEL: 'GS-PARCEL', TEXT: 'GS-TEXT', VENT: 'GS-VENT', ANNOT: 'GS-ANNOT' };
+  const layers = { [LN.BOUNDARY]: 6, [LN.PARCEL]: 30, [LN.MODULE]: 6, [LN.TABLE]: 2, [LN.TEXT]: 7, [LN.VENT]: 8, [LN.ANNOT]: 5 };
   items.forEach(it => { it.layer = LN[it.layer] || it.layer; }); // AutoCAD 색 번호(6 자홍, 30 주황, 5 파랑, 2 노랑, 7 흰/검)
   const L = [];
   const push = (...a) => L.push(...a);
@@ -3040,6 +3259,86 @@ function registerLayout(ed){
   if(ed){ ed.preset = activePreset; ed.mountType = (document.getElementById('mountType') || {}).value; }
   layoutRegistry.push(ed); raiseModules(ed); scheduleLayoutCards();
 }
+// ===== ⑤ 부속물: 사다리·전기실·인버터·기타 — 지도 클릭으로 놓고, 끌어서 옮기고, 배치도 이미지·DXF에 함께 출력 =====
+const ANNOT_KINDS = {
+  ladder:   { name: '사다리', icon: '🪜', w: 0.6, h: 1.2, fill: '#FFB000', stroke: '#8A5A00' },
+  elec:     { name: '전기실', icon: '⚡', w: 2.5, h: 3.0, fill: '#4A90E2', stroke: '#1C4F8A' },
+  inverter: { name: '인버터', icon: '🔌', w: 0.8, h: 0.4, fill: '#8E6BD6', stroke: '#4B2E8A' },
+  custom:   { name: '부속물', icon: '📦', w: 2.0, h: 2.0, fill: '#9AA5B1', stroke: '#3C4650' },
+};
+let annots = []; // { id, kind, name, center:LatLng, w, h, rot(rad), poly, lab }
+let annotSeq = 0, annotPending = null, annotDrag = null;
+function startAnnot(kind){
+  const K = ANNOT_KINDS[kind]; if(!K) return;
+  const st = document.getElementById('roadviewStatus');
+  if(mapMode === 'annot' && annotPending && annotPending.kind === kind){ setMode('normal'); annotPending = null; annotBtnState(); if(st) st.textContent = ''; return; }
+  let name = K.name;
+  if(kind === 'custom'){ const v = prompt('부속물 이름 (예: 접속함, 계량기, 출입구)', '부속물'); if(v === null) return; name = (v || '부속물').trim().slice(0, 20); }
+  const g = id => document.getElementById(id);
+  if(g('annotW') && (!annotPending || annotPending.kind !== kind)){ g('annotW').value = K.w; g('annotH').value = K.h; }
+  annotPending = { kind, name };
+  setMode('annot'); annotBtnState();
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `${K.icon} ${name}: 지도에서 놓을 자리를 클릭하세요 (크기 ${g('annotW').value}×${g('annotH').value}m · 놓은 뒤 끌어서 옮기기 · 라벨의 ⟳로 90° 회전 · ✕로 삭제). 다시 누르면 끝.`; }
+}
+function annotBtnState(){
+  [['annotLadderBtn','ladder'],['annotElecBtn','elec'],['annotInvBtn','inverter'],['annotCustomBtn','custom']].forEach(([id, k]) => { const b = document.getElementById(id); if(b) b.classList.toggle('on', mapMode === 'annot' && !!annotPending && annotPending.kind === k); });
+}
+function annotNearestAz(ll){
+  let best = null, bd = Infinity;
+  layoutRegistry.forEach(ed => { try{ const c = layoutCenter(ed); const d = haversineMeters(c, ll); if(d < bd){ bd = d; best = ed; } }catch(e){} });
+  return best ? (best.azRad || 0) : 0;
+}
+function annotRect(a){
+  const lat0 = a.center.getLat() * Math.PI / 180, c = solarToXY(a.center, lat0);
+  return [[-a.w / 2, -a.h / 2], [a.w / 2, -a.h / 2], [a.w / 2, a.h / 2], [-a.w / 2, a.h / 2]].map(([x, y]) => { const r = rotateXY(x, y, a.rot); return solarToLatLng(c.x + r.x, c.y + r.y, lat0); });
+}
+function annotPlace(ll){
+  if(!annotPending) return;
+  const g = id => document.getElementById(id);
+  const K = ANNOT_KINDS[annotPending.kind];
+  const w = Math.max(parseFloat(g('annotW').value) || K.w, 0.1), h = Math.max(parseFloat(g('annotH').value) || K.h, 0.1);
+  const rot = (g('annotAlign') && g('annotAlign').checked) ? annotNearestAz(ll) : 0;
+  histCheckpoint('부속물 추가');
+  const a = { id: ++annotSeq, kind: annotPending.kind, name: annotPending.name, center: ll, w, h, rot, poly: null, lab: null };
+  const map = ensureKakaoMap();
+  a.poly = new kakao.maps.Polygon({ map, path: annotRect(a), strokeWeight: 2, strokeColor: K.stroke, strokeOpacity: 1, fillColor: K.fill, fillOpacity: 0.75, zIndex: 9 });
+  a.lab = new kakao.maps.CustomOverlay({ position: ll, content: '', yAnchor: 1.35, clickable: true, zIndex: 26 });
+  a.lab.setMap(map);
+  try{ kakao.maps.event.addListener(a.poly, 'mousedown', ev => { if(ev && ev.latLng && (mapMode === 'normal' || mapMode === 'annot')) annotDragStart(a, ev.latLng); }); }catch(e){}
+  try{ kakao.maps.event.addListener(a.poly, 'click', ev => { if(mapMode === 'annot' && Date.now() - (window.__annotDropAt || 0) > 300) dispatchMapClick(ev); }); }catch(e){}
+  annots.push(a); annotRedraw(a); renderAnnotList();
+  const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `✅ ${K.icon} ${a.name} ${w}×${h}m 을 놓았습니다. 계속 클릭해 더 놓거나 버튼을 다시 눌러 끝내세요. 끌어서 옮기기 · 라벨 ⟳ 90° 회전 · ✕ 삭제.`; }
+}
+function annotRedraw(a){
+  const K = ANNOT_KINDS[a.kind] || ANNOT_KINDS.custom;
+  try{ a.poly.setPath(annotRect(a)); a.lab.setPosition(a.center); }catch(e){}
+  a.lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.95);border:1.5px solid ${K.stroke};color:#222;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.25);">${K.icon} ${escLand(a.name)} <span style="font-weight:400;color:#666;">${a.w}×${a.h}m</span><span onclick="event.stopPropagation();annotRotate(${a.id})" title="90° 회전" style="cursor:pointer;">⟳</span>${closeBtnHtml(`annotRemove(${a.id})`)}</div>`);
+}
+function annotRotate(id){ const a = annots.find(x => x.id === id); if(!a) return; histCheckpoint('부속물 회전'); a.rot += Math.PI / 2; annotRedraw(a); }
+function annotRemove(id, silent){
+  const i = annots.findIndex(x => x.id === id); if(i < 0) return;
+  if(!silent) histCheckpoint('부속물 삭제');
+  const a = annots[i]; try{ a.poly.setMap(null); a.lab.setMap(null); }catch(e){}
+  annots.splice(i, 1); renderAnnotList();
+}
+function annotResize(id, w, h){ const a = annots.find(x => x.id === id); if(!a) return; const W = parseFloat(w), H = parseFloat(h); if(!(W > 0 && H > 0)) return; histCheckpoint('부속물 크기'); a.w = W; a.h = H; annotRedraw(a); renderAnnotList(); }
+function annotLocate(id){ const a = annots.find(x => x.id === id); if(!a) return; try{ ensureKakaoMap().panTo(a.center); }catch(e){} }
+function annotDragStart(a, ll){
+  try{ ensureKakaoMap().setDraggable(false); }catch(e){}
+  const lat0 = a.center.getLat() * Math.PI / 180;
+  annotDrag = { a, lat0, start: solarToXY(ll, lat0), base: solarToXY(a.center, lat0), moved: false };
+  const mv = e => { if(!annotDrag) return; let cur; try{ cur = solarToXY(mapLatLngFromClient(e.clientX, e.clientY), annotDrag.lat0); }catch(x){ return; } const dx = cur.x - annotDrag.start.x, dy = cur.y - annotDrag.start.y; if(!annotDrag.moved && Math.hypot(dx, dy) < 0.1) return; if(!annotDrag.moved){ annotDrag.moved = true; histCheckpoint('부속물 이동'); } annotDrag.a.center = solarToLatLng(annotDrag.base.x + dx, annotDrag.base.y + dy, annotDrag.lat0); annotRedraw(annotDrag.a); };
+  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); try{ ensureKakaoMap().setDraggable(true); }catch(e){} if(annotDrag && annotDrag.moved) window.__annotDropAt = Date.now(); annotDrag = null; };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
+function renderAnnotList(){
+  const el = document.getElementById('annotList'); if(!el) return;
+  el.innerHTML = annots.map(a => { const K = ANNOT_KINDS[a.kind] || ANNOT_KINDS.custom; return `<div class="annot-row"><span class="ar-name">${K.icon} ${escLand(a.name)}</span>
+    <input type="number" value="${a.w}" step="0.1" min="0.1" title="가로(m)" onchange="annotResize(${a.id}, this.value, this.nextElementSibling.nextElementSibling.value)">×<input type="number" value="${a.h}" step="0.1" min="0.1" title="세로(m)" onchange="annotResize(${a.id}, this.previousElementSibling.previousElementSibling.value, this.value)">
+    <button type="button" onclick="annotLocate(${a.id})" title="지도를 이 위치로">📍</button><button type="button" onclick="annotRotate(${a.id})" title="90° 회전">⟳</button><button type="button" class="del" onclick="annotRemove(${a.id})" title="삭제">✕</button></div>`; }).join('');
+}
+function annotsForExport(){ return annots.map(a => ({ a, path: annotRect(a), K: ANNOT_KINDS[a.kind] || ANNOT_KINDS.custom })); }
+
 // ===== ④ 배치한 동 목록(왼쪽 배치도 탭): 합계 + 동별 카드 (위치 보기 · 다시 배치 · 삭제 · 끌어서 순서 변경) =====
 let __layCardsT = null;
 function scheduleLayoutCards(){ clearTimeout(__layCardsT); __layCardsT = setTimeout(renderLayoutCards, 40); }
@@ -5849,6 +6148,7 @@ async function loadParcelBuildings(parcelPath){
       if(ll && (mapMode === 'rect3' || mapMode === 'align2' || mapMode === 'trace' || mapMode === 'fitoutline')){ dispatchMapClick(ev); return; }
       if(ll && mapMode === 'delrow'){ window.__shapeClickAt = Date.now(); delRowClick(ll); return; }
       if(ll && mapMode === 'splitzone'){ splitClick(ll); return; }
+      if(ll && mapMode === 'annot'){ annotPlace(ll); return; }
       window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building') selectParcelBuilding(idx);
     }); }catch(e){}
     shapes.push(poly);
