@@ -117,7 +117,10 @@
   .rail #mainGenBtn{width:100%;padding:11px 16px;font-size:14px;margin-top:4px;}
   .rail .hist-row{display:flex;gap:6px;flex-basis:100%;}
   .rail .hist-row .preset-btn{flex:1;}
-  .rail #sheetOpts{flex-direction:column;align-items:stretch;}
+  .rail #sheetOpts{flex-direction:column;align-items:stretch;min-width:0;overflow:hidden;}
+  .rail #sheetOpts input, .rail #sheetOpts button{min-width:0;}
+  .rail #sheetStatus{white-space:normal;word-break:break-all;}
+  .rail{overflow-x:hidden;}
   .rail #sheetOpts label{display:flex;justify-content:space-between;align-items:center;gap:8px;}
   .rail #sheetOpts label:has(input[type=checkbox]){justify-content:flex-start;}
   .rail .panel-bar select, .rail .panel-bar input{max-width:100%;}
