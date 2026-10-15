@@ -621,7 +621,7 @@
           <button type="button" class="preset-btn" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
           <button type="button" class="preset-btn" onclick="startFromParcel()" title="검색한 필지 경계를 배치 경계로 가져온 뒤 바로 조정 모드로 — 지붕이 필지를 거의 다 덮는 공장 등에서 노란 네모(변)를 끌어 지붕선에 맞추기">▭ 필지 경계로 시작</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
-          <label style="font-size:11.5px;color:var(--ink-soft);" title="경계 변 길이(m) 라벨 표시. 변이 많은 건물은 5m 이상 변만 표시"><input type="checkbox" id="edgeLenChk" checked style="vertical-align:middle;" onchange="toggleEdgeLabels()"> 변 길이</label>
+          <label style="font-size:11.5px;color:var(--ink-soft);" title="경계 변 길이(m) 라벨 표시. 변이 많은 건물은 5m 이상 변만 표시"><input type="checkbox" id="edgeLenChk" style="vertical-align:middle;" onchange="toggleEdgeLabels()"> 변 길이</label>
           <span id="boundaryInfo" style="font-weight:600;color:var(--ink);font-size:12px;"></span>
           <span id="offsetInfo" style="font-size:11px;color:#7A4E05;"></span>
         </div>
@@ -1971,10 +1971,9 @@ async function toggleClickedParcel(latlng){
   const cl = kakaoPath.reduce((s, q) => s + q.getLat(), 0) / kakaoPath.length, cg = kakaoPath.reduce((s, q) => s + q.getLng(), 0) / kakaoPath.length;
   const jibunShort = (props.addr || props.jibun || '').split(' ').slice(-2).join(' ');
   const content = `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:7px;background:rgba(232,112,42,.95);color:#fff;padding:4px 9px;border-radius:5px;font-size:12px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);"><span>${escLand(jibunShort)} · <b>${Math.round(area).toLocaleString('ko-KR')}㎡</b> (${Math.round(pyeong).toLocaleString('ko-KR')}평)</span>${closeBtnHtml(`removeClickedParcel('${String(pnu).replace(/'/g, '')}')`)}</div>`;
-  const label = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(cl, cg), content, xAnchor: 0.5, yAnchor: 0.5, zIndex: 30, clickable: true });
-  label.setMap(map);
-  measureShapes.push(poly, label);
-  const groupId = registerMeasureGroup([poly, label]);
+  // 주황색 지번·면적 라벨은 띄우지 않음(사용자 요청 2026-10-15: 용량 라벨에 지번이 이미 있음). 필지를 다시 클릭하면 테두리가 사라짐
+  measureShapes.push(poly);
+  const groupId = registerMeasureGroup([poly]);
   clickedParcels[pnu] = { groupId, path: kakaoPath, area, jibun: jibunShort };
   boundaryNameRef = { path: kakaoPath.slice(), name: jibunShort };
   // 클릭한 필지를 "☀️ 태양광 배치"의 경계로 설정 → 바로 "배치 생성"을 누르면 이 필지에 배치됨 (다른 필지의 기존 배치는 유지)
@@ -3331,10 +3330,14 @@ function registerLayout(ed){
 }
 // ===== ⑤ 부속물: 사다리·전기실·인버터·기타 — 지도 클릭으로 놓고, 끌어서 옮기고, 배치도 이미지·DXF에 함께 출력 =====
 const ANNOT_KINDS = {
-  ladder:   { name: '사다리', icon: '🪜', w: 0.6, h: 1.2, fill: '#FFB000', stroke: '#8A5A00' },
-  elec:     { name: '전기실', icon: '⚡', w: 2.5, h: 3.0, fill: '#4A90E2', stroke: '#1C4F8A' },
-  inverter: { name: '인버터', icon: '🔌', w: 0.8, h: 0.4, fill: '#8E6BD6', stroke: '#4B2E8A' },
-  custom:   { name: '부속물', icon: '📦', w: 2.0, h: 2.0, fill: '#9AA5B1', stroke: '#3C4650' },
+  ladder:   { name: '사다리', icon: '🪜', w: 0.6, h: 1.2, fill: '#FFB000', stroke: '#8A5A00',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M7 3v18M17 3v18M7 7h10M7 12h10M7 17h10"/></svg>' },
+  elec:     { name: '전기실', icon: '⚡', w: 2.5, h: 3.0, fill: '#2F7BE0', stroke: '#1C4F8A',
+    svg: '<svg viewBox="0 0 24 24" fill="#fff"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>' },
+  inverter: { name: '인버터', icon: '🔌', w: 0.8, h: 0.4, fill: '#7C4DD8', stroke: '#4B2E8A',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15c2-4 3-4 5 0s3 4 5 0"/></svg>' },
+  custom:   { name: '부속물', icon: '📦', w: 2.0, h: 2.0, fill: '#6B7785', stroke: '#3C4650',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>' },
 };
 let annots = []; // { id, kind, name, center:LatLng, w, h, rot(rad), poly, lab }
 let annotSeq = 0, annotPending = null, annotDrag = null;
@@ -3372,7 +3375,8 @@ function annotPlace(ll){
   const a = { id: ++annotSeq, kind: annotPending.kind, name: annotPending.name, center: ll, w, h, rot, poly: null, lab: null };
   const map = ensureKakaoMap();
   a.poly = new kakao.maps.Polygon({ map, path: annotRect(a), strokeWeight: 2, strokeColor: K.stroke, strokeOpacity: 1, fillColor: K.fill, fillOpacity: 0.75, zIndex: 9 });
-  a.lab = new kakao.maps.CustomOverlay({ position: ll, content: '', yAnchor: 1.35, clickable: true, zIndex: 26 });
+  a.lab = new kakao.maps.CustomOverlay({ position: ll, content: '', xAnchor: 0.5, yAnchor: 0.3, clickable: true, zIndex: 26 });
+  try{ kakao.maps.event.addListener(a.lab, 'mousedown', ev => {}); }catch(e){}
   a.lab.setMap(map);
   try{ kakao.maps.event.addListener(a.poly, 'mousedown', ev => { if(ev && ev.latLng && (mapMode === 'normal' || mapMode === 'annot')) annotDragStart(a, ev.latLng); }); }catch(e){}
   try{ kakao.maps.event.addListener(a.poly, 'click', ev => { if(mapMode === 'annot' && Date.now() - (window.__annotDropAt || 0) > 300) dispatchMapClick(ev); }); }catch(e){}
@@ -3382,7 +3386,9 @@ function annotPlace(ll){
 function annotRedraw(a){
   const K = ANNOT_KINDS[a.kind] || ANNOT_KINDS.custom;
   try{ a.poly.setPath(annotRect(a)); a.lab.setPosition(a.center); }catch(e){}
-  a.lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.95);border:1.5px solid ${K.stroke};color:#222;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.25);">${K.icon} ${escLand(a.name)} <span style="font-weight:400;color:#666;">${a.w}×${a.h}m</span><span onclick="event.stopPropagation();annotRotate(${a.id})" title="90° 회전" style="cursor:pointer;">⟳</span>${closeBtnHtml(`annotRemove(${a.id})`)}</div>`);
+  a.lab.setContent(`<div onmousedown="annotDragStartFromLabel(event, ${a.id})" style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:grab;">
+    <div title="${escLand(a.name)} ${a.w}×${a.h}m — 끌어서 이동" style="width:40px;height:40px;border-radius:50%;background:${K.fill};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;"><div style="width:24px;height:24px;">${K.svg || ''}</div></div>
+    <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.96);border:1.5px solid ${K.stroke};color:#222;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.3);">${escLand(a.name)}<span style="font-weight:500;color:#666;font-size:11px;">${a.w}×${a.h}m</span><span onclick="event.stopPropagation();annotRotate(${a.id})" title="90° 회전" style="cursor:pointer;color:${K.stroke};font-size:14px;line-height:1;">⟳</span><span onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();annotRemove(${a.id})" title="삭제" style="cursor:pointer;color:#b3402a;font-weight:900;">✕</span></div></div>`);
 }
 function annotRotate(id){ const a = annots.find(x => x.id === id); if(!a) return; histCheckpoint('부속물 회전'); a.rot += Math.PI / 2; annotRedraw(a); }
 function annotRemove(id, silent){
@@ -3393,6 +3399,12 @@ function annotRemove(id, silent){
 }
 function annotResize(id, w, h){ const a = annots.find(x => x.id === id); if(!a) return; const W = parseFloat(w), H = parseFloat(h); if(!(W > 0 && H > 0)) return; histCheckpoint('부속물 크기'); a.w = W; a.h = H; annotRedraw(a); renderAnnotList(); }
 function annotLocate(id){ const a = annots.find(x => x.id === id); if(!a) return; try{ ensureKakaoMap().panTo(a.center); }catch(e){} }
+function annotDragStartFromLabel(ev, id){
+  const a = annots.find(x => x.id === id); if(!a) return;
+  if(ev.button !== 0) return; ev.preventDefault(); ev.stopPropagation();
+  try{ kakao.maps.event.preventMap(); }catch(e){}
+  annotDragStart(a, mapLatLngFromClient(ev.clientX, ev.clientY));
+}
 function annotDragStart(a, ll){
   try{ ensureKakaoMap().setDraggable(false); }catch(e){}
   const lat0 = a.center.getLat() * Math.PI / 180;
