@@ -751,6 +751,7 @@
           <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
           <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
           <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
+          <label title="경계(지붕 끝) 변마다 가장 가까운 모듈 모서리까지의 거리를 mm 치수로 표시 — 지자체 제출용"><input id="sheetDim" type="checkbox" checked style="vertical-align:middle;"> 처마끝 이격 치수(mm) 표시</label>
           <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
           <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
           <span id="sheetWinInfo" style="font-size:11px;color:var(--ink-soft);">범위: 자동(배치 전체)</span>
@@ -2762,6 +2763,30 @@ async function exportLayoutSheet(fmt, opts){
     L.live.forEach(m => poly(m.poly.getPath(), '#FF00FF', 'rgba(255,255,255,0.28)', 1.6));
     L.vents.forEach(m => { const path = m.poly.getPath(); poly(path, '#11AA22', 'rgba(60,220,60,0.75)', 1.6); if(path.length === 4){ const a = toC(path[0].getLat(), path[0].getLng()), b = toC(path[2].getLat(), path[2].getLng()), c2 = toC(path[1].getLat(), path[1].getLng()), d = toC(path[3].getLat(), path[3].getLng()); g.strokeStyle = '#000'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.moveTo(c2.x, c2.y); g.lineTo(d.x, d.y); g.stroke(); } });
   });
+  // 3-3) 처마끝 이격 치수(지자체 제출용): 경계 변 → 가장 가까운 모듈 모서리까지의 거리(mm)
+  if((document.getElementById('sheetDim') || {}).checked !== false){
+    layouts.forEach(L => {
+      layoutEdgeSetbacks(L.ed, 3.5).slice(0, 6).forEach(dm => {
+        const A = toC(dm.from.getLat(), dm.from.getLng()), Bp = toC(dm.to.getLat(), dm.to.getLng());
+        const dx = Bp.x - A.x, dy = Bp.y - A.y, len = Math.hypot(dx, dy); if(len < 0.5) return;
+        const ux = dx / len, uy = dy / len; // 모듈 → 경계(바깥) 방향
+        const nx = -uy, ny = ux;            // 치수선에 수직
+        g.strokeStyle = '#0033CC'; g.lineWidth = 2.4; g.setLineDash([]);
+        g.beginPath(); g.moveTo(A.x, A.y); g.lineTo(Bp.x, Bp.y); g.stroke();
+        [A, Bp].forEach(P => { g.beginPath(); g.moveTo(P.x - nx * 10, P.y - ny * 10); g.lineTo(P.x + nx * 10, P.y + ny * 10); g.stroke(); });
+        // 지시선: 경계 밖으로 빼서 치수 글자가 모듈·경계와 겹치지 않게
+        const lead = 28, tx = Bp.x + ux * lead, ty = Bp.y + uy * lead;
+        g.lineWidth = 1.4; g.beginPath(); g.moveTo(Bp.x, Bp.y); g.lineTo(tx, ty); g.stroke();
+        const label = `이격 ${Math.round(dm.d * 1000).toLocaleString('ko-KR')}`;
+        g.font = 'bold 20px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        const tw = g.measureText(label).width + 12, th = 26;
+        const mx = tx + ux * (tw / 2 + 2), my = ty + uy * (th / 2 + 2);
+        g.fillStyle = 'rgba(255,255,255,0.95)'; g.fillRect(mx - tw / 2, my - th / 2, tw, th);
+        g.strokeStyle = '#0033CC'; g.lineWidth = 1.2; g.strokeRect(mx - tw / 2, my - th / 2, tw, th);
+        g.fillStyle = '#0033CC'; g.fillText(label, mx, my);
+      });
+    });
+  }
   // 3-2) 부속물(사다리·전기실 등): 색 사각형 + 이름
   annotsForExport().forEach(({ a, path, K }) => {
     poly(path, K.stroke, K.fill, 2.4);
@@ -2978,6 +3003,30 @@ function layoutShadowPaths(ed, hours){
   });
   return out;
 }
+// ===== 처마끝(지붕 끝·경계) 이격 치수: 경계 변마다 가장 가까운 모듈 모서리까지의 수직 거리 =====
+// 반환: [{ from:LatLng(모듈 모서리), to:LatLng(경계 변 위의 발), d:m, edgeLen:m }] — 변마다 하나, 가까운 순
+function layoutEdgeSetbacks(ed, maxDist){
+  if(!ed.boundary || ed.boundary.length < 3) return [];
+  const lat0 = ed.lat0Rad, B = ed.boundary.map(q => solarToXY(q, lat0));
+  const corners = [];
+  ed.modules.filter(m => !m.removed).forEach(m => m.poly.getPath().forEach(q => corners.push(solarToXY(q, lat0))));
+  if(!corners.length) return [];
+  const out = [];
+  for(let i = 0; i < B.length; i++){
+    const a = B[i], b = B[(i + 1) % B.length];
+    const ex = b.x - a.x, ey = b.y - a.y, L = Math.hypot(ex, ey); if(L < 1) continue;
+    const ux = ex / L, uy = ey / L;
+    let best = null;
+    corners.forEach(c => {
+      const t = ((c.x - a.x) * ux + (c.y - a.y) * uy); if(t < 0.2 || t > L - 0.2) return; // 변 안쪽에 발이 떨어지는 모서리만
+      const fx = a.x + ux * t, fy = a.y + uy * t;
+      const d = Math.hypot(c.x - fx, c.y - fy);
+      if(!best || d < best.d) best = { d, c, f: { x: fx, y: fy }, t };
+    });
+    if(best && best.d <= (maxDist || 2.5)) out.push({ from: solarToLatLng(best.c.x, best.c.y, lat0), to: solarToLatLng(best.f.x, best.f.y, lat0), d: best.d, edgeLen: L });
+  }
+  return out.sort((p, q) => q.edgeLen - p.edgeLen);
+}
 function convexHullXY(pts){
   const P = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
   if(P.length < 3) return P;
@@ -3126,6 +3175,11 @@ function exportLayoutDxf(){
     const b = ed.boundary.map(xy); const cx = b.reduce((a, q) => a + q.x, 0) / b.length, cy = Math.max(...b.map(q => q.y)) + 2;
     items.push({ layer: 'TEXT', text: `${live.length}EA x ${ed.wattPerPanel}W = ${kw.toFixed(2)}kW`, x: cx, y: cy, h: 1.2 });
   });
+  layoutRegistry.forEach(ed => layoutEdgeSetbacks(ed, 3.5).slice(0, 6).forEach(dm => {
+    const A = xy(dm.from), Bp = xy(dm.to);
+    items.push({ layer: 'DIM', path: [A, Bp], closed: false });
+    items.push({ layer: 'DIM', text: `${Math.round(dm.d * 1000)}`, x: (A.x + Bp.x) / 2, y: (A.y + Bp.y) / 2, h: 0.35 });
+  }));
   annotsForExport().forEach(({ a, path }) => {
     items.push({ layer: 'ANNOT', path: path.map(xy), closed: true });
     const c = xy(a.center); items.push({ layer: 'ANNOT', text: `${a.name} ${a.w}x${a.h}m`, x: c.x, y: c.y, h: 0.5 });
@@ -3138,8 +3192,8 @@ function exportLayoutDxf(){
   const U = 1000;
   const f = n => (Math.round(n * U * 10) / 10).toFixed(1);
   // 레이어 이름은 R12 DXF 호환을 위해 영문(한글 레이어명은 CAD 버전에 따라 깨짐)
-  const LN = { MODULE: 'GS-MODULE', TABLE: 'GS-TABLE', BOUNDARY: 'GS-BOUNDARY', PARCEL: 'GS-PARCEL', TEXT: 'GS-TEXT', VENT: 'GS-VENT', ANNOT: 'GS-ANNOT' };
-  const layers = { [LN.BOUNDARY]: 6, [LN.PARCEL]: 30, [LN.MODULE]: 6, [LN.TABLE]: 2, [LN.TEXT]: 7, [LN.VENT]: 8, [LN.ANNOT]: 5 };
+  const LN = { MODULE: 'GS-MODULE', TABLE: 'GS-TABLE', BOUNDARY: 'GS-BOUNDARY', PARCEL: 'GS-PARCEL', TEXT: 'GS-TEXT', VENT: 'GS-VENT', ANNOT: 'GS-ANNOT', DIM: 'GS-DIM' };
+  const layers = { [LN.BOUNDARY]: 6, [LN.PARCEL]: 30, [LN.MODULE]: 6, [LN.TABLE]: 2, [LN.TEXT]: 7, [LN.VENT]: 8, [LN.ANNOT]: 5, [LN.DIM]: 5 };
   items.forEach(it => { it.layer = LN[it.layer] || it.layer; }); // AutoCAD 색 번호(6 자홍, 30 주황, 5 파랑, 2 노랑, 7 흰/검)
   const L = [];
   const push = (...a) => L.push(...a);
@@ -6155,11 +6209,7 @@ async function loadParcelBuildings(parcelPath){
     parcelBuildings.push({ path, name, floors, poly, area: shoelaceArea(path) });
   });
   if(shapes.length){ shapes.forEach(sh => measureShapes.push(sh)); parcelBldGroupId = registerMeasureGroup(shapes); }
-  const st = document.getElementById('roadviewStatus');
-  if(st && parcelBuildings.length){
-    st.style.color = 'var(--ink-soft)';
-    st.textContent = `🏢 필지 안 건물 ${parcelBuildings.length}동을 하늘색 점선으로 표시했습니다${parcelBuildings.some(b => b.name) ? ' (' + parcelBuildings.map(b => b.name || '이름 없음').join(', ') + ')' : ''}. 배치할 건물을 클릭 → ② 배치 유형 → "③ 배치 생성"을 건물마다 반복하세요(앞서 만든 배치는 유지).`;
-  }
+  // 지도 위 안내 띠는 띄우지 않음(사용자 요청 2026-10-15) — 건물 수는 배치도 탭 합계 줄에 표시
   updateAllDongBtn();
   updateOffsetInfo(parcelPath[0]);
 }
