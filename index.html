@@ -594,6 +594,21 @@
       <div class="card" style="padding:16px 16px 14px;">
         <h2 style="margin-bottom:12px;">모듈 배치도</h2>
         <div class="lay-sum" id="laySum"><b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span></div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:6px;padding:5px 8px;margin:0 0 10px;" title="주소를 검색하면 필지 안 건물 전부에 고른 유형으로 바로 배치합니다. 배치된 뒤 동별 카드에서 '다시 배치'로 유형을 바꿀 수 있습니다">
+          ⚡ 주소 검색 시 건물 자동 배치
+          <select id="autoLayoutPreset" onchange="saveAutoLayoutPreset()" style="font-size:12px;padding:2px 4px;flex:1;">
+            <option value="">끄기</option>
+            <option value="slab" selected>평슬라브</option>
+            <option value="wondan2">원단 2단</option>
+            <option value="wondan3">원단 3단</option>
+            <option value="wondan4">원단 4단</option>
+            <option value="wondan5">원단 5단</option>
+            <option value="insamflat1">인삼밭 1단 플랫</option>
+            <option value="insamflat2">인삼밭 2단 플랫</option>
+            <option value="insam">인삼밭</option>
+            <option value="zero">제로솔루션</option>
+          </select>
+        </label>
         <p class="hint" style="margin:0 0 10px;">지도에서 건물(하늘색 점선)을 클릭하거나 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
@@ -6209,9 +6224,24 @@ async function loadParcelBuildings(parcelPath){
   if(shapes.length){ shapes.forEach(sh => measureShapes.push(sh)); parcelBldGroupId = registerMeasureGroup(shapes); }
   // 지도 위 안내 띠는 띄우지 않음(사용자 요청 2026-10-15) — 건물 수는 배치도 탭 합계 줄에 표시
   updateAllDongBtn();
+  autoLayoutAfterSearch();
   updateOffsetInfo(parcelPath[0]);
 }
 function updateAllDongBtn(){ const b = document.getElementById('allDongBtn'); if(b) b.style.display = parcelBuildings.length ? '' : 'none'; scheduleLayoutCards(); }
+// ⚡ 주소 검색 시 건물 자동 배치: 선택한 유형(기본 평슬라브)으로 필지 안 건물 전부에 바로 배치
+function saveAutoLayoutPreset(){ try{ localStorage.setItem('solarAutoLayout', (document.getElementById('autoLayoutPreset') || {}).value || ''); }catch(e){} }
+function loadAutoLayoutPreset(){ try{ const v = localStorage.getItem('solarAutoLayout'); const el = document.getElementById('autoLayoutPreset'); if(el && v !== null && [...el.options].some(o => o.value === v)) el.value = v; }catch(e){} }
+function autoLayoutAfterSearch(){
+  const key = (document.getElementById('autoLayoutPreset') || {}).value;
+  if(!key || !LAYOUT_PRESETS[key] || !parcelBuildings.length) return;
+  if(layoutRegistry.length) return; // 이미 배치가 있으면 건드리지 않음
+  try{
+    applyLayoutPreset(key);
+    generateAllDongs();
+    const st = document.getElementById('roadviewStatus');
+    if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 필지 안 건물 ${parcelBuildings.length}동에 "${LAYOUT_PRESETS[key].label}"로 자동 배치했습니다. 유형을 바꾸려면 배치도 탭 동별 카드의 "🔁 다시 배치", 끄려면 "주소 검색 시 건물 자동 배치"를 "끄기"로.`; }
+  }catch(e){ console.warn('auto layout', e); }
+}
 // ===== ✂ 구역 나누기: 현재 경계를 두 점으로 정한 선으로 잘라 두 구역으로 — 구역을 클릭해 고른 뒤 유형별로 배치 =====
 let splitFirst = null, splitPreview = null, splitZones = [], splitGroupId = null, splitBaseName = '';
 function toggleSplitMode(){
@@ -8228,7 +8258,7 @@ const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역�
 (function initMapOnLoad(){
   const run = () => {
     try{ const t = localStorage.getItem('solarRailTab'); if(t && document.getElementById(t)) switchRailTab(t); }catch(e){}
-    try{ decoratePresetButtons(); renderLayoutCards(); }catch(e){ console.warn('rail init', e); }
+    try{ decoratePresetButtons(); renderLayoutCards(); loadAutoLayoutPreset(); }catch(e){ console.warn('rail init', e); }
     try{ onMountTypeChange(); }catch(e){ console.warn('mount opts init', e); } // 단 수·테이블당 가로 등 배치 대상별 옵션을 첫 화면부터 표시
     if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.Map){ return; }
     let saved = null;
