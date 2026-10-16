@@ -771,6 +771,11 @@
           <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
           <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
           <label title="경계(지붕 끝) 변마다 가장 가까운 모듈 모서리까지의 거리를 mm 치수로 표시 — 지자체 제출용"><input id="sheetDim" type="checkbox" checked style="vertical-align:middle;"> 처마끝 이격 치수(mm) 표시</label>
+          <label title="측면도에 그릴 건물 처마(지붕 바닥) 높이 — 건축물대장·현장 확인값을 넣으세요(가정값)">처마 높이(m) <input id="sideEaveH" type="number" value="6" step="0.5" min="0" style="width:60px;"></label>
+          <label title="측면도 지붕 경사각(경사지붕). 평슬라브·토지는 0">지붕 경사(°) <input id="sideRoofDeg" type="number" value="10" step="1" min="0" max="45" style="width:60px;"></label>
+          <label title="같은 유형·단 수인 동은 대표 1장만 그림"><input id="sideRep" type="checkbox" checked style="vertical-align:middle;"> 같은 유형은 대표 측면도 1장</label>
+          <button type="button" class="run" style="background:#1E4F8C;color:#fff;" onclick="exportSideViews('pdf')" title="배치한 동의 측면도(A-A 단면: 지붕·모듈·이격·높이 치수)를 A4 가로 PDF로">📐 측면도 PDF 저장</button>
+          <button type="button" class="run" style="background:#2C6CB5;color:#fff;" onclick="exportSideViews('png')">측면도 PNG 저장</button>
           <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
           <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
           <span id="sheetWinInfo" style="font-size:11px;color:var(--ink-soft);">범위: 자동(배치 전체)</span>
@@ -3058,6 +3063,195 @@ function convexHullXY(pts){
   return lo.slice(0, -1).concat(up.slice(0, -1));
 }
 
+// ===== 📐 측면도(단면): 동마다 지붕 단면 + 모듈 + 이격·높이 치수 (그랜드썬 측면도 양식: 검정 건물선·자홍 모듈·빨강 치수·파랑 제목) =====
+// 측면 축: 배치 축(azRad)에 수직인 방향(y'). 경계·모듈을 y'로 투영해 단면을 만든다.
+function sideViewData(ed){
+  const lat0 = ed.lat0Rad, az = ed.azRad || 0;
+  const B = ed.boundary.map(q => { const xy = solarToXY(q, lat0); return rotateXY(xy.x, xy.y, -az); });
+  const by = B.map(q => q.y); const y0 = Math.min(...by), y1 = Math.max(...by);
+  const live = ed.modules.filter(m => !m.removed);
+  const blocks = []; // 단면상 모듈 묶음 [y'시작, y'끝]
+  const units = (ed.tables && ed.tables.length) ? ed.tables.filter(t => t.mods.some(m => !m.removed)).map(t => t.mods.filter(m => !m.removed)) : live.map(m => [m]);
+  units.forEach(ms => { let a = Infinity, b = -Infinity; ms.forEach(m => modCornersRot(ed, m).forEach(c => { a = Math.min(a, c.y); b = Math.max(b, c.y); })); if(a < b) blocks.push([a, b]); });
+  blocks.sort((p, q) => p[0] - q[0]);
+  // 겹치는 묶음 합치기(같은 줄의 테이블들)
+  const merged = []; blocks.forEach(bl => { const last = merged[merged.length - 1]; if(last && bl[0] <= last[1] + 0.05){ last[1] = Math.max(last[1], bl[1]); } else merged.push(bl.slice()); });
+  return { y0, y1, D: y1 - y0, blocks: merged, n: live.length };
+}
+function sideViewKind(ed){
+  if(ed.type === 'ground') return 'ground';
+  if(ed.type === 'roof') return ed.kind === 'slab' ? 'slab' : 'gable';
+  if(ed.kind === 'insam_flat') return 'flat';
+  if(ed.kind === 'parking') return 'parking';
+  return 'gable'; // 원단·인삼밭·제로솔루션: 경사면에 평행
+}
+// g: 캔버스, box:{x,y,w,h} 그릴 영역, ed: 배치, opts:{eaveH, roofDeg, tilt, title}
+function drawSideView(g, box, ed, opts){
+  const sv = sideViewData(ed); if(!sv.blocks.length) return;
+  const kind = sideViewKind(ed);
+  const eaveH = kind === 'ground' ? 0 : Math.max(0, opts.eaveH || 0);
+  const roofDeg = (kind === 'gable' || kind === 'flat') ? Math.max(0, opts.roofDeg || 0) : 0; // 인삼밭 플랫도 경사지붕 위
+  const tiltDeg = (typeof ed.tilt === 'number' ? ed.tilt : (opts.tilt || 10));
+  const panelL = ed.panelL || parseFloat((document.getElementById('panelL') || {}).value) || 2.465;
+  const D = sv.D, half = D / 2;
+  const roofZ = y => { // y: 0..D (왼쪽 처마=0). 경사지붕은 가운데 용마루
+    if(kind !== 'gable' && kind !== 'flat') return eaveH;
+    const d = Math.abs(y - half); return eaveH + (half - d) * Math.tan(roofDeg * Math.PI / 180);
+  };
+  const ridgeH = roofZ(half);
+  // 모듈 선분(단면): 각 묶음마다 [ (y,z) 시작, (y,z) 끝 ]
+  const offN = (ed.kind === 'wondan' || ed.kind === 'wondan_barn') ? { s: 1.0, n: 0.5 } : { s: 0.5, n: 0.5 }; // 남(앞) / 북(뒤) 지붕면 위 높이
+  const segs = [], posts = [];
+  let modTop = 0;
+  if(kind === 'flat'){
+    const z = ridgeH + 0.5; // 용마루 위 500mm (벤츄레이터 없을 때)
+    const a = sv.blocks[0][0] - sv.y0, b = sv.blocks[sv.blocks.length - 1][1] - sv.y0;
+    segs.push([[a, z], [b, z]]); modTop = z;
+    sv.blocks.forEach(bl => { [bl[0] - sv.y0, bl[1] - sv.y0].forEach(y => posts.push([[y, roofZ(y)], [y, z]])); });
+  } else if(kind === 'gable'){
+    sv.blocks.forEach(bl => {
+      const a = bl[0] - sv.y0, b = bl[1] - sv.y0;
+      const south = (a + b) / 2 < half; // 왼쪽 면을 남쪽(앞)으로 가정
+      const off = south ? offN.s : offN.n;
+      const za = roofZ(a) + off, zb = roofZ(b) + off;
+      segs.push([[a, za], [b, zb]]); modTop = Math.max(modTop, za, zb);
+      posts.push([[a, roofZ(a)], [a, za]], [[b, roofZ(b)], [b, zb]]);
+    });
+  } else { // slab / ground / parking: 평면 위 경사 거치 (앞 낮고 뒤 높음, 뒤쪽=북쪽=오른쪽)
+    const base = kind === 'ground' ? 1.0 : (kind === 'parking' ? 3.0 : 0.5);
+    sv.blocks.forEach(bl => {
+      const a = bl[0] - sv.y0, b = bl[1] - sv.y0;
+      const rise = (b - a) * Math.tan(tiltDeg * Math.PI / 180);
+      segs.push([[a, eaveH + base], [b, eaveH + base + rise]]); modTop = Math.max(modTop, eaveH + base + rise);
+      posts.push([[a, eaveH], [a, eaveH + base]], [[b, eaveH], [b, eaveH + base + rise]]);
+    });
+  }
+  // 축척: 가로 D, 세로 modTop (+치수 여백)
+  const totalH = Math.max(modTop + 0.5, eaveH + 1);
+  const padL = 150, padR = 150, padT = 110, padB = 40;
+  const sc = Math.min((box.w - padL - padR) / D, (box.h - padT - padB) / totalH);
+  const ox = box.x + padL + ((box.w - padL - padR) - D * sc) / 2, oy = box.y + box.h - padB;
+  const X = y => ox + y * sc, Y = z => oy - z * sc;
+  // 건물(벽·지붕) 검정
+  g.lineWidth = 2.2; g.strokeStyle = '#000'; g.setLineDash([]);
+  if(kind !== 'ground'){
+    g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(0), Y(eaveH));
+    if(kind === 'gable' || kind === 'flat'){ g.lineTo(X(half), Y(ridgeH)); }
+    g.lineTo(X(D), Y(eaveH)); g.lineTo(X(D), Y(0)); g.stroke();
+    g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(D), Y(0)); g.stroke();
+  } else { g.beginPath(); g.moveTo(X(-0.5), Y(0)); g.lineTo(X(D + 0.5), Y(0)); g.stroke(); }
+  // 지주(파랑) · 모듈(자홍)
+  g.lineWidth = 2; g.strokeStyle = '#1C4FD8';
+  posts.forEach(([a, b]) => { g.beginPath(); g.moveTo(X(a[0]), Y(a[1])); g.lineTo(X(b[0]), Y(b[1])); g.stroke(); });
+  g.lineWidth = 6; g.strokeStyle = '#FF00FF';
+  segs.forEach(([a, b]) => { g.beginPath(); g.moveTo(X(a[0]), Y(a[1])); g.lineTo(X(b[0]), Y(b[1])); g.stroke(); });
+  // 모듈 위 짧은 눈금(모듈 1장 길이 표시)
+  g.lineWidth = 1.2; g.strokeStyle = '#C000C0';
+  segs.forEach(([a, b]) => { const len = Math.hypot(b[0] - a[0], b[1] - a[1]); const n = Math.max(1, Math.round(len / (panelL * Math.cos(tiltDeg * Math.PI / 180)))); for(let i = 1; i < n; i++){ const t = i / n; const px = X(a[0] + (b[0] - a[0]) * t), py = Y(a[1] + (b[1] - a[1]) * t); g.beginPath(); g.moveTo(px, py - 6); g.lineTo(px, py + 6); g.stroke(); } });
+  // 치수(빨강)
+  const mm = v => Math.round(v * 1000).toLocaleString('ko-KR');
+  g.strokeStyle = '#E00000'; g.fillStyle = '#E00000'; g.lineWidth = 1.4; g.font = 'bold 22px "Noto Sans KR", "Malgun Gothic", sans-serif';
+  const hdim = (ya, yb, zPx, label) => { const xa = X(ya), xb = X(yb); g.beginPath(); g.moveTo(xa, zPx); g.lineTo(xb, zPx); g.moveTo(xa, zPx - 8); g.lineTo(xa, zPx + 8); g.moveTo(xb, zPx - 8); g.lineTo(xb, zPx + 8); g.stroke(); g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(label, (xa + xb) / 2, zPx - 4); };
+  const vdim = (xPx, za, zb, label, side) => { const ya = Y(za), yb = Y(zb); g.beginPath(); g.moveTo(xPx, ya); g.lineTo(xPx, yb); g.moveTo(xPx - 8, ya); g.lineTo(xPx + 8, ya); g.moveTo(xPx - 8, yb); g.lineTo(xPx + 8, yb); g.stroke(); g.save(); g.translate(xPx + (side < 0 ? -6 : 6), (ya + yb) / 2); g.rotate(-Math.PI / 2); g.textAlign = 'center'; g.textBaseline = side < 0 ? 'bottom' : 'top'; g.fillText(label, 0, 0); g.restore(); };
+  // 지붕 끝 이격(왼쪽·오른쪽)
+  const fa = sv.blocks[0][0] - sv.y0, fb = sv.blocks[sv.blocks.length - 1][1] - sv.y0;
+  const topPx = Y(modTop) - 40;
+  if(fa > 0.02) hdim(0, fa, topPx, mm(fa));
+  if(D - fb > 0.02) hdim(fb, D, topPx, mm(D - fb));
+  // 보조선(이격 치수까지)
+  g.setLineDash([4, 4]); g.lineWidth = 1; [0, fa, fb, D].forEach(y => { g.beginPath(); g.moveTo(X(y), topPx - 10); g.lineTo(X(y), Y(roofZ(y))); g.stroke(); }); g.setLineDash([]); g.lineWidth = 1.4;
+  // 높이: 왼쪽에 처마 높이·모듈 상단까지, 오른쪽에 용마루·전체
+  const lx = ox - 70, rx = X(D) + 70;
+  if(eaveH > 0) vdim(lx, 0, eaveH, mm(eaveH), -1);
+  vdim(lx - 50, 0, modTop, mm(modTop), -1);
+  if((kind === 'gable' || kind === 'flat') && roofDeg > 0) vdim(rx, 0, ridgeH, mm(ridgeH), 1);
+  vdim(rx + 50, eaveH, modTop, `지붕바닥↑${mm(modTop - eaveH)}`, 1);
+  // 모듈 높이(지붕면 위)
+  if(kind === 'flat') vdim(X(fa) - 30, roofZ(fa), modTop, mm(modTop - roofZ(fa)), -1);
+  // 최대 4m 기준(지붕 바닥 기준) 초과 표시
+  if(kind !== 'ground' && modTop - eaveH > 4.0 + 1e-6){ g.fillStyle = '#B3402A'; g.font = 'bold 20px "Noto Sans KR", sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top'; g.fillText(`※ 지붕 바닥에서 모듈 상단 ${(modTop - eaveH).toFixed(2)}m — 설치기준 최대 4m 초과`, box.x + 10, box.y + 6); }
+  // 제목(파랑)
+  g.fillStyle = '#1A2FD6'; g.font = 'bold 34px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillText(opts.title || '측면도 VIEW', box.x + box.w / 2, box.y + box.h + 18);
+  g.fillStyle = '#444'; g.font = '20px "Noto Sans KR", sans-serif';
+  g.fillText(opts.sub || '', box.x + box.w / 2, box.y + box.h + 62);
+  return { eaveH, ridgeH, modTop, D, kind };
+}
+// 대표 측면도 묶기: 같은 유형·단 수·방향 → 한 장
+function sideViewGroups(){
+  const g = id => document.getElementById(id);
+  const rep = !g('sideRep') || g('sideRep').checked;
+  const groups = [];
+  layoutRegistry.forEach((ed, i) => {
+    if(!ed.boundary || ed.boundary.length < 3 || !ed.modules.some(m => !m.removed)) return;
+    const key = rep ? [ed.type, ed.kind || '', ed.frameN || ed.blockRows || ed.arrRows || '', ed.orient || '', (ed.stdRows || '')].join('|') : String(ed.groupId);
+    let grp = groups.find(x => x.key === key);
+    if(!grp){ grp = { key, ed, names: [] }; groups.push(grp); }
+    grp.names.push(ed.bldName || `${i + 1}동`);
+  });
+  return groups;
+}
+function sideViewPages(){
+  const W = 2480, H = 1754;
+  const g0 = id => ((document.getElementById(id) || {}).value || '').trim();
+  const eaveH = parseFloat(g0('sideEaveH')); const roofDeg = parseFloat(g0('sideRoofDeg'));
+  const groups = sideViewGroups();
+  const pages = [];
+  const letters = 'ABCDEFGHIJKLMNOP';
+  for(let i = 0; i < groups.length; i += 2){
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.lineWidth = 6; g.strokeStyle = '#000'; g.strokeRect(40, 40, W - 80, H - 80); g.lineWidth = 2; g.strokeRect(80, 80, W - 160, H - 230);
+    const pair = groups.slice(i, i + 2);
+    pair.forEach((grp, k) => {
+      const box = pair.length === 1 ? { x: 300, y: 200, w: W - 600, h: 1050 } : { x: 160 + k * (W - 320) / 2 + 40, y: 220, w: (W - 320) / 2 - 80, h: 1020 };
+      const L = letters[i + k] || '?';
+      const sub = `${layoutTypeLabel(grp.ed)} · 적용: ${grp.names.join(', ')}${isFinite(eaveH) && grp.ed.type !== 'ground' ? ` · 처마 높이 ${eaveH}m(입력값)` : ''}`;
+      try{ drawSideView(g, box, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, title: `"${L}"-"${L}" 측면도 VIEW SCALE 1:1`, sub }); }catch(e){ console.warn('side view', e); }
+    });
+    drawSheetTitleBlock(g, W, H, '모 듈 배 치 측 면 도');
+    pages.push(cv);
+  }
+  return pages;
+}
+// 표제란(배치도와 같은 양식, 간략)
+function drawSheetTitleBlock(g, W, H, title){
+  const g0 = id => ((document.getElementById(id) || {}).value || '').trim();
+  const ty = H - 194, th = 154, x0 = 40, x1 = W - 40;
+  g.lineWidth = 5; g.strokeStyle = '#000'; g.beginPath(); g.moveTo(x0, ty); g.lineTo(x1, ty); g.stroke();
+  const cols = [x0, 560, 900, 1470, 1610, 1990, x1];
+  g.lineWidth = 2; g.beginPath(); cols.slice(1, -1).forEach(x => { g.moveTo(x, ty); g.lineTo(x, ty + th); }); g.stroke();
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillStyle = '#000';
+  const project = g0('sheetProject') || lastJibunAddress || g0('siteAddress') || '';
+  g.font = '22px "Noto Sans KR", sans-serif'; g.fillText('공 사 명', x0 + 20, ty + 30); g.fillText('PROJECT', x0 + 20, ty + 60);
+  g.font = '26px "Noto Sans KR", sans-serif'; wrapText(g, project, x0 + 160, ty + 40, 380, 32);
+  g.font = '22px "Noto Sans KR", sans-serif'; g.fillText('시 행 청', 580, ty + 30);
+  g.textAlign = 'center'; g.font = '24px "Noto Sans KR", sans-serif'; g.fillText('그랜드썬기술단', (900 + 1470) / 2, ty + 34); g.font = '22px sans-serif'; g.fillText('GRANDSUN ENGINEERING CO., LTD.', (900 + 1470) / 2, ty + 72); g.fillText('TEL : 051-941-7783  FAX : 051-941-7785', (900 + 1470) / 2, ty + 108);
+  g.fillText('1 : none', (1470 + 1610) / 2, ty + 77);
+  g.font = '22px "Noto Sans KR", sans-serif'; g.fillText('책임기술자', 1680, ty + 30); g.fillText('설 계 자', 1680, ty + 80); g.fillText('제 도 자', 1680, ty + 128);
+  g.fillText(g0('sheetDesigner'), 1870, ty + 80);
+  g.beginPath(); g.moveTo(1610, ty + 52); g.lineTo(1990, ty + 52); g.moveTo(1610, ty + 104); g.lineTo(1990, ty + 104); g.moveTo(1750, ty); g.lineTo(1750, ty + th); g.stroke();
+  g.textAlign = 'left'; g.fillText('도 면 명', 2010, ty + 30); g.fillText('T I T L E', 2010, ty + 60); g.textAlign = 'center'; g.font = '26px "Noto Sans KR", sans-serif'; g.fillText(title, (2010 + x1) / 2 + 40, ty + 95);
+}
+async function exportSideViews(fmt){
+  const st = document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
+  if(!layoutRegistry.length){ st.textContent = '❌ 먼저 배치를 생성하세요.'; return; }
+  const pages = sideViewPages();
+  if(!pages.length){ st.textContent = '❌ 측면도를 그릴 배치(경계가 있는 배치)가 없습니다.'; return; }
+  const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_측면도';
+  try{
+    if(fmt === 'pdf'){
+      const blob = canvasesToPdfA4(pages);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.pdf'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    } else {
+      pages.forEach((cv, i) => cv.toBlob(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + (pages.length > 1 ? `_${i + 1}` : '') + '.png'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }, 'image/png'));
+    }
+    st.textContent = `✅ 측면도 ${pages.length}쪽 저장 (대표 측면도 ${sideViewGroups().length}장) — 처마 높이·지붕 경사는 입력값(가정)입니다.`;
+  }catch(e){ st.textContent = '❌ 측면도 저장 실패: ' + e.message; }
+  window.__lastSidePages = pages;
+  return pages;
+}
+
 // ===== 📑 제안서 PDF 자동 생성: 표지(조감도+음영) · 모듈 배치도 · 동별 집계표 =====
 async function exportProposalPdf(){
   const st = document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
@@ -3150,13 +3344,14 @@ async function exportProposalPdf(){
       .filter(Boolean).forEach(line => { wrapText(g, line, cols[0], y, cols[cols.length - 1] - cols[0], 36); y += 36 * Math.max(1, Math.ceil(g.measureText(line).width / (cols[cols.length - 1] - cols[0]))) + 10; });
     g.fillStyle = '#888'; g.font = '22px "Noto Sans KR", sans-serif'; g.textAlign = 'right'; g.fillText(`그랜드썬기술단 · ${dateStr}`, W - 120, H - 60);
   }
-  const pages = [cover, sheetCv, tbl].filter(Boolean);
+  let sidePages = []; try{ sidePages = sideViewPages(); }catch(e){ console.warn('side pages', e); }
+  const pages = [cover, sheetCv, ...sidePages, tbl].filter(Boolean);
   const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_제안서';
   try{
     const blob = canvasesToPdfA4(pages);
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.pdf'; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-    st.textContent = `✅ ${base}.pdf 저장 — 표지(조감도·음영) + 모듈 배치도 + 동별 집계표, ${pages.length}쪽 · ${fmtKw(totalKw)}kW`;
+    st.textContent = `✅ ${base}.pdf 저장 — 표지(조감도·음영) + 모듈 배치도 + 측면도 ${sidePages.length}쪽 + 동별 집계표, 총 ${pages.length}쪽 · ${fmtKw(totalKw)}kW`;
   }catch(e){ st.textContent = '❌ 제안서 PDF 저장 실패: ' + e.message; }
   window.__lastProposalPages = pages;
   return pages;
