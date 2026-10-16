@@ -8379,7 +8379,8 @@ function renderResults(r){
 const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역시청 부근(기본 위치)' };
 (function initMapOnLoad(){
   const run = () => {
-    try{ const t = localStorage.getItem('solarRailTab'); if(t && document.getElementById(t)) switchRailTab(t); }catch(e){}
+    // 첫 화면은 항상 컨설팅 탭 (사용자 요청 2026-10-16) — 마지막 탭 기억은 쓰지 않음
+    try{ switchRailTab('railPaneConsult'); }catch(e){}
     try{ decoratePresetButtons(); renderLayoutCards(); loadAutoLayoutPreset(); }catch(e){ console.warn('rail init', e); }
     try{ onMountTypeChange(); }catch(e){ console.warn('mount opts init', e); } // 단 수·테이블당 가로 등 배치 대상별 옵션을 첫 화면부터 표시
     if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.Map){ return; }
