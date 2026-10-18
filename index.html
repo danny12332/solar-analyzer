@@ -784,9 +784,68 @@
           <span id="sheetStatus" class="hint" style="font-size:11px;"></span>
         </div>
         <div class="export-row">
-          <button type="button" class="run" style="background:#0F2A44;color:#fff;font-size:14px;" onclick="exportProposalPdf()" title="표지(위성사진 조감도 + 동지 음영) · 모듈 배치도 · 동별 집계표를 한 PDF(A4 가로)로">📑 제안서 PDF 자동 생성 (표지 조감도 · 배치도 · 집계표)</button>
+          <button type="button" class="run" style="background:#0F2A44;color:#fff;font-size:14px;" onclick="exportProposalPdf()" title="표지(위성사진 조감도 + 동지 음영) · 모듈 배치도 · 측면도 · 동별 집계표 · 수익성 분석(발전사업 30년 · 자가소비)을 한 PDF(A4 가로)로">📑 제안서 PDF 자동 생성 (조감도 · 배치도 · 측면도 · 집계표 · 수익성)</button>
           <button type="button" class="run" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
           <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
+        </div>
+      </div>
+      <!-- ▣ 견적 · 수익성: 그랜드썬 2026 견적서 엑셀 단가 체계 + 제안서 PPT 수익 모델 -->
+      <div class="card" style="padding:16px 16px 14px;" id="quoteCard">
+        <h2 style="margin-bottom:6px;">견적서 · 수익성 분석</h2>
+        <p class="hint" style="margin:0 0 10px;">배치 용량과 모듈 등급에 따라 견적서(A4 세로 PDF: 표지·견적 목록·산출내역서)와 수익성 표(발전사업 30년 · 자가소비 월별)를 만듭니다. 단가 체계는 "2026년 견적서" 엑셀(2026-09-28)과 제안서 PPT(2026-10-13)에서 읽은 값이며, 아래 입력으로 바꿀 수 있습니다.</p>
+        <div class="panel-bar" id="quoteOpts" style="display:flex;gap:8px;" oninput="renderQuotePanel()" onchange="renderQuotePanel()">
+          <span>① 기본 조건</span>
+          <label title="배치도 탭에서 배치한 모듈 장수. 비우면 자동(배치 합계)">모듈 장수 <input id="qCount" type="number" min="0" step="1" style="width:70px;" placeholder="자동"></label>
+          <label>모듈(등급·회사·Wp·단가)
+            <select id="qModule">
+              <option value="h1">1등급 현대 645W · 330원/Wp</option>
+              <option value="h2">2등급 현대 645W · 260원/Wp</option>
+              <option value="q2">2등급 한화 590W · 300원/Wp</option>
+              <option value="q0">무등급 한화 645W · 208원/Wp</option>
+              <option value="h0">무등급 현대 645W · 200원/Wp</option>
+            </select></label>
+          <label>사업 형태
+            <select id="qBiz"><option>건물 발전사업</option><option>토지 발전사업</option><option>자가소비</option></select></label>
+          <label title="내부 입금가 기준(견적서에는 표시되지 않음)">적용 입금가
+            <select id="qPriceSet"><option>기본</option><option>제로솔루션</option><option>건물지원사업</option></select></label>
+          <label title="배치 유형에서 자동 추정(바꿀 수 있음)">시공 방식
+            <select id="qMethod"><option>경사지붕</option><option>평슬라브</option><option>볼트프리캡</option><option>경사인삼밭플랫</option><option>지붕보강_샌드위치판넬</option><option>지붕보강_칼라강판</option><option>지붕보강_제로솔루션</option><option>주차장</option><option>스파이럴</option><option>그라우팅</option></select></label>
+          <label>인버터 보증 <select id="qInvWarranty"><option value="10">10년</option><option value="7">7년</option><option value="5">5년</option></select></label>
+          <label id="qSelfGridWrap" style="display:none;">자가소비 계통연계
+            <select id="qSelfGrid"><option>단순병렬 MCCB</option><option>단순병렬 ACB</option><option>단순병렬 VCB</option><option>역송병렬 MCCB</option><option>역송병렬 ACB</option><option>역송병렬 VCB</option></select></label>
+          <label title="지붕보강 시공 시 교체 지붕 면적(㎡) × 단가(샌드위치판넬 30,000 · 칼라강판 25,000 · 제로솔루션 38,000)">지붕교체 면적(㎡) <input id="qRoofArea" type="number" min="0" step="1" value="0" style="width:70px;"></label>
+          <span class="grp">② 추가 항목(원) — 물류대·장비대 줄에 합산</span>
+          <label title="임시안전난간대: 장 수 × 14,500원(설치 6,500+철거 8,000) + 장비대 680,000 → 10만 단위 올림">임시안전난간대(장) <input id="qRailN" type="number" min="0" step="1" value="0" style="width:60px;"></label>
+          <label title="사다리 금액(엑셀 표: 건물 높이 ≤6m 1,000,000 · ≤9m 1,200,000 · ≤11m 2,500,000 · ≤15m 3,500,000 · 그 이상 협의) — 직접 입력">사다리 <input id="qLadder" type="number" min="0" step="100000" value="0" style="width:95px;"></label>
+          <label title="채광창 덧방: 면적(길이×(폭+0.5m)×개수×1.2) × 20,000원 + 장비대 400,000 — 직접 입력">채광창 덧방 <input id="qSkylight" type="number" min="0" step="100000" value="0" style="width:95px;"></label>
+          <label title="휀스: 60kW 미만 500,000 · 230kW 미만 1,000,000 · 그 이상 없음(엑셀 식). 비우면 자동">휀스 <input id="qFence" type="number" min="0" step="100000" style="width:95px;" placeholder="자동"></label>
+          <label title="기타 금액(물류대·장비대 줄에 합산)">기타 <input id="qEtc" type="number" step="100000" value="0" style="width:95px;"></label>
+          <label title="인허가 줄 금액(엑셀 샘플 1,000,000)">인허가 <input id="qPermit" type="number" min="0" step="100000" value="1000000" style="width:95px;"></label>
+          <span class="grp">③ 선택 항목(산출내역에 줄 추가)</span>
+          <label><input id="qRsd" type="checkbox" style="vertical-align:middle;"> RSD(40,000원/kW)</label>
+          <label><input id="qRemote" type="checkbox" style="vertical-align:middle;"> 원격감시제어장치(11,000,000)</label>
+          <label><input id="qKpx" type="checkbox" style="vertical-align:middle;"> KPX 계량기(전기자재 줄에 합산) <input id="qKpxAmt" type="number" step="100000" value="4000000" style="width:95px;" title="엑셀 샘플(08-0606) 4,000,000 · 2026-09-28 양식 K64=16,000 — 두 값이 달라 직접 확인 필요"></label>
+          <label title="견적서 합계에서 빼는 할인(네고) 금액. 0이면 산출 금액 그대로">할인(네고) <input id="qDiscount" type="number" min="0" step="1000000" value="0" style="width:110px;"></label>
+          <span class="grp">④ 수익성(발전사업·자가소비) — 제안서 PPT 42·47쪽 모델</span>
+          <label>발전시간(h/일) <input id="pHours" type="number" min="2" max="5" step="0.1" value="3.6" style="width:60px;"></label>
+          <label title="장기계약 단가 = SMP 86.350 + REC(1등급 77.336 · 2등급 68.336 · 무등급 40.756) × 가중치 → 1등급 202.354 · 2등급 188.854 · 무등급 147.484 원/kWh (PPT 49쪽)">REC 가중치 <input id="pRecW" type="number" step="0.1" value="1.5" style="width:55px;"></label>
+          <label title="비우면 등급별 장기계약 단가 자동. 현물 등 다른 단가는 직접 입력">판매단가(원/kWh) <input id="pPrice" type="number" step="0.001" style="width:85px;" placeholder="등급 자동"></label>
+          <label>계통(한전연계비 vat별도) <select id="pGrid"><option value="120000">저압 공중(12만/kW)</option><option value="140000">저압 지중(14만/kW)</option><option value="24000">고압 공중(2.4만/kW)</option><option value="50000">고압 지중(5만/kW)</option></select></label>
+          <label title="EGI 연간 보험료 표(≤100kW 40만 … ≤3,000kW 623만). 비우면 자동">보험료(년) <input id="pInsurance" type="number" step="10000" style="width:95px;" placeholder="자동"></label>
+          <label title="전기안전관리 대행 수수료 2026 표(월) × 12. 비우면 자동">전기안전관리비(년) <input id="pSafety" type="number" step="10000" style="width:95px;" placeholder="자동"></label>
+          <label title="자가소비 단가 = 기후환경요금 9.0 + 전력량요금(계약종별 평균) + 연료비조정요금 5">자가소비 전력량요금(원/kWh) <input id="pSelfEnergy" type="number" step="0.1" value="142.3" style="width:70px;"></label>
+          <label>제안서에 포함 <label><input id="pIncRps" type="checkbox" checked style="vertical-align:middle;"> 발전사업 표</label> <label><input id="pIncSelf" type="checkbox" checked style="vertical-align:middle;"> 자가소비 표</label></label>
+          <span class="grp">⑤ 견적서 표기</span>
+          <label>고객명 <input id="qClient" type="text" style="width:130px;"></label>
+          <label>고객 연락처 <input id="qClientTel" type="text" style="width:120px;"></label>
+          <label>상담번호 <input id="qCaseNo" type="text" style="width:80px;" placeholder="08-0606"></label>
+          <label>담당자 <input id="qStaff" type="text" style="width:140px;" placeholder="홍길동 부장 010-0000-0000"></label>
+          <label>이메일 <input id="qEmail" type="text" style="width:150px;"></label>
+        </div>
+        <div id="quoteSummary" style="font-size:12px;line-height:1.55;background:#F4F6F8;border-radius:8px;padding:10px 12px;margin-bottom:10px;"></div>
+        <div class="export-row">
+          <button type="button" class="run" style="background:#7A2E0E;color:#fff;font-size:14px;" onclick="exportQuotePdf()" title="표지 · 견적 목록(간접비 포함 합계·참고사항) · 산출내역서 — A4 세로 PDF">🧾 견적서 PDF 저장 (A4 세로)</button>
+          <button type="button" class="run" style="background:#0E5A3A;color:#fff;" onclick="exportProfitPdf()" title="발전사업 30년 수익 표 + 자가소비 월별 수익 표 — A4 가로 PDF">📈 수익성 분석 PDF 저장</button>
         </div>
       </div>
       </div><!-- /railPaneProposal -->
@@ -2988,7 +3047,7 @@ async function exportLayoutSheet(fmt, opts){
 // 캔버스 → A4 가로 PDF(JPEG 이미지, 여러 쪽 가능). 외부 라이브러리 없이 PDF 구조를 직접 작성
 function canvasToPdfA4(cv){ return canvasesToPdfA4([cv]); }
 function canvasesToPdfA4(cvs){
-  const PW = 841.89, PH = 595.28; // A4 가로(pt)
+  const sizeOf = cv => cv.width >= cv.height ? [841.89, 595.28] : [595.28, 841.89]; // A4 가로/세로(pt) — 캔버스 비율로 결정
   const enc = str => new TextEncoder().encode(str);
   const parts = [], offs = [];
   let len = 0;
@@ -3004,6 +3063,7 @@ function canvasesToPdfA4(cvs){
     const pid = pageIds[i], iid = pid + 1, cid = pid + 2;
     const jpg = atob(cv.toDataURL('image/jpeg', 0.92).split(',')[1]);
     const img = new Uint8Array(jpg.length); for(let k = 0; k < jpg.length; k++) img[k] = jpg.charCodeAt(k);
+    const [PW, PH] = sizeOf(cv);
     const content = `q\n${PW} 0 0 ${PH} 0 0 cm\n/Im0 Do\nQ\n`;
     obj(pid, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${iid} 0 R >> >> /Contents ${cid} 0 R >>`);
     obj(iid, [enc(`<< /Type /XObject /Subtype /Image /Width ${cv.width} /Height ${cv.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`), img, enc('\nendstream')]);
@@ -3412,17 +3472,401 @@ async function exportProposalPdf(){
     g.fillStyle = '#888'; g.font = '22px "Noto Sans KR", sans-serif'; g.textAlign = 'right'; g.fillText(`그랜드썬기술단 · ${dateStr}`, W - 120, H - 60);
   }
   let sidePages = []; try{ sidePages = sideViewPages(); }catch(e){ console.warn('side pages', e); }
-  const pages = [cover, sheetCv, ...sidePages, tbl].filter(Boolean);
+  let profitPgs = []; try{ profitPgs = profitPages().pages; }catch(e){ console.warn('profit pages', e); }
+  const pages = [cover, sheetCv, ...sidePages, tbl, ...profitPgs].filter(Boolean);
   const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_제안서';
   try{
     const blob = canvasesToPdfA4(pages);
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.pdf'; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-    st.textContent = `✅ ${base}.pdf 저장 — 표지(조감도·음영) + 모듈 배치도 + 측면도 ${sidePages.length}쪽 + 동별 집계표, 총 ${pages.length}쪽 · ${fmtKw(totalKw)}kW`;
+    st.textContent = `✅ ${base}.pdf 저장 — 표지(조감도·음영) + 모듈 배치도 + 측면도 ${sidePages.length}쪽 + 동별 집계표 + 수익성 ${profitPgs.length}쪽, 총 ${pages.length}쪽 · ${fmtKw(totalKw)}kW`;
   }catch(e){ st.textContent = '❌ 제안서 PDF 저장 실패: ' + e.message; }
   window.__lastProposalPages = pages;
   return pages;
 }
+// ===== 🧾 견적 · 📈 수익성 =====
+// 단가 체계 출처: "2026년 견적서 ★★★복사해서 사용하세요_2026-09-28.xlsx"(INDEX·건물 시트), 샘플 "08-0606 견적서_리엔젠 평택공장.xlsx",
+// 수익 모델 출처: "1.제안서_그랜드썬기술단_2026-10-13.pptx" 42·47~49·52쪽. 값은 그대로 옮긴 것이며, 출처가 확인되지 않은 항목은 입력란으로 두었다.
+const QUOTE = {
+  modules: { // INDEX!B4:E8 — 등급·회사·Wp·모듈단가(원/Wp)
+    h1: { grade: '1등급', maker: '현대', wp: 645, price: 330 },
+    h2: { grade: '2등급', maker: '현대', wp: 645, price: 260 },
+    q2: { grade: '2등급', maker: '한화', wp: 590, price: 300 },
+    q0: { grade: '무등급', maker: '한화', wp: 645, price: 208 },
+    h0: { grade: '무등급', maker: '현대', wp: 645, price: 200 },
+  },
+  modBase: 290, // 모듈기준금액(원/Wp) INDEX!I6
+  // 입금가 구간표(만원/kW): [구간 상한(용량보다 큰 첫 구간 적용), 기본 입금가(모듈 290원/Wp 기준), 제로솔루션 차감]
+  // 기본 = 97 + 구간보정 − 차감(30~60kW 5, 그 외 10) — INDEX!H열에서 모듈 상승분을 뺀 값. 등급별 입금가 = 기본 + (모듈단가 − 290)/10
+  bands: [[30, 145, 0], [40, 105, 0], [50, 100, 0], [60, 98, 8], [80, 95, 8], [90, 89, 10], [100, 87, 11], [150, 88, 12], [200, 85, 13], [300, 85, 8], [400, 83, 9], [500, 81, 9], [600, 93, 6], [700, 91, 7], [800, 89, 7], [900, 87, 7], [1000, 85, 7], [1300, 83, 6], [1700, 81, 6], [2000, 79, 6], [4000, 79, 6]],
+  inverters: { 10: { 125: 8000000, 55: 4700000, 33: 4000000 }, 7: { 125: 7000000, 55: 3800000, 33: 3200000 }, 5: { 125: 6000000, 55: 3800000, 33: 3200000 } }, // 이노일렉트릭, 보증연수별 (INDEX!B11:E19)
+  lowPanel: [[30, 800000], [75, 2000000], [100, 3000000], [230, 6000000], [500, 14000000], [750, 90000000], [999, 95000000], [1100, 100000000], [1300, 115000000], [1500, 125000000], [2000, 140000000], [2500, 170000000], [3000, 200000000], [3500, 230000000], [4000, 260000000]], // 저압반류 INDEX!BJ:BK
+  devel: [[30, 5000000], [50, 5500000], [75, 6000000], [100, 6500000], [150, 8000000], [200, 10000000], [250, 11000000], [300, 12000000], [350, 13000000], [400, 14000000], [450, 15000000], [500, 16000000], [4000, 23000000]], // 개발행위·설계·감리 등 INDEX!CD:CE
+  monitor: [[25, 500000], [50, 800000], [200, 1500000], [300, 2000000], [400, 2500000], [500, 3000000], [4000, 4000000]], // 모니터링 INDEX!CG:CH
+  logistics: [[150, 1500000], [200, 2000000], [300, 2500000], [400, 3000000], [500, 3500000], [600, 4000000], [700, 4500000], [800, 5000000], [900, 5500000], [1000, 6000000], [1500, 9000000], [2000, 15000000], [2500, 20000000], [4000, 25000000]], // 물류대·장비대 INDEX!CJ:CK
+  elecRoom: [[100, 0], [200, 1000000], [500, 4000000], [1000, 8500000], [4000, 11000000]], // 전기실(PAD·휀스·캐노피) INDEX!CV:CW — 100kW 이상
+  methodExtra: { '경사지붕': 0, '평슬라브': 0, '볼트프리캡': 0, '경사인삼밭플랫': 0, '지붕보강_샌드위치판넬': 0, '지붕보강_칼라강판': 0, '지붕보강_제로솔루션': 0, '주차장': 450000, '스파이럴': 100000, '그라우팅': 100000 }, // INDEX!AL:AM (원/kW)
+  methodNames: { // INDEX!BU:BX — 산출내역 4·5번 줄 이름
+    '경사지붕': ['구조물 자재 및 제작', '구조물 및 모듈 설치(골탕패드,쉴란트방수,모듈더블너트)'],
+    '평슬라브': ['구조물 자재 및 제작', '구조물 및 모듈 설치(케미컬,모르타르,모듈더블너트)'],
+    '볼트프리캡': ['구조물 자재 및 제작', '구조물 및 모듈 설치(볼트프리캡)'],
+    '경사인삼밭플랫': ['구조물 자재 및 제작', '구조물 및 모듈 설치(골탕패드,쉴란트방수,모듈더블너트)'],
+    '지붕보강_샌드위치판넬': ['구조물 자재 및 제작', '구조물 및 모듈 설치(샌드위치판넬)'],
+    '지붕보강_칼라강판': ['구조물 자재 및 제작', '구조물 및 모듈 설치(칼라강판)'],
+    '지붕보강_제로솔루션': ['구조물 자재 및 제작', '구조물 및 모듈 설치(제로솔루션)'],
+    '주차장': ['구조물 자재 및 제작', '구조물 및 모듈 설치(케미컬,모르타르,모듈더블너트)'],
+    '스파이럴': ['구조물 자재 및 제작 (스파이럴 고정형)', '구조물 및 모듈 설치'],
+    '그라우팅': ['구조물 자재 및 제작 (그라우팅 고정형)', '구조물 및 모듈 설치'],
+  },
+  roofReinforce: { '지붕보강_샌드위치판넬': 30000, '지붕보강_칼라강판': 25000, '지붕보강_제로솔루션': 38000 }, // 원/㎡ (건물!K69:K71 × 지붕면적)
+  parking: [[90, 550000], [500, 450000], [1000, 400000], [4000, 380000]], // 주차장 구조물 추가비(원/kW) INDEX!AO:AP
+  selfGrid: { // INDEX!BO:BS — 자가소비 계통연계: [보호차단기 이름, 금액, 전기실 개조 이름, 금액]
+    '역송병렬 MCCB': ['보호차단기 (MCCB)', 4500000, '전기실 개조 (양방향계량기) 등', 12000000],
+    '역송병렬 ACB': ['보호차단기 (ACB)', 17000000, '전기실 개조 (MOF) 등', 25000000],
+    '역송병렬 VCB': ['보호차단기 (VCB)', 35000000, '전기실 개조 (MOF) 등', 25000000],
+    '단순병렬 MCCB': ['보호차단기 (MCCB)', 4500000, '전기실 개조 (역전력계전기) 등', 12000000],
+    '단순병렬 ACB': ['보호차단기 (ACB)', 17000000, '전기실 개조 (역전력계전기) 등', 20000000],
+    '단순병렬 VCB': ['보호차단기 (VCB)', 35000000, '전기실 개조 (역전력계전기) 등', 20000000],
+  },
+  notes: { // INDEX!BA:BB — 견적서 하단 참고사항(사업형태별)
+    '건물 발전사업': ['1. 본 견적서는 발전사업허가에서부터 사용전 검사 합격까지의 공정 일체에 대한 견적입니다', '2. 한국전력에 납부하는 비용은 사업주님 부담입니다', ' - 한전연계비용 (표준시설부담금 or 설계조정부담금, 기술검토비용(고압), COS투입비용, 감시ㆍ제어시스템 등)', '3. 발전소 구축 및 운영에 필요한 부가금액은 사업주님 부담입니다', ' - 모니터링 설치시 인버터까지 인터넷 구축', ' - 무선모니터링 통신비 연 99,000원(VAT 포함, 최초 5년 무상) 사용료 발생', '', '4. 추가공사 비용은 사업주님 부담입니다', ' - 전기실(배전반)에서 한전책임분계점까지의 거리가 25m 이상 추가시', ' - 지중선로 공사 필요시', ' - 기존건축물의 구조안전 진단후 구조보강 필요시', ' - 건설재해예방기술지도비용(300kW 이상시)', '', '5. 참고사항', ' - 불법건축물(미양성화)은 개발행위시 양성화 및 철거가 되어 있어야 함', ' - T볼트,U볼트,더블너트,N브라켓,3중방수,순간풍속60M/S(평균풍속40M/S),고체에어로졸,모아(알림)포함', ' - 정부정책에 의한 탄소배출량 조정으로 모듈의 탄소인증등급이 변경될 수 있음'],
+    '토지 발전사업': ['1. 본 견적서는 발전사업허가에서부터 사용전 검사 합격까지의 공정 일체에 대한 견적입니다', '2. 한국전력에 납부하는 비용은 사업주님 부담입니다', ' - 한전연계비용 (표준시설부담금 or 설계조정부담금, 기술검토비용(고압), COS투입비용)', '3. 발전소 구축 및 운영에 필요한 부가금액은 사업주님 부담입니다', ' - 모니터링 설치시 인버터까지 인터넷 구축', ' - 무선모니터링 통신비 연 99,000원(VAT 포함, 최초 5년 무상) 사용료 발생', '', '4. 추가공사 비용은 사업주님 부담입니다', ' - 전기실(배전반)에서 한전책임분계점까지의 거리가 25m 이상 추가시', ' - 지중선로 공사 필요시', ' - 기존건축물의 구조안전 진단후 구조보강 필요시', ' - 지적공사 측량비용ㆍ개발행위ㆍ개발분담금', ' - 개발행위시 농지전용부담금, 산지복구보증금 등의 발생비용', ' - 지자체에서 요청으로 설계변경시 추가물량 비용', ' - 건설재해예방기술지도비용(300kW 이상시)', '', '5. 참고사항', ' - 불법건축물(미양성화)은 개발행위시 양성화 및 철거가 되어 있어야 함', ' - T볼트,U볼트,더블너트,N브라켓,3중방수,순간풍속60M/S(평균풍속40M/S),고체에어로졸,모아(알림)포함', ' - 정부정책에 의한 탄소배출량 조정으로 모듈의 탄소인증등급이 변경될 수 있음'],
+    '자가소비': ['1. 본 견적서는 개발행위허가에서부터 사용전 검사 합격까지의 공정 일체에 대한 견적입니다', '2. 한국전력에 납부하는 비용은 사업주님 부담입니다', ' - 한전연계비용 (표준시설부담금 or 설계조정부담금, 기술검토비용(고압), COS투입비용)', '3. 발전소 구축 및 운영에 필요한 부가금액은 사업주님 부담입니다', ' - 모니터링 설치시 인버터까지 인터넷 구축', ' - 무선모니터링 통신비 연 99,000원(VAT 포함, 최초 5년 무상) 사용료 발생', '', '4. 추가공사 비용은 사업주님 부담입니다', ' - 전기실(배전반)에서 전기실(수용가) 까지의 구축비용', ' - 지중선로 공사 필요시', ' - 기존건축물의 구조안전 진단후 구조보강 필요시', ' - 건설재해예방기술지도비용(300kW 이상시)', '', '5. 참고사항', ' - 불법건축물(미양성화)은 개발행위시 양성화 및 철거가 되어 있어야 함', ' - T볼트,U볼트,더블너트,N브라켓,3중방수,순간풍속60M/S(평균풍속40M/S),고체에어로졸,모아(알림)포함', ' - 정부정책에 의한 탄소배출량 조정으로 모듈의 탄소인증등급이 변경될 수 있음'],
+  },
+  company: { name: '주식회사 그랜드썬기술단', bizNo: '409-86-10941', addr: '부산 강서구 체육공원로 6번길 109', tel: 'TEL : 1800-8513 / FAX : 051-941-7785', type: '업태 : 제조업 도소매 / 업종 : 태양광발전' },
+};
+const PROFIT = { // 제안서 PPT 42·47~49·52쪽
+  effYear1: 0.99, effDrop: 0.004, costInflation: 1.02, years: 30,
+  smp: 86.350, rec: { '1등급': 77.336, '2등급': 68.336, '무등급': 40.756 }, recWeight: 1.5, // 장기계약 단가(원/kWh) = SMP + REC × 적용가중치 1.5 → 1등급 202.354 · 2등급 188.854 · 무등급 147.484 (PPT 49쪽)
+  egi: [[100, 400000], [200, 700000], [300, 940000], [400, 1240000], [500, 1550000], [600, 2640000], [700, 2760000], [1000, 3120000], [2000, 4090000], [3000, 6230000]], // EGI 연간 보험료(≤kW)
+  safetyMonthly: [[50, 66430], [100, 75950], [200, 86590], [300, 99050], [400, 151270], [500, 181440], [600, 295330], [700, 380030], [800, 459410], [900, 569940], [1000, 661640], [1250, 865480], [1500, 1041320], [2000, 1422680], [2499, 1894130]], // 전기안전관리 월 대행수수료 2026(≤kW; 500kW 이하 저압, 초과 고압)
+  selfClimate: 9.0, selfFuel: 5, co2PerMWh: 0.45941,
+};
+// 용량보다 큰 첫 구간(엑셀 MIN(IF(col>kW)) / AGGREGATE(15,6,col/(col>kW),1)); 없으면 마지막 구간
+function bandOver(tbl, kW){ const r = tbl.find(x => x[0] > kW); return r || tbl[tbl.length - 1]; }
+// 용량 이하 첫 구간(≤kW 표: 보험료·안전관리비)
+function bandUpTo(tbl, kW){ const r = tbl.find(x => kW <= x[0]); return r || tbl[tbl.length - 1]; }
+const roundUpTo = (v, p) => Math.ceil(v / p) * p, roundDownTo = (v, p) => Math.floor(v / p) * p;
+const wonFmt = v => (Math.round(v) || 0).toLocaleString('ko-KR');
+// 엑셀 NUMBERSTRING(값,1): 이억구천삼백만
+function numToHangul(n){
+  n = Math.round(Math.abs(n)); if(!n) return '영';
+  const d = '일이삼사오육칠팔구', small = ['', '십', '백', '천'], big = ['', '만', '억', '조', '경'];
+  let out = '', bi = 0;
+  while(n > 0){
+    let part = n % 10000, s = '';
+    for(let i = 0; i < 4 && part > 0; i++){ const v = part % 10; if(v) s = (v === 1 && i > 0 && i < 3 ? '' : d[v - 1]) + small[i] + s; part = Math.floor(part / 10); }
+    if(s) out = s + big[bi] + out;
+    n = Math.floor(n / 10000); bi++;
+  }
+  return out;
+}
+// 배치 유형 → 시공 방식 추정
+function guessMethod(){
+  const eds = layoutRegistry; if(!eds.length) return null;
+  const score = {};
+  eds.forEach(ed => {
+    const k = ed.mountType || ed.kind || '';
+    let m = '경사지붕';
+    if(/insam/.test(k)) m = '경사인삼밭플랫'; else if(k === 'zero') m = '지붕보강_제로솔루션'; else if(k === 'slab') m = '평슬라브'; else if(k === 'parking') m = '주차장'; else if(ed.type === 'ground') m = '스파이럴';
+    score[m] = (score[m] || 0) + ed.modules.filter(x => !x.removed).length;
+  });
+  return Object.keys(score).sort((a, b) => score[b] - score[a])[0];
+}
+let __qMethodAuto = true;
+function quoteInputs(){
+  const g = id => document.getElementById(id), v = id => (g(id) || {}).value, num = (id, d) => { const x = parseFloat(v(id)); return isFinite(x) ? x : d; };
+  const autoCount = layoutRegistry.reduce((a, ed) => a + ed.modules.filter(m => !m.removed).length, 0);
+  const count = Math.max(0, Math.round(num('qCount', NaN))) || autoCount;
+  const mod = QUOTE.modules[v('qModule')] || QUOTE.modules.h1;
+  const kW = count * mod.wp / 1000;
+  return {
+    count, autoCount, mod, kW, biz: v('qBiz') || '건물 발전사업', priceSet: v('qPriceSet') || '기본', method: v('qMethod') || '경사지붕', warranty: parseInt(v('qInvWarranty')) || 10,
+    selfGrid: v('qSelfGrid') || '단순병렬 MCCB', roofArea: num('qRoofArea', 0), railN: num('qRailN', 0), ladder: num('qLadder', 0), skylight: num('qSkylight', 0),
+    fence: num('qFence', NaN), etc: num('qEtc', 0), permit: num('qPermit', 1000000), rsd: !!(g('qRsd') || {}).checked, remote: !!(g('qRemote') || {}).checked,
+    kpx: !!(g('qKpx') || {}).checked, kpxAmt: num('qKpxAmt', 4000000), discount: num('qDiscount', 0),
+    client: v('qClient') || '', clientTel: v('qClientTel') || '', caseNo: v('qCaseNo') || '', staff: v('qStaff') || '', email: v('qEmail') || '',
+    hours: num('pHours', 3.6), contract: v('pContract') || 'long', recW: num('pRecW', PROFIT.recWeight), price: num('pPrice', NaN), gridRate: num('pGrid', 120000), insurance: num('pInsurance', NaN), safety: num('pSafety', NaN), selfEnergy: num('pSelfEnergy', 142.3),
+    incRps: (g('pIncRps') || { checked: true }).checked, incSelf: (g('pIncSelf') || { checked: true }).checked,
+  };
+}
+// 인버터 선정(엑셀 O59~O61 식): 500kW 초과 → 125kW × ceil(kW/125); kW ≤ 125 → kW 이상 최소 용량 1대; 그 외 125kW × 몫 + 나머지 이상 최소 용량 1대(나머지가 125 초과면 125kW 1대 추가)
+function pickInverters(kW, warranty){
+  const tbl = QUOTE.inverters[warranty] || QUOTE.inverters[10]; const sizes = [33, 55, 125]; const out = [];
+  if(kW <= 0) return out;
+  const add = (size, n) => { const f = out.find(o => o.size === size); if(f) f.n += n; else out.push({ size, n, price: tbl[size] }); };
+  if(kW > 125 * 1 && kW > 500){ add(125, Math.ceil(kW / 125)); return out; }
+  if(kW <= 125){ add(sizes.find(s => s >= kW), 1); return out; }
+  const q = Math.floor(kW / 125), rem = kW - q * 125;
+  if(rem < 1e-9){ add(125, q); return out; }
+  const s = sizes.find(x => x >= rem); if(s === 125) add(125, q + 1); else { add(125, q); add(s, 1); }
+  return out;
+}
+function computeQuote(inp){
+  const q = inp || quoteInputs(); const { kW, count, mod, method } = q;
+  const items = []; const push = (name, spec, qty, unit, amount, note) => items.push({ name, spec: spec || '', qty: qty || '', unit: unit || '', amount: Math.round(amount || 0), note: note || '' });
+  const wpTotal = count * mod.wp;
+  push('Module\n(한국에너지공단\n인증제품)', `${mod.maker} ( ${mod.wp}W ) 양면${mod.grade === '1등급' ? '\n630 kg·CO2/kW 이하' : ''}`, `${wpTotal.toLocaleString('ko-KR')} wp\n${count.toLocaleString('ko-KR')} 장`, mod.price.toLocaleString('ko-KR'), wpTotal * mod.price, '12년\n보증');
+  const invs = pickInverters(kW, q.warranty); const invAmt = invs.reduce((a, o) => a + o.n * o.price, 0);
+  push('Inverter\n(한국기술시험원\n인증제품)', '이노일렉트릭 분산형 (접속반 포함)\n스트링 옥외형', invs.map(o => `${o.size} kW`).join('/') + '\n' + invs.map(o => `${o.n}`).join('/') + ' 대', invs.map(o => o.price.toLocaleString('ko-KR')).join('\n/'), invAmt, `${q.warranty}년\n보증`);
+  const lowPanel = bandOver(QUOTE.lowPanel, kW)[1]; push('저압반류', '', '', lowPanel.toLocaleString('ko-KR'), lowPanel);
+  const extra = QUOTE.methodExtra[method] || 0, zero = method === '지붕보강_제로솔루션';
+  const k92 = zero ? -45000 : 35000 + extra / 2, k93 = zero ? 25000 : 35000 + extra / 2, k94 = method === '주차장' ? 105000 : 45000;
+  const nm = QUOTE.methodNames[method] || QUOTE.methodNames['경사지붕'];
+  const struct = roundUpTo(kW * (180000 + k92), 100000); push(nm[0], '', '', struct.toLocaleString('ko-KR'), struct);
+  const install = roundUpTo(kW * (85000 + k93), 100000); push(nm[1], '', '', install.toLocaleString('ko-KR'), install);
+  const kpx = q.kpx ? q.kpxAmt : 0; const elec = roundUpTo(kW * (140000 + k94) + kpx, 100000); push('전기자재 및 선로공사' + (kpx ? ' (KPX 계량기 포함)' : ''), '', '', elec.toLocaleString('ko-KR'), elec);
+  const devel = bandOver(QUOTE.devel, kW)[1]; push('개발행위, 설계(구조물,어레이,전기), 감리, 구조안전진단, 사용전검사, 대관업무, REC 입찰 등', '', '', devel.toLocaleString('ko-KR'), devel);
+  const monitor = bandOver(QUOTE.monitor, kW)[1]; push('모니터링', '', '', monitor.toLocaleString('ko-KR'), monitor);
+  const rail = q.railN > 0 ? roundUpTo(q.railN * (6500 + 8000) + 680000, 100000) : 0;
+  const fence = isFinite(q.fence) ? q.fence : (kW < 60 ? 500000 : (kW < 230 ? 1000000 : 0));
+  const logiBase = bandOver(QUOTE.logistics, kW)[1]; const logi = logiBase + rail + q.ladder + q.skylight + fence + q.etc;
+  push('물류대 ,장비대 등', '', '', logi.toLocaleString('ko-KR'), logi);
+  if(q.biz === '자가소비'){
+    const sg = QUOTE.selfGrid[q.selfGrid] || QUOTE.selfGrid['단순병렬 MCCB'];
+    push(sg[0], '', '', sg[1].toLocaleString('ko-KR'), sg[1]); push(sg[2], '', '', sg[3].toLocaleString('ko-KR'), sg[3]);
+  } else if(q.permit > 0){ push('인허가', '', '', q.permit.toLocaleString('ko-KR'), q.permit); }
+  const er = bandOver(QUOTE.elecRoom, kW)[1]; if(er > 0) push('전기실(I) (PAD, 휀스, 캐노피, 구조물 등)', '', '', er.toLocaleString('ko-KR'), er);
+  if(QUOTE.roofReinforce[method] && q.roofArea > 0){ const a = roundUpTo(q.roofArea * QUOTE.roofReinforce[method], 100000); push(method.replace('지붕보강_', '') + ' 지붕', `${q.roofArea.toLocaleString('ko-KR')}㎡ × ${QUOTE.roofReinforce[method].toLocaleString('ko-KR')}`, '', '', a); }
+  if(q.remote) push('원격감시제어장치', '', '', '11,000,000', 11000000);
+  if(q.rsd){ const a = roundUpTo(kW * 40000, 100000); push('Rapid Shutdown (RSD)', '', '', a.toLocaleString('ko-KR'), a); }
+  const direct = items.reduce((a, it) => a + it.amount, 0); // 산출내역 합계 = 견적서 "재료비" 줄
+  const labor = direct * 0.20, expense = direct * 0.17, indLabor = labor * 0.03;
+  const ins = (labor + indLabor) * (0.0356 + 0.0101) + labor * (0.03595 + 0.0475);
+  const exempt = items[0].amount + invAmt + lowPanel; // 모듈·인버터·수배전반 제외
+  const safetyBase = direct * 0.63 + labor - exempt;
+  const safety = direct < 500000000 ? safetyBase * 0.0207 : safetyBase * 0.0159 + 2450000;
+  const admin = (direct + indLabor) * 0.015;
+  const profitRate = kW < 30 ? 0.07 : 0.05; const profit = (labor + expense + indLabor + ins) * profitRate;
+  const total = direct + indLabor + ins + safety + admin + profit;
+  const customer = Math.max(0, roundDownTo(total, 1000000) - q.discount);
+  // 내부 참고(견적서 미표시): 입금가 × kW + 내부 추가금액, 네고 여유 = 고객가 − 내부
+  const band = bandOver(QUOTE.bands, kW); let depositMan = band[1] + (mod.price - QUOTE.modBase) / 10; if(q.priceSet === '제로솔루션') depositMan -= band[2];
+  const internalAdd = kpx + (q.rsd ? roundUpTo(kW * 40000, 100000) : 0) + (q.remote ? 11000000 : 0) + rail + q.ladder + q.skylight + fence + (q.priceSet === '건물지원사업' ? 1500000 : 0) + (QUOTE.roofReinforce[method] && q.roofArea > 0 ? roundUpTo(q.roofArea * QUOTE.roofReinforce[method], 100000) : 0) + (method === '주차장' ? kW * bandOver(QUOTE.parking, kW)[1] : 0) + (q.biz === '자가소비' ? (QUOTE.selfGrid[q.selfGrid] || [0, 0, 0, 0])[1] + (QUOTE.selfGrid[q.selfGrid] || [0, 0, 0, 0])[3] : 0);
+  const internal = kW * depositMan * 10000 + internalAdd;
+  return { q, items, invs, direct, labor, expense, indLabor, ins, safety, admin, profit, profitRate, total, customer, depositMan, internal, internalAdd, nego: roundDownTo(customer - internal, 1000000), safetyLabel: direct < 500000000 ? '(재+직노) x 2.07' : '[(재+직노)] x 1.59 + 2,450,000' };
+}
+// 수익성: 발전사업(RPS) 30년, 자가소비 월별
+function computeProfit(Q){
+  const q = Q.q; const kW = q.kW; const grade = q.mod.grade;
+  const longPrice = PROFIT.smp + (PROFIT.rec[grade] || 0) * q.recW;
+  const price = isFinite(q.price) ? q.price : longPrice;
+  const insurance = isFinite(q.insurance) ? q.insurance : bandUpTo(PROFIT.egi, kW)[1];
+  const safetyY = isFinite(q.safety) ? q.safety : bandUpTo(PROFIT.safetyMonthly, kW)[1] * 12;
+  const gridFee = kW * q.gridRate; const invest = Q.customer + gridFee;
+  const hoursList = [q.hours, +(q.hours + 0.2).toFixed(1), +(q.hours + 0.4).toFixed(1)].map(h => +h.toFixed(1));
+  const rows = []; let cum = -invest, payback = null; const sums = { rev: hoursList.map(() => 0), cost: 0, net: 0 }; let sum20 = 0;
+  for(let y = 1; y <= PROFIT.years; y++){
+    const eff = PROFIT.effYear1 - PROFIT.effDrop * (y - 1);
+    const revs = hoursList.map(h => kW * h * 365 * eff * price);
+    const cost = (insurance + safetyY) * Math.pow(PROFIT.costInflation, y - 1);
+    const net = revs[0] - cost; const prev = cum; cum += net;
+    if(payback === null && cum >= 0) payback = (y - 1) + (net > 0 ? (-prev) / net : 0);
+    revs.forEach((r, i) => sums.rev[i] += r); sums.cost += cost; sums.net += net; if(y <= 20) sum20 += net;
+    rows.push({ y, eff, revs, cost, net, cum });
+  }
+  // 자가소비(PPT 42쪽): 단가 = 기후환경 9.0 + 전력량요금 + 연료비조정 5 · 월 생산량 = kW × 발전시간 × 월 일수
+  const unit = PROFIT.selfClimate + q.selfEnergy + PROFIT.selfFuel; const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const months = days.map((d, i) => { const gen = kW * q.hours * d; return { m: i + 1, gen, income: gen * unit }; });
+  const yearIncome = months.reduce((a, m) => a + m.income, 0), yearGen = months.reduce((a, m) => a + m.gen, 0);
+  return { price, insurance, safetyY, gridFee, invest, hoursList, rows, sums, sum20, payback, self: { unit, months, yearIncome, yearGen, co2: yearGen / 1000 * PROFIT.co2PerMWh, payback: yearIncome > 0 ? invest / yearIncome : null } };
+}
+function renderQuotePanel(){
+  const box = document.getElementById('quoteSummary'); if(!box) return;
+  const mSel = document.getElementById('qMethod');
+  if(mSel && __qMethodAuto){ const gm = guessMethod(); if(gm && mSel.value !== gm && document.activeElement !== mSel) mSel.value = gm; }
+  const cnt = document.getElementById('qCount'); if(cnt) cnt.placeholder = `자동 ${layoutRegistry.reduce((a, ed) => a + ed.modules.filter(m => !m.removed).length, 0)}장`;
+  const Q = computeQuote(); const q = Q.q;
+  const sgw = document.getElementById('qSelfGridWrap'); if(sgw) sgw.style.display = q.biz === '자가소비' ? '' : 'none';
+  const pp = document.getElementById('pPrice'); if(pp) pp.placeholder = (PROFIT.smp + (PROFIT.rec[q.mod.grade] || 0) * q.recW).toFixed(3);
+  if(!q.kW){ box.innerHTML = '<span class="hint">배치도 탭에서 배치를 만들거나 모듈 장수를 입력하면 견적·수익성이 계산됩니다.</span>'; return; }
+  const P = computeProfit(Q);
+  const fmtKw = v => v.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  box.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:6px 18px;">
+      <div><b>설치용량</b> ${fmtKw(q.kW)} kW <span class="hint">(${q.mod.grade} ${q.mod.maker} ${q.mod.wp}W × ${q.count.toLocaleString('ko-KR')}장${q.count !== q.autoCount ? ' · 입력값' : ''})</span></div>
+      <div><b>인버터</b> ${Q.invs.map(o => `${o.size}kW×${o.n}`).join(' + ')} (${q.warranty}년)</div>
+      <div><b>시공</b> ${q.method}${__qMethodAuto ? ' <span class="hint">(배치 유형에서 추정)</span>' : ''}</div>
+    </div>
+    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 18px;">
+      <div>산출내역 합계(재료비 줄) <b>${wonFmt(Q.direct)}</b>원</div>
+      <div>간접비 합계 <b>${wonFmt(Q.total - Q.direct)}</b>원 <span class="hint">(간접노무 ${wonFmt(Q.indLabor)} · 4대보험 ${wonFmt(Q.ins)} · 산업안전 ${wonFmt(Q.safety)} · 일반관리 ${wonFmt(Q.admin)} · 이윤 ${Math.round(Q.profitRate * 100)}% ${wonFmt(Q.profit)})</span></div>
+    </div>
+    <div style="margin-top:6px;font-size:14px;"><b>견적 금액(VAT 별도)</b> <b style="color:#B3261E;font-size:17px;">${wonFmt(Q.customer)}원</b> <span class="hint">= 백만 단위 내림${q.discount ? ` − 할인 ${wonFmt(q.discount)}` : ''} · ${wonFmt(Q.customer / q.kW)}원/kW</span></div>
+    <div style="margin-top:4px;color:#555;">내부 참고(견적서 미표시): 입금가 ${Q.depositMan.toFixed(1)}만원/kW(${q.priceSet}) × ${fmtKw(q.kW)}kW + 내부 추가 ${wonFmt(Q.internalAdd)} = <b>${wonFmt(Q.internal)}</b>원 → 네고 여유 <b style="color:${Q.nego < 0 ? '#B3261E' : '#0E5A3A'};">${wonFmt(Q.nego)}</b>원</div>
+    <div style="margin-top:8px;border-top:1px dashed #C9D2DB;padding-top:6px;display:flex;flex-wrap:wrap;gap:6px 18px;">
+      <div><b>발전사업</b> 단가 ${P.price.toFixed(3)}원/kWh · 1년차 매출 <b>${wonFmt(P.rows[0].revs[0])}</b>원 · 연 비용 ${wonFmt(P.rows[0].cost)}원(보험 ${wonFmt(P.insurance)} + 안전관리 ${wonFmt(P.safetyY)}) · 총 투자 ${wonFmt(P.invest)}원(견적 + 한전연계비 ${wonFmt(P.gridFee)}) · 회수 <b>${P.payback === null ? '30년 내 회수 안 됨' : P.payback.toFixed(1) + '년'}</b> · 20년 순수익 ${wonFmt(P.sum20)}원</div>
+      <div><b>자가소비</b> 단가 ${P.self.unit.toFixed(1)}원/kWh · 연 생산 ${wonFmt(P.self.yearGen)}kWh · 연 절감 <b>${wonFmt(P.self.yearIncome)}</b>원 · 회수 ${P.self.payback === null ? '-' : P.self.payback.toFixed(1) + '년'} · CO₂ ${P.self.co2.toFixed(2)}t/년</div>
+    </div>`;
+}
+document.addEventListener('DOMContentLoaded', () => { const m = document.getElementById('qMethod'); if(m) m.addEventListener('change', () => { __qMethodAuto = false; }); const c = document.getElementById('qCount'); if(c) c.addEventListener('input', renderQuotePanel); renderQuotePanel(); });
+
+// ---- 견적서 PDF(A4 세로 1754×2480): 표지 · 견적 목록 · 산출내역서 ----
+function quotePages(){
+  const Q = computeQuote(); const q = Q.q; const W = 1754, H = 2480;
+  const today = new Date(); const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const yymmdd = ymd.slice(2).replace(/-/g, '');
+  const g0 = id => ((document.getElementById(id) || {}).value || '').trim();
+  const site = g0('sheetProject') || lastJibunAddress || g0('siteAddress') || '';
+  const kwTxt = q.kW.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  const F = (sz, w) => `${w || ''} ${sz}px "Noto Sans KR", "Malgun Gothic", "IBM Plex Sans KR", sans-serif`;
+  const newPage = () => { const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.textBaseline = 'middle'; return [cv, g]; };
+  const lines = (g, text, x, y, lh, align) => { lh = lh || 24; g.textAlign = align || 'center'; String(text).split('\n').forEach((t, i, arr) => g.fillText(t, x, y + (i - (arr.length - 1) / 2) * lh)); };
+  const pages = [];
+  // 1) 표지
+  { const [cv, g] = newPage();
+    g.fillStyle = '#111'; g.textAlign = 'center';
+    g.font = F(96, 'bold'); const title = `${q.mod.grade.split('').join(' ')} 견 적 서`; g.fillText(title, W / 2, 660); const tw = g.measureText(title).width; g.fillRect(W / 2 - tw / 2, 715, tw, 6);
+    g.font = F(34); g.fillText(`(태양광발전소_${q.biz === '자가소비' ? '자가소비' : (q.priceSet === '건물지원사업' ? '건물지원사업' : '발전사업')})`, W / 2, 790);
+    g.font = F(38); g.fillText(`${today.getFullYear()}. ${String(today.getMonth() + 1).padStart(2, '0')}. ${String(today.getDate()).padStart(2, '0')}`, W / 2, 1500);
+    g.font = F(30, 'bold'); g.fillText('한국에너지공단 선정기업', W / 2, 1880);
+    g.font = `italic bold 96px "Arial Black", "Noto Sans KR", sans-serif`; g.textAlign = 'left'; { const wS = g.measureText('SUN').width, wG = g.measureText('GRAND').width, x0 = W / 2 - (wS + wG) / 2; g.fillStyle = '#1E2F6B'; g.fillText('GRAND', x0, 2010); g.fillStyle = '#C8102E'; g.fillText('SUN', x0 + wG, 2010); }
+    pages.push(cv); }
+  // 2) 견적 목록
+  { const [cv, g] = newPage(); const L = 150, R = W - 150;
+    g.fillStyle = '#111'; g.textAlign = 'center'; g.font = F(52, 'bold'); g.fillText('견 적 목 록', W / 2, 190);
+    g.textAlign = 'left'; g.font = F(24);
+    const left = [`· 견 적 번 호 : GS-PV-${yymmdd}${q.caseNo ? ', ' + q.caseNo : ''}`, `· 고   객   명 : ${q.client}`, `· 연   락   처 : ${q.clientTel}`, `· 설 치 주 소 : ${site}`, `· 작 성 일 자 : ${ymd}`, `· 견 적 명 : 태양광발전설비(${kwTxt}kW) 설치공사`, '· 유 효 기 간 : 견적 후'];
+    const right = [`· 상호명 : ${QUOTE.company.name}`, `· 사업자등록번호 : ${QUOTE.company.bizNo}`, `· 주소 : ${QUOTE.company.addr}`, `· ${QUOTE.company.tel}`, `· ${QUOTE.company.type}`, `· 담당자 : ${q.staff}`, `· 이메일 : ${q.email}`];
+    left.forEach((t, i) => g.fillText(t, L, 300 + i * 44)); right.forEach((t, i) => g.fillText(t, 920, 300 + i * 44));
+    // 직인 자리
+    g.strokeStyle = '#C8102E'; g.lineWidth = 3; g.beginPath(); g.arc(R - 70, 330, 62, 0, Math.PI * 2); g.stroke(); g.fillStyle = '#C8102E'; g.font = F(20); g.textAlign = 'center'; lines(g, '그랜드썬\n기술단\n(인)', R - 70, 330, 24);
+    // 합계 금액
+    const yT = 680; g.fillStyle = '#111'; g.textAlign = 'left'; g.font = F(34, 'bold'); g.fillText('합 계 금 액   :', L + 40, yT);
+    g.font = F(28); g.fillText(`일금${numToHangul(Q.customer)}원 (程)`, L + 330, yT);
+    g.textAlign = 'right'; g.font = F(44, 'bold'); g.fillText(`₩${wonFmt(Q.customer)}`, R - 200, yT); g.font = F(24); g.textAlign = 'left'; g.fillText('(VAT별도)', R - 180, yT);
+    // 표
+    const cols = [L, L + 90, L + 440, L + 790, L + 900, L + 1000, L + 1230, R]; const heads = ['품번\nNo', '항    목\nDescription', '규    격\nStandard', "수   량\nQ'ty", '단    위\nUnit', '단    가\nUnit Price', '금    액\nAmount'];
+    let y = 760; const hh = 76;
+    g.fillStyle = '#E6E6E6'; g.fillRect(L, y, R - L, hh); g.strokeStyle = '#111'; g.lineWidth = 2; g.strokeRect(L, y, R - L, hh);
+    g.fillStyle = '#111'; g.font = F(22, 'bold'); heads.forEach((h, i) => lines(g, h, (cols[i] + cols[i + 1]) / 2, y + hh / 2, 26));
+    y += hh;
+    const rows = [
+      ['1', '재   료   비', '', '1', '식', wonFmt(Q.direct * 0.63), wonFmt(Q.direct)],
+      ['2', '직접노무비', '', '1', '식', wonFmt(Q.labor), ''],
+      ['3', '경         비', '', '1', '식', wonFmt(Q.expense), ''],
+      ['4', '간접노무비', '(2) X 3.0%', '1', '식', wonFmt(Q.indLabor), wonFmt(Q.indLabor)],
+      ['5', '4 대 보 험', '산재(노X3.56%)\n고용(노X1.01%)\n건강(직노×3.595%)\n연금(직노×4.75%)', '1', '식', wonFmt(Q.ins), wonFmt(Q.ins)],
+      ['6', '산업안전보건관리비', Q.safetyLabel, '1', '식', wonFmt(Q.safety), wonFmt(Q.safety)],
+      ['7', '일반관리비', '(1+2+3+4) X 1.5%', '1', '식', wonFmt(Q.admin), wonFmt(Q.admin)],
+      ['8', '이         윤', `(2+3+4+5)*${(Q.profitRate * 100).toFixed(1)}%`, '1', '식', '', wonFmt(Q.profit)],
+      ['9', '계', '', '', '', '', wonFmt(Q.total)],
+      q.discount ? ['10', '할인(네고)', '', '', '', '', '-' + wonFmt(roundDownTo(Q.total, 1000000) - Q.customer)] : ['10', '', '', '', '', '', ''],
+      ['11', '이 하 여 백', '', '', '', '', ''],
+    ];
+    g.font = F(22); g.lineWidth = 1.5;
+    rows.forEach(r => { const rh = r[2].includes('\n') ? 110 : 64; g.strokeRect(L, y, R - L, rh); cols.slice(1, -1).forEach(x => { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + rh); g.stroke(); });
+      r.forEach((c, i) => { if(i >= 5){ g.textAlign = 'right'; lines(g, c, cols[i + 1] - 14, y + rh / 2, 24, 'right'); } else lines(g, c, (cols[i] + cols[i + 1]) / 2, y + rh / 2, 24); }); y += rh; });
+    g.fillStyle = '#E6E6E6'; g.fillRect(L, y, R - L, 64); g.lineWidth = 3; g.strokeRect(L, y, R - L, 64); g.fillStyle = '#111'; g.font = F(26, 'bold'); lines(g, '합              계', (L + cols[6]) / 2, y + 32); g.textAlign = 'right'; g.fillText(wonFmt(Q.customer), R - 14, y + 32); y += 64;
+    // 참고사항
+    y += 40; g.textAlign = 'left'; g.font = F(24, 'bold'); g.fillText('  · 참고사항', L, y); y += 40; g.font = F(20);
+    (QUOTE.notes[q.biz] || QUOTE.notes['건물 발전사업']).forEach(t => { if(t) g.fillText(t, L + 10, y); y += 32; });
+    pages.push(cv); }
+  // 3) 산출내역서
+  { const [cv, g] = newPage(); const L = 150, R = W - 150;
+    g.fillStyle = '#111'; g.textAlign = 'center'; g.font = F(52, 'bold'); g.fillText('산출내역서', W / 2, 500);
+    g.font = F(20); g.textAlign = 'right'; g.fillText('(단위 : 원)', R, 590);
+    const cols = [L, L + 70, L + 300, L + 370, L + 760, L + 960, L + 1210, R]; const heads = ['품번\nNo', '항목\nDescription', '내용', '', '용량(wp)\n및 수량', '단    가\nUnit Price', '금  액\nAmount'];
+    let y = 610; const hh = 70;
+    g.fillStyle = '#E6E6E6'; g.fillRect(L, y, R - L, hh); g.strokeStyle = '#111'; g.lineWidth = 2; g.strokeRect(L, y, R - L, hh);
+    g.fillStyle = '#111'; g.font = F(22, 'bold'); heads.forEach((h, i) => { if(i === 2) lines(g, h, (cols[2] + cols[4]) / 2, y + hh / 2, 26); else if(i !== 3) lines(g, h, (cols[i] + cols[i + 1]) / 2, y + hh / 2, 26); });
+    y += hh; g.lineWidth = 1.5;
+    Q.items.forEach((it, k) => {
+      const tall = k < 2; const rh = tall ? 150 : 74;
+      g.strokeRect(L, y, R - L, rh); [cols[1], cols[4], cols[5], cols[6]].forEach(x => { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + rh); g.stroke(); });
+      g.font = F(22); g.fillStyle = '#111'; lines(g, String(k + 1), (cols[0] + cols[1]) / 2, y + rh / 2, 24);
+      if(tall){ g.beginPath(); g.moveTo(cols[2], y); g.lineTo(cols[2], y + rh); g.moveTo(cols[3], y); g.lineTo(cols[3], y + rh); g.stroke();
+        g.font = F(21); lines(g, it.name, (cols[1] + cols[2]) / 2, y + rh / 2, 24); lines(g, it.note, (cols[2] + cols[3]) / 2, y + rh / 2, 24); lines(g, it.spec, (cols[3] + cols[4]) / 2, y + rh / 2, 30); lines(g, it.qty, (cols[4] + cols[5]) / 2, y + rh / 2, 30); lines(g, it.unit, cols[6] - 14, y + rh / 2, 26, 'right'); }
+      else { g.font = F(21); g.textAlign = 'left'; wrapText2(g, it.name + (it.spec ? ` — ${it.spec}` : ''), cols[1] + 14, y + rh / 2, cols[4] - cols[1] - 28, 26); g.textAlign = 'right'; g.fillText(it.unit, cols[6] - 14, y + rh / 2); }
+      g.font = F(22); g.textAlign = 'right'; g.fillText(wonFmt(it.amount), R - 14, y + rh / 2); y += rh; });
+    for(let i = Q.items.length; i < 18; i++){ g.strokeRect(L, y, R - L, 54); [cols[1], cols[4], cols[5], cols[6]].forEach(x => { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 54); g.stroke(); }); y += 54; if(y > H - 260) break; }
+    g.fillStyle = '#E6E6E6'; g.fillRect(L, y, R - L, 60); g.lineWidth = 3; g.strokeRect(L, y, R - L, 60); g.fillStyle = '#111'; g.font = F(26, 'bold'); lines(g, '합              계', (L + cols[6]) / 2, y + 30); g.textAlign = 'right'; g.fillText(wonFmt(Q.direct), R - 14, y + 30);
+    pages.push(cv); }
+  return { pages, Q };
+}
+// 가운데(세로) 기준 여러 줄 줄바꿈
+function wrapText2(g, text, x, yMid, maxW, lh){
+  const out = []; let line = '';
+  for(const ch of String(text)){ const t = line + ch; if(g.measureText(t).width > maxW && line){ out.push(line); line = ch; } else line = t; }
+  if(line) out.push(line);
+  out.forEach((t, i) => g.fillText(t, x, yMid + (i - (out.length - 1) / 2) * lh));
+}
+function downloadBlob(blob, name){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+function exportQuotePdf(){
+  const st = document.getElementById('sheetStatus');
+  const { pages, Q } = quotePages();
+  if(!Q.q.kW){ if(st) st.textContent = '❌ 배치를 만들거나 모듈 장수를 입력하세요.'; return; }
+  const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + `_견적서_${Q.q.mod.grade}`;
+  try{ downloadBlob(canvasesToPdfA4(pages), base + '.pdf'); if(st) st.textContent = `✅ ${base}.pdf 저장 — ${Q.q.mod.grade} ${Q.q.kW.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}kW · 견적 ${wonFmt(Q.customer)}원(VAT 별도) · 표지·견적 목록·산출내역서 3쪽`; }
+  catch(e){ if(st) st.textContent = '❌ 견적서 PDF 저장 실패: ' + e.message; }
+  window.__lastQuotePages = pages; return pages;
+}
+// ---- 수익성 페이지(A4 가로 2480×1754) ----
+function profitPages(){
+  const Q = computeQuote(); const q = Q.q; if(!q.kW) return { pages: [], Q };
+  const P = computeProfit(Q); const W = 2480, H = 1754; const pages = [];
+  const F = (sz, w) => `${w || ''} ${sz}px "Noto Sans KR", "Malgun Gothic", "IBM Plex Sans KR", sans-serif`;
+  const g0 = id => ((document.getElementById(id) || {}).value || '').trim(); const site = g0('sheetProject') || lastJibunAddress || g0('siteAddress') || '';
+  const fmtKw = v => v.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  const header = (g, small, big, sub) => { g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = '#888'; g.font = F(30); g.fillText(small, 90, 110); g.fillStyle = '#1E2F6B'; g.font = F(72, 'bold'); g.fillText(big, 90, 190); if(sub){ g.fillStyle = '#1E2F6B'; g.font = F(44, 'bold'); g.fillText(sub, 90, 250); } g.font = `italic bold 40px "Arial Black", sans-serif`; g.textAlign = 'left'; const wS = g.measureText('SUN').width, wG = g.measureText('GRAND').width; g.fillStyle = '#1E2F6B'; g.fillText('GRAND', W - 90 - wS - wG, 100); g.fillStyle = '#C8102E'; g.fillText('SUN', W - 90 - wS, 100); };
+  const kv = (g, x, y, w, k, v, hl) => { g.fillStyle = hl ? '#F6D9D9' : '#E9EEF5'; g.fillRect(x, y, w * 0.56, 56); g.fillStyle = '#fff'; g.fillRect(x + w * 0.56, y, w * 0.44, 56); g.strokeStyle = '#B8C2CF'; g.lineWidth = 2; g.strokeRect(x, y, w, 56); g.fillStyle = '#222'; g.font = F(22); g.textAlign = 'center'; g.textBaseline = 'middle'; wrapText2(g, k, x + w * 0.28, y + 28, w * 0.54, 24); g.textAlign = 'right'; g.font = F(24, 'bold'); g.fillStyle = hl ? '#B3261E' : '#222'; g.fillText(v, x + w - 14, y + 28); g.textBaseline = 'alphabetic'; };
+  if(q.incRps){ const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+    header(g, '사업개요', '예상 이익율', '발전사업');
+    // 왼쪽 조건
+    let y = 330; const x = 90, w = 560;
+    [['설비용량 (STC)(kW)', fmtKw(q.kW), true], ['발전시간 (시간)', String(q.hours), false], [`${q.mod.grade} 공사비 (VAT 별도)`, wonFmt(Q.customer) + ' 원', true], ['한전연계비 (vat 별도)', wonFmt(P.gridFee) + ' 원', false], ['총 투자비', wonFmt(P.invest) + ' 원', true], [`월 예상매출 (${q.hours}h)`, wonFmt(P.rows[0].revs[0] / 12) + ' 원', false], ['전기안전관리비 (년)', wonFmt(P.safetyY) + ' 원', false], ['보험료 (년)', wonFmt(P.insurance) + ' 원', false], ['계통 구분', (document.getElementById('pGrid') || { options: [], selectedIndex: 0 }).options[(document.getElementById('pGrid') || { selectedIndex: 0 }).selectedIndex]?.text.replace(/\(.*\)/, '') || '', false], ['판매단가 (원/kWh)', P.price.toFixed(3), false], [isFinite(q.price) ? '판매단가 (입력값)' : `장기계약 (${q.mod.grade}) · 가중치 ${q.recW}`, isFinite(q.price) ? `${P.price.toFixed(3)} 원/kWh` : `SMP ${PROFIT.smp} + REC ${PROFIT.rec[q.mod.grade]} × ${q.recW}`, false], ['투자비 회수기간', P.payback === null ? '30년 초과' : `${P.payback.toFixed(1)} 년`, true]]
+      .forEach(([k, v, hl]) => { kv(g, x, y, w, k, v, hl); y += 66; });
+    // 오른쪽 표
+    const tx = 720, tw = W - 720 - 90; const cols = [0, 90, 240, 520, 800, 1080, 1340, tw].map(c => tx + c);
+    const heads = ['년차', '시스템효율', `${q.mod.grade} 연간매출\n(${P.hoursList[0].toFixed(1)}h)`, `${q.mod.grade} 연간매출\n(${P.hoursList[1].toFixed(1)}h)`, `${q.mod.grade} 연간매출\n(${P.hoursList[2].toFixed(1)}h)`, '연간비용\n(물가상승 2%)', `누적수익 (${P.hoursList[0]}h)\n투자비 차감`];
+    let ty = 300; const rh = 38, hh = 70;
+    g.fillStyle = '#1E2F6B'; g.fillRect(tx, ty, tw, hh); g.fillStyle = '#fff'; g.font = F(20, 'bold'); g.textAlign = 'center'; g.textBaseline = 'middle'; heads.forEach((h, i) => { h.split('\n').forEach((t, j, arr) => g.fillText(t, (cols[i] + cols[i + 1]) / 2, ty + hh / 2 + (j - (arr.length - 1) / 2) * 24)); });
+    ty += hh; g.font = F(20);
+    P.rows.forEach((r, i) => { g.fillStyle = i % 2 ? '#F7F9FC' : '#fff'; g.fillRect(tx, ty, tw, rh); g.fillStyle = '#FBE3E3'; g.fillRect(cols[2], ty, cols[3] - cols[2], rh); g.fillStyle = '#E3ECFB'; g.fillRect(cols[3], ty, cols[5] - cols[3], rh);
+      g.fillStyle = '#222'; const cells = [String(r.y), (r.eff * 100).toFixed(2) + '%', wonFmt(r.revs[0]), wonFmt(r.revs[1]), wonFmt(r.revs[2]), wonFmt(r.cost), wonFmt(r.cum)];
+      cells.forEach((c, k) => { g.textAlign = k < 2 ? 'center' : 'right'; if(k === 6) g.fillStyle = r.cum < 0 ? '#B3261E' : '#0E5A3A'; else g.fillStyle = '#222'; g.fillText(c, k < 2 ? (cols[k] + cols[k + 1]) / 2 : cols[k + 1] - 12, ty + rh / 2); }); ty += rh; });
+    g.fillStyle = '#1E2F6B'; g.fillRect(tx, ty, tw, 44); g.fillStyle = '#fff'; g.font = F(22, 'bold'); g.textAlign = 'center'; g.fillText('합계(30년)', (cols[0] + cols[2]) / 2, ty + 22); g.textAlign = 'right'; [P.sums.rev[0], P.sums.rev[1], P.sums.rev[2], P.sums.cost].forEach((v, k) => g.fillText(wonFmt(v), cols[k + 3] - 12, ty + 22)); g.fillText(wonFmt(P.sums.net - P.invest), cols[7] - 12, ty + 22);
+    g.strokeStyle = '#B8C2CF'; g.lineWidth = 2; g.strokeRect(tx, 300, tw, ty + 44 - 300);
+    // 각주
+    g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = '#444'; g.font = F(19);
+    [`# 시스템효율 1년차 ${(PROFIT.effYear1 * 100).toFixed(0)}% · 매년 ${(PROFIT.effDrop * 100).toFixed(1)}%p 감소 · 연간비용(보험료+전기안전관리비) 매년 2% 상승 · 연간매출 = 용량 × 발전시간 × 365 × 효율 × 단가 (제안서 양식 47쪽 모델)`,
+     `# 한전연계비(저압 공중 12만/kW · 저압 지중 14만/kW · 고압 공중 2.4만/kW · 고압 지중 5만/kW, vat 별도)는 표준시설부담금 기준 자리값이며, 설계조정부담금·단말통신공사(20kW/50kW 이상)·리클로저·에코개폐기 등은 별도`,
+     `# 변전소·MTR·DL 여유용량(출력제어 조건)과 지중공사비(150kW 이상)는 별도 확인 · 정부정책에 따라 가중치 등은 변경될 수 있음`]
+      .forEach((t, i) => g.fillText(t, 90, H - 120 + i * 30));
+    g.textAlign = 'right'; g.fillStyle = '#888'; g.fillText(site, W - 90, H - 40); pages.push(cv); }
+  if(q.incSelf){ const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'); const S = P.self;
+    header(g, '사업개요', '예상수익금액 ( 자가소비 )', '');
+    // 우측 상단 요약
+    let y = 60; const x = W - 90 - 760; [['월 평균 수익', wonFmt(S.yearIncome / 12) + ' 원'], ['1 년 평균 수익', wonFmt(S.yearIncome) + ' 원'], ['20 년 평균 수익', wonFmt(S.yearIncome * 20) + ' 원'], ['연간 온실가스 배출 예상 감축량', S.co2.toFixed(2) + ' tCO2-eq/년'], ['투자비 회수기간 (공사비+한전연계비)', S.payback === null ? '-' : S.payback.toFixed(1) + ' 년']].forEach(([k, v]) => { g.fillStyle = '#1E2F6B'; g.fillRect(x, y, 420, 48); g.fillStyle = '#fff'; g.font = F(21); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(k, x + 210, y + 24); g.fillStyle = '#F4F6F8'; g.fillRect(x + 420, y, 340, 48); g.strokeStyle = '#B8C2CF'; g.strokeRect(x, y, 760, 48); g.fillStyle = '#222'; g.textAlign = 'right'; g.font = F(23, 'bold'); g.fillText(v, x + 745, y + 24); y += 50; });
+    // 표
+    const tx = 90, tw = W - 180; y = 360; g.fillStyle = '#1E2F6B'; g.fillRect(tx, y, tw, 64); g.fillStyle = '#fff'; g.font = F(30, 'bold'); g.textAlign = 'center'; g.fillText('태양광 자가소비 전기요금 수익효과', W / 2, y + 32); y += 64;
+    const cols = [0, 260, 480, 760, 1040, 1320, 1560, 1840, tw].map(c => tx + c);
+    const heads = ['구 분', '월', '① 기후환경\n요금 (원/kWh)', '② 전력량요금\n(원/kWh)', '③ 연료비조정\n요금 (원/kWh)', '①+②+③\n합계', '전력생산량\n(kWh)', '1 년 수익예상비용 (원)\n(기본요금 차감)'];
+    const hh = 80; g.fillStyle = '#3D4F7C'; g.fillRect(tx, y, tw, hh); g.fillStyle = '#fff'; g.font = F(22, 'bold'); heads.forEach((h, i) => h.split('\n').forEach((t, j, arr) => g.fillText(t, (cols[i] + cols[i + 1]) / 2, y + hh / 2 + (j - (arr.length - 1) / 2) * 26))); y += hh;
+    const rh = 60; g.font = F(23);
+    S.months.forEach((m, i) => { g.fillStyle = i % 2 ? '#F7F9FC' : '#fff'; g.fillRect(tx, y, tw, rh); g.fillStyle = '#222'; g.textAlign = 'center';
+      [`${m.m} 월`, PROFIT.selfClimate.toFixed(1), q.selfEnergy.toFixed(1), String(PROFIT.selfFuel), S.unit.toFixed(1), wonFmt(m.gen)].forEach((c, k) => g.fillText(c, (cols[k + 1] + cols[k + 2]) / 2, y + rh / 2));
+      g.textAlign = 'right'; g.font = F(23, 'bold'); g.fillText(wonFmt(m.income), cols[8] - 20, y + rh / 2); g.font = F(23); y += rh; });
+    g.fillStyle = '#E9EEF5'; g.fillRect(cols[0], 360 + 64 + hh, cols[1] - cols[0], rh * 12); g.fillStyle = '#222'; g.font = F(26, 'bold'); g.textAlign = 'center'; wrapText2(g, `설비용량 ${fmtKw(q.kW)}kW · 발전시간 ${q.hours}h`, (cols[0] + cols[1]) / 2, 360 + 64 + hh + rh * 6, cols[1] - cols[0] - 30, 34);
+    g.fillStyle = '#1E2F6B'; g.fillRect(tx, y, tw, 56); g.fillStyle = '#fff'; g.font = F(26, 'bold'); g.textAlign = 'center'; g.fillText('연간 합계', (cols[0] + cols[6]) / 2, y + 28); g.fillText(wonFmt(S.yearGen), (cols[6] + cols[7]) / 2, y + 28); g.textAlign = 'right'; g.fillText(wonFmt(S.yearIncome), cols[8] - 20, y + 28); y += 56;
+    g.strokeStyle = '#C8102E'; g.lineWidth = 5; g.strokeRect(cols[7], 360 + 64, cols[8] - cols[7], y - 360 - 64);
+    g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = '#444'; g.font = F(19);
+    [`# 단가 = 기후환경요금 ${PROFIT.selfClimate} + 전력량요금 ${q.selfEnergy}(계약종별 평균 — 경부하·중간부하·최대부하 평균 단가, 입력값) + 연료비조정요금 ${PROFIT.selfFuel} = ${S.unit.toFixed(1)}원/kWh · 월 생산량 = 용량 × 발전시간 × 월 일수 (제안서 양식 42쪽 모델)`,
+     `# 전력배출계수 ${PROFIT.co2PerMWh} tCO2-eq/MWh 적용 · 상계거래·자가용 PPA·시간대별 사용 패턴(한전파워플래너) 분석은 별도`]
+      .forEach((t, i) => g.fillText(t, 90, H - 90 + i * 30));
+    g.textAlign = 'right'; g.fillStyle = '#888'; g.fillText(site, W - 90, H - 30); pages.push(cv); }
+  return { pages, Q, P };
+}
+function exportProfitPdf(){
+  const st = document.getElementById('sheetStatus');
+  const { pages, Q } = profitPages();
+  if(!pages.length){ if(st) st.textContent = '❌ 배치를 만들거나 모듈 장수를 입력하고, 포함할 표를 하나 이상 체크하세요.'; return; }
+  const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_수익성분석';
+  try{ downloadBlob(canvasesToPdfA4(pages), base + '.pdf'); if(st) st.textContent = `✅ ${base}.pdf 저장 — ${pages.length}쪽 (${Q.q.mod.grade} · ${Q.q.kW.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}kW · 공사비 ${wonFmt(Q.customer)}원 기준)`; }
+  catch(e){ if(st) st.textContent = '❌ 수익성 PDF 저장 실패: ' + e.message; }
+  window.__lastProfitPages = pages; return pages;
+}
+
 function wrapText(g, text, x, y, maxW, lh){
   let line = '', yy = y;
   for(const ch of String(text)){ const t = line + ch; if(g.measureText(t).width > maxW && line){ g.fillText(line, x, yy); line = ch; yy += lh; } else line = t; }
@@ -3703,6 +4147,7 @@ function layoutAreaM2(ed){
   return ed.projectedAreaM2 || ed.areaM2 || ed.siteAreaM2 || 0;
 }
 function renderLayoutCards(){
+  try{ renderQuotePanel(); }catch(e){ console.warn('quote panel', e); }
   const wrap = document.getElementById('layCards'), sum = document.getElementById('laySum');
   if(!wrap || !sum) return;
   const fmt = (v, d) => v.toLocaleString('ko-KR', { maximumFractionDigits: d == null ? 2 : d });
