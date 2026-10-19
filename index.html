@@ -1357,6 +1357,7 @@ function landUseRegulationFlags(){
   const out = [];
   if(!lastLandInfo || !Array.isArray(lastLandInfo.uses)) return out;
   lastLandInfo.uses.forEach(u => {
+    if(!/포함/.test(u.rel || '')) return; // 표시·판정은 "포함"만 (저촉·접함 제외 — 사용자 요청 2026-10-20)
     const rule = LANDUSE_RULES.find(r => r.match.some(m => u.name.includes(m)));
     if(!rule) return;
     const rel = /포함/.test(u.rel) ? 'incl' : (/저촉/.test(u.rel) ? 'part' : 'touch');
@@ -1372,7 +1373,8 @@ function landUseRegulationFlags(){
 function renderLandInfoPanel(info, pnu){
   const wrap = document.getElementById('landInfoPanel');
   if(!wrap) return;
-  const rows = info.uses.map(u => {
+  const inclUses = info.uses.filter(u => /포함/.test(u.rel || ''));
+  const rows = inclUses.map(u => {
     const isBlock = LANDUSE_BLOCKERS.some(b => u.name.includes(b));
     const isZone = !!useZoneKeyFromName(u.name);
     const badge = isBlock ? `<span class="li-badge need">주의</span>` : (isZone ? `<span class="li-badge clear">용도지역</span>` : '');
@@ -1392,7 +1394,7 @@ function renderLandInfoPanel(info, pnu){
         <dt>공부면적</dt><dd>${info.area ? info.area.toLocaleString('ko-KR') + '㎡' : '-'}</dd>
         <dt>개별공시지가</dt><dd>${priceText}</dd>
       </dl>
-      ${rows ? `<div class="li-title">토지이용계획 <span>${info.uses.length}건 · 포함/저촉/접함</span></div><ul class="li-list">${rows}</ul>` : `<p class="hint">토지이용계획 항목이 조회되지 않았습니다.</p>`}
+      ${rows ? `<div class="li-title">토지이용계획 <span>포함 ${inclUses.length}건${info.uses.length > inclUses.length ? ` · 저촉·접함 ${info.uses.length - inclUses.length}건 제외` : ''}</span></div><ul class="li-list">${rows}</ul>` : `<p class="hint">${info.uses.length ? '"포함"인 토지이용계획 항목이 없습니다(저촉·접함만 있음).' : '토지이용계획 항목이 조회되지 않았습니다.'}</p>`}
       <p class="hint" style="margin-top:8px;">토지이음 열람과 기준일이 다를 수 있으니 인허가 신청 전 토지이음에서 최종 확인하세요.</p>
     </div>`;
 }
@@ -1429,25 +1431,25 @@ function applyLandInfoToForm(info){
   } else if(priceNote){ priceNote.className = 'auto-note warn'; priceNote.textContent = '⚠ 개별공시지가가 조회되지 않았습니다' + (info.errors && info.errors.landPrice ? ' (' + info.errors.landPrice + ')' : '') + '. 토지이음 값을 입력하세요.'; allSet = false; }
   // 용도지역 (토지이용계획 항목 중 분석기 용도지역과 맞는 것)
   // 저촉여부: "포함"(필지 전체가 그 용도지역) → 채택, "저촉"(일부 걸침) → 포함이 없을 때만 채택, "접함"(경계만 닿음) → 제외
-  const zoneItems = info.uses.filter(u => useZoneKeyFromName(u.name) && !/접함/.test(u.rel));
-  const incl = zoneItems.filter(u => /포함/.test(u.rel));
-  const pick = incl.length ? incl : zoneItems;
+  // 판정은 "포함"만 사용(저촉·접함 제외 — 사용자 요청 2026-10-20)
+  const zoneItems = info.uses.filter(u => useZoneKeyFromName(u.name) && /포함/.test(u.rel || ''));
+  const pick = zoneItems;
   const zoneKeys = [...new Set(pick.map(u => useZoneKeyFromName(u.name)))];
   const zoneNames = pick.map(u => u.name + (u.rel ? '(' + u.rel + ')' : ''));
-  const touching = info.uses.filter(u => useZoneKeyFromName(u.name) && /접함/.test(u.rel)).map(u => u.name);
+  const touching = info.uses.filter(u => useZoneKeyFromName(u.name) && !/포함/.test(u.rel || '')).map(u => u.name);
   if(zoneKeys.length === 1){
     const sel = document.getElementById('useZone'); sel.value = zoneKeys[0]; sel.dispatchEvent(new Event('change'));
     collapseSeg('useZone', true);
-    zoneNote.className = 'auto-note'; zoneNote.textContent = `✅ 토지이용계획 "${zoneNames.join(', ')}" 기준 자동 선택` + (touching.length ? ` (경계에 접한 ${touching.join(', ')}은 제외)` : '');
+    zoneNote.className = 'auto-note'; zoneNote.textContent = `✅ 토지이용계획 "${zoneNames.join(', ')}" 기준 자동 선택` + (touching.length ? ` (저촉·접함인 ${touching.join(', ')}은 제외)` : '');
   } else if(zoneKeys.length > 1){
     zoneNote.className = 'auto-note warn'; zoneNote.textContent = `⚠ 용도지역이 둘 이상 조회됩니다: ${zoneNames.join(', ')} — 2번 항목을 직접 골라주세요.`; allSet = false;
   } else {
-    zoneNote.className = 'auto-note warn'; zoneNote.textContent = '⚠ 토지이용계획에서 용도지역을 찾지 못했습니다. 2번 항목을 직접 골라주세요.'; allSet = false;
+    zoneNote.className = 'auto-note warn'; zoneNote.textContent = touching.length ? `⚠ "포함"인 용도지역이 없습니다(저촉·접함: ${touching.join(', ')}). 2번 항목을 직접 골라주세요.` : '⚠ 토지이용계획에서 용도지역을 찾지 못했습니다. 2번 항목을 직접 골라주세요.'; allSet = false;
   }
   // 농지 구분 / 산지 구분 (토지이용계획 항목명 기준)
   // 농지·산지 구분은 이 필지에 실제로 걸린 항목(포함·저촉)만 보고 정함 — "접함"(경계만 닿음)은 제외
-  const names = info.uses.filter(u => !/접함/.test(u.rel)).map(u => u.name).join(' | ');
-  const touchNames = info.uses.filter(u => /접함/.test(u.rel)).map(u => u.name);
+  const names = info.uses.filter(u => /포함/.test(u.rel || '')).map(u => u.name).join(' | ');
+  const touchNames = info.uses.filter(u => !/포함/.test(u.rel || '')).map(u => u.name);
   if(/농업진흥구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'core'; s.dispatchEvent(new Event('change')); }
   else if(/농업보호구역/.test(names)){ const s = document.getElementById('farmZone'); s.value = 'protect'; s.dispatchEvent(new Event('change')); }
   else { const s = document.getElementById('farmZone'); s.value = 'out'; s.dispatchEvent(new Event('change')); }
@@ -1458,7 +1460,7 @@ function applyLandInfoToForm(info){
   const touchRestrict = touchNames.filter(n => /농업진흥구역|농업보호구역|보전산지|준보전산지|공익용산지|임업용산지|산지전용/.test(n));
   if(touchRestrict.length){
     const jn = document.getElementById('jimokNote');
-    if(jn){ jn.textContent += (jn.textContent ? ' ' : '') + `(경계에 접한 ${[...new Set(touchRestrict)].join('·')}은 이 필지에 해당하지 않아 판정에서 제외)`; }
+    if(jn){ jn.textContent += (jn.textContent ? ' ' : '') + `(저촉·접함인 ${[...new Set(touchRestrict)].join('·')}은 판정에서 제외)`; }
   }
   updateSiteSummary();
   return allSet;
