@@ -5832,7 +5832,7 @@ function startShrinkOutline(){
   histCheckpoint('경계 줄이기');
   shrinkEdit = { base: from, lat0: from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180, d: from.map(() => 0), name: currentBoundaryName, preset: ed ? (ed.preset || ed.genPreset) : null, overlays: [] };
   drawShrinkOverlays();
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⇲ 경계 줄이기: 각 변 가운데의 ▼(안쪽)·▲(바깥) 버튼으로 그 변만 옮기고, 가운데 패널로 전체를 줄이거나 늘립니다. 바꿀 때마다 배치가 같은 유형으로 다시 만들어집니다. 끝나면 "완료".'; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⇲ 경계 줄이기: 각 변 가운데의 화살표 버튼(건물 안쪽을 향한 화살표 = 줄이기, 바깥쪽 = 늘리기)으로 그 변만 옮기고, 가운데 패널로 전체를 줄이거나 늘립니다. 바꿀 때마다 배치가 같은 유형으로 다시 만들어집니다. 끝나면 "완료".'; }
 }
 function shrinkPath(){ const E = shrinkEdit; const xy = E.base.map(q => solarToXY(q, E.lat0)); return insetPathXY(xy, E.d).map(q => solarToLatLng(q.x, q.y, E.lat0)); }
 function drawShrinkOverlays(){
@@ -5841,11 +5841,22 @@ function drawShrinkOverlays(){
   const path = shrinkPath();
   const step = () => parseFloat((document.getElementById('shrinkStep') || {}).value) || 0.5;
   const btn = (txt, js, title) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" title="${title}" style="border:1px solid #1A5FB4;background:#fff;color:#1A5FB4;font-weight:800;border-radius:3px;padding:0 5px;cursor:pointer;font-size:11px;line-height:16px;">${txt}</button>`;
+  // 변마다 안쪽 방향(지도 화면 기준: 위=북)을 구해 화살표를 그 방향으로 — 왼쪽 변은 → / ←, 위 변은 ▼ / ▲
+  const pxy = path.map(q => solarToXY(q, E.lat0));
+  const sgnA = (() => { let a = 0; for(let k = 0; k < pxy.length; k++){ const u = pxy[k], v = pxy[(k + 1) % pxy.length]; a += u.x * v.y - v.x * u.y; } return a > 0 ? 1 : -1; })();
+  const arrowOf = (vx, vy) => { const ang = Math.atan2(vy, vx) * 180 / Math.PI; const dirs = ['→', '↗', '↑', '↖', '←', '↙', '↓', '↘']; return dirs[((Math.round(ang / 45) % 8) + 8) % 8]; };
   path.forEach((p, i) => {
     const q = path[(i + 1) % path.length];
     const len = haversineMeters(p, q); if(len < 1.5) return;
     const mid = new kakao.maps.LatLng((p.getLat() + q.getLat()) / 2, (p.getLng() + q.getLng()) / 2);
-    const ov = new kakao.maps.CustomOverlay({ map, position: mid, clickable: true, zIndex: 45, content: `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:2px;align-items:center;background:rgba(26,95,180,.9);padding:2px 3px;border-radius:4px;color:#fff;font-size:10.5px;white-space:nowrap;">${btn('▼', `shrinkEdge(${i}, 1)`, '이 변을 안쪽으로')}${E.d[i] ? `<span>${E.d[i] > 0 ? '−' : '+'}${Math.abs(E.d[i]).toFixed(1)}m</span>` : ''}${btn('▲', `shrinkEdge(${i}, -1)`, '이 변을 바깥으로')}</div>` });
+    const u = pxy[i], v = pxy[(i + 1) % pxy.length]; const ex = v.x - u.x, ey = v.y - u.y;
+    const nx = -ey * sgnA, ny = ex * sgnA; // 안쪽 법선
+    const inA = arrowOf(nx, ny), outA = arrowOf(-nx, -ny);
+    const bIn = btn(inA, `shrinkEdge(${i}, 1)`, '이 변을 안쪽으로'), bOut = btn(outA, `shrinkEdge(${i}, -1)`, '이 변을 바깥으로');
+    const lab = E.d[i] ? `<span>${E.d[i] > 0 ? '−' : '+'}${Math.abs(E.d[i]).toFixed(1)}m</span>` : '';
+    // 버튼 순서도 화면 방향에 맞춤: 안쪽이 오른쪽(동)을 향하면 [바깥←][안쪽→], 왼쪽이면 [안쪽←][바깥→], 위아래면 [안쪽][바깥]
+    const inner = Math.abs(nx) >= Math.abs(ny) ? (nx > 0 ? bOut + lab + bIn : bIn + lab + bOut) : (ny < 0 ? bIn + lab + bOut : bOut + lab + bIn);
+    const ov = new kakao.maps.CustomOverlay({ map, position: mid, clickable: true, zIndex: 45, content: `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:2px;align-items:center;background:rgba(26,95,180,.9);padding:2px 3px;border-radius:4px;color:#fff;font-size:10.5px;white-space:nowrap;">${inner}</div>` });
     E.overlays.push(ov);
   });
   const c = new kakao.maps.LatLng(path.reduce((a, q) => a + q.getLat(), 0) / path.length, path.reduce((a, q) => a + q.getLng(), 0) / path.length);
@@ -5880,7 +5891,7 @@ function applyShrink(){
   drawShrinkOverlays();
   const ed = layoutRegistry.find(e => e.__shrinkOf === E);
   const st = document.getElementById('roadviewStatus');
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⇲ 경계 ${Math.round(shoelaceArea(path)).toLocaleString('ko-KR')}㎡${ed ? ` · ${layoutTypeLabel(ed)} ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장 · ${(ed.modules.filter(m => !m.removed).length * ed.wattPerPanel / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}kW` : ' (배치 유형이 없어 경계만 바꿈 — ② 유형 고르고 ③ 배치 생성)'}. 변별 ▼▲ 또는 전체 줄이기, 끝나면 "완료".`; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⇲ 경계 ${Math.round(shoelaceArea(path)).toLocaleString('ko-KR')}㎡${ed ? ` · ${layoutTypeLabel(ed)} ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장 · ${(ed.modules.filter(m => !m.removed).length * ed.wattPerPanel / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}kW` : ' (배치 유형이 없어 경계만 바꿈 — ② 유형 고르고 ③ 배치 생성)'}. 변별 화살표 또는 전체 줄이기, 끝나면 "완료".`; }
 }
 function endShrinkOutline(keep){
   const E = shrinkEdit; if(!E) return;
