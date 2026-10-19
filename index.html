@@ -601,9 +601,9 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
       <div class="card" style="padding:16px 16px 14px;">
         <h2 style="margin-bottom:12px;">모듈 배치도</h2>
         <div class="lay-sum" id="laySum"><b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span></div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:6px;padding:5px 8px;margin:0 0 10px;" title="주소를 검색하면 필지 안 건물 전부에 고른 유형으로 바로 배치합니다. 배치된 뒤 동별 카드에서 '다시 배치'로 유형을 바꿀 수 있습니다">
-          ⚡ 주소 검색 시 건물 자동 배치
-          <select id="autoLayoutPreset" onchange="saveAutoLayoutPreset()" style="font-size:12px;padding:2px 4px;flex:1;">
+        <div class="auto-lay-box" style="display:grid;grid-template-columns:minmax(0,1fr);gap:4px;font-size:12px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:6px;padding:7px 9px;margin:0 0 10px;">
+          <label for="autoLayoutPreset" style="font-weight:700;white-space:nowrap;" title="주소를 검색하면 필지 안 건물 전부에 고른 유형으로 바로 배치합니다. 배치된 뒤 동별 카드에서 유형을 바꿀 수 있습니다">⚡ 주소 검색 시 건물 자동 배치</label>
+          <select id="autoLayoutPreset" onchange="saveAutoLayoutPreset()" style="width:100%;font-size:12px;padding:3px 4px;box-sizing:border-box;">
             <option value="">끄기</option>
             <option value="maxfill" selected>최대 배치(방위각 → 원단/인삼밭 플랫 자동)</option>
             <option value="slab">평슬라브</option>
@@ -616,15 +616,15 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <option value="insam">인삼밭</option>
             <option value="zero">제로솔루션</option>
           </select>
-          <span style="flex-basis:100%;display:flex;align-items:center;gap:6px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다. '최대'는 2·3·4단을 모두 계산해 장수가 가장 많은 것을 고름">건물 없는 토지는
-          <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="font-size:12px;padding:2px 4px;flex:1;">
+          <label for="autoLandPreset" style="font-weight:700;white-space:nowrap;margin-top:4px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다">🌱 건물 없는 토지 자동 배치</label>
+          <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="width:100%;font-size:12px;padding:3px 4px;box-sizing:border-box;">
             <option value="ground3" selected>토지 노지 3단(끝 3m 이격)</option>
             <option value="groundmax">토지 노지 2~4단 중 최대</option>
             <option value="ground2">토지 노지 2단</option>
             <option value="ground4">토지 노지 4단</option>
             <option value="">끄기</option>
-          </select></span>
-        </label>
+          </select>
+        </div>
         <p class="hint" style="margin:0 0 10px;">지도에서 건물(하늘색 점선)을 클릭하거나 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
