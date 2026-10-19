@@ -616,6 +616,14 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <option value="insam">인삼밭</option>
             <option value="zero">제로솔루션</option>
           </select>
+          <span style="flex-basis:100%;display:flex;align-items:center;gap:6px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다. '최대'는 2·3·4단을 모두 계산해 장수가 가장 많은 것을 고름">건물 없는 토지는
+          <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="font-size:12px;padding:2px 4px;flex:1;">
+            <option value="groundmax" selected>토지 노지 2~4단 중 최대(끝 3m 이격)</option>
+            <option value="ground2">토지 노지 2단</option>
+            <option value="ground3">토지 노지 3단</option>
+            <option value="ground4">토지 노지 4단</option>
+            <option value="">끄기</option>
+          </select></span>
         </label>
         <p class="hint" style="margin:0 0 10px;">지도에서 건물(하늘색 점선)을 클릭하거나 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
@@ -7088,12 +7096,22 @@ function updateAllDongBtn(){ const b = document.getElementById('allDongBtn'); if
 // ⚡ 주소 검색 시 건물 자동 배치: 선택한 유형(기본 평슬라브)으로 필지 안 건물 전부에 바로 배치
 function saveMaxRule(){ try{ localStorage.setItem('solarMaxRule', JSON.stringify({ ns: (document.getElementById('maxNS') || {}).value, ew: (document.getElementById('maxEW') || {}).value })); }catch(e){} }
 function loadMaxRule(){ try{ const v = JSON.parse(localStorage.getItem('solarMaxRule') || 'null'); if(!v) return; const a = document.getElementById('maxNS'), b = document.getElementById('maxEW'); if(a && v.ns && [...a.options].some(o => o.value === v.ns)) a.value = v.ns; if(b && v.ew && [...b.options].some(o => o.value === v.ew)) b.value = v.ew; }catch(e){} }
-function saveAutoLayoutPreset(){ try{ localStorage.setItem('solarAutoLayout', (document.getElementById('autoLayoutPreset') || {}).value || ''); }catch(e){} }
-function loadAutoLayoutPreset(){ loadMaxRule(); try{ const v = localStorage.getItem('solarAutoLayout'); const el = document.getElementById('autoLayoutPreset'); if(el && v !== null && [...el.options].some(o => o.value === v)) el.value = v; }catch(e){} }
+function saveAutoLayoutPreset(){ try{ localStorage.setItem('solarAutoLayout', (document.getElementById('autoLayoutPreset') || {}).value || ''); localStorage.setItem('solarAutoLand', (document.getElementById('autoLandPreset') || {}).value || ''); }catch(e){} }
+function loadAutoLayoutPreset(){ loadMaxRule(); try{ const v = localStorage.getItem('solarAutoLayout'); const el = document.getElementById('autoLayoutPreset'); if(el && v !== null && [...el.options].some(o => o.value === v)) el.value = v; const v2 = localStorage.getItem('solarAutoLand'); const el2 = document.getElementById('autoLandPreset'); if(el2 && v2 !== null && [...el2.options].some(o => o.value === v2)) el2.value = v2; }catch(e){} }
 let autoLayoutPending = false; // 컨설팅 탭에서 검색했으면 배치도 탭으로 넘어갈 때 실행
 function autoLayoutAfterSearch(){
   const key = (document.getElementById('autoLayoutPreset') || {}).value;
-  if(!key || !LAYOUT_PRESETS[key] || !parcelBuildings.length) return;
+  const landKey = (document.getElementById('autoLandPreset') || {}).value;
+  if(!parcelBuildings.length){ // 건물 없는 토지 → 필지 경계에 토지 노지 자동 배치
+    if(!landKey || !lastParcelPath || lastParcelPath.length < 3) return;
+    if(layoutRegistry.length) return;
+    const layoutTabOn = !!document.querySelector('#railPaneLayout.active');
+    if(!layoutTabOn){ autoLayoutPending = true; return; }
+    autoLayoutPending = false;
+    try{ autoLandLayout(landKey); }catch(e){ console.warn('auto land layout', e); }
+    return;
+  }
+  if(!key || !LAYOUT_PRESETS[key]) return;
   if(layoutRegistry.length) return; // 이미 배치가 있으면 건드리지 않음
   const layoutTabOn = !!document.querySelector('#railPaneLayout.active');
   if(!layoutTabOn){ autoLayoutPending = true; return; } // 컨설팅 화면에서는 바로 배치하지 않음
@@ -7104,6 +7122,28 @@ function autoLayoutAfterSearch(){
     const st = document.getElementById('roadviewStatus');
     if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 필지 안 건물 ${parcelBuildings.length}동에 "${LAYOUT_PRESETS[key].label}"로 자동 배치했습니다. 유형을 바꾸려면 배치도 탭 동별 카드의 "🔁 다시 배치", 끄려면 "주소 검색 시 건물 자동 배치"를 "끄기"로.`; }
   }catch(e){ console.warn('auto layout', e); }
+}
+// 토지(건물 없음) 자동 배치: 필지 경계를 배치 경계로, 끝 3m 이격(프리셋 값). 'groundmax'는 2·3·4단을 모두 만들어 장수 최대를 선택
+function autoLandLayout(landKey){
+  const st = document.getElementById('roadviewStatus');
+  lastAreaPolygonPath = lastParcelPath.slice(); currentBoundaryName = '토지';
+  const keys = landKey === 'groundmax' ? ['ground2', 'ground3', 'ground4'] : [landKey];
+  const results = [];
+  keys.forEach(k => {
+    if(!LAYOUT_PRESETS[k]) return;
+    applyLayoutPreset(k);
+    const before = new Set(layoutRegistry);
+    try{ onGenerateLayoutClick(); }catch(e){ console.warn('land', k, e); }
+    const ed = layoutRegistry.find(x => !before.has(x));
+    results.push({ k, n: ed ? ed.modules.filter(m => !m.removed).length : 0 });
+  });
+  const best = results.reduce((a, r) => (r.n > a.n ? r : a), { n: -1 });
+  if(!best.k || best.n <= 0){ if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 토지 자동 배치: 이 필지 경계(끝 3m 이격)에는 모듈이 들어가지 않습니다.'; } return; }
+  if(keys.length > 1 && results[results.length - 1].k !== best.k){ applyLayoutPreset(best.k); try{ onGenerateLayoutClick(); }catch(e){} }
+  const ed = layoutRegistry[layoutRegistry.length - 1];
+  if(ed) ed.autoPick = { rule: landKey, results: results.map(r => ({ label: LAYOUT_PRESETS[r.k].label, n: r.n })) };
+  scheduleLayoutCards();
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 없는 토지 → 필지 경계 끝 ${LAYOUT_PRESETS[best.k].setback}m 이격으로 "${LAYOUT_PRESETS[best.k].label}" ${best.n.toLocaleString('ko-KR')}장 자동 배치${keys.length > 1 ? ` (비교: ${results.map(r => `${LAYOUT_PRESETS[r.k].label} ${r.n}장`).join(' · ')})` : ''}. 다른 유형은 동별 카드에서 바로 바꿀 수 있고, 끄려면 "건물 없는 토지는 → 끄기".`; }
 }
 // ===== ✂ 구역 나누기: 현재 경계를 두 점으로 정한 선으로 잘라 두 구역으로 — 구역을 클릭해 고른 뒤 유형별로 배치 =====
 let splitFirst = null, splitPreview = null, splitZones = [], splitGroupId = null, splitBaseName = '';
