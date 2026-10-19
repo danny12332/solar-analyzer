@@ -5817,7 +5817,7 @@ function onGenerateLayoutClick(){
 function insetPathXY(xy, d){
   const n = xy.length; const dd = Array.isArray(d) ? d : xy.map(() => d); const sgn = (() => { let a = 0; for(let i = 0; i < n; i++){ const p = xy[i], q = xy[(i + 1) % n]; a += p.x * q.y - q.x * p.y; } return a > 0 ? 1 : -1; })();
   const lines = xy.map((p, i) => { const q = xy[(i + 1) % n]; const dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy) || 1; const nx = -dy / L * sgn, ny = dx / L * sgn; return { p: { x: p.x + nx * dd[i], y: p.y + ny * dd[i] }, v: { x: dx, y: dy } }; });
-  return lines.map((l1, i) => { const l0 = lines[(i - 1 + n) % n]; const den = l0.v.x * l1.v.y - l0.v.y * l1.v.x; if(Math.abs(den) < 1e-9) return l1.p; const t = ((l1.p.x - l0.p.x) * l1.v.y - (l1.p.y - l0.p.y) * l1.v.x) / den; return { x: l0.p.x + l0.v.x * t, y: l0.p.y + l0.v.y * t }; });
+  return lines.map((l1, i) => { const l0 = lines[(i - 1 + n) % n]; const den = l0.v.x * l1.v.y - l0.v.y * l1.v.x; const sinA = Math.abs(den) / ((Math.hypot(l0.v.x, l0.v.y) * Math.hypot(l1.v.x, l1.v.y)) || 1); if(sinA < 0.12){ const o = xy[i]; return { x: l1.p.x + (o.x - xy[i].x), y: l1.p.y + (o.y - xy[i].y) }; } const t = ((l1.p.x - l0.p.x) * l1.v.y - (l1.p.y - l0.p.y) * l1.v.x) / den; return { x: l0.p.x + l0.v.x * t, y: l0.p.y + l0.v.y * t }; });
 }
 // ===== ⇲ 경계 줄이기: 변마다 [안쪽▼/바깥▲] 버튼 + 전체 줄이기, 바꿀 때마다 그 경계의 배치를 같은 유형으로 다시 생성 =====
 let shrinkEdit = null; // { base:[LatLng], lat0, d:[m per edge], name, extra, overlays:[], ed }
@@ -5828,47 +5828,61 @@ function startShrinkOutline(){
   stopBuildingEdit && stopBuildingEdit();
   const base = lastAreaPolygonPath.slice();
   const ed = layoutRegistry.slice().reverse().find(e => sameBoundary(e.boundary, base) || (e.origBoundary && sameBoundary(e.origBoundary, base))) || null;
-  const from = ed && ed.boundary ? ed.boundary.slice() : base; // 이미 대장 면적으로 줄인 배치가 있으면 그 경계에서 시작
+  let from = ed && ed.boundary ? ed.boundary.slice() : base; // 이미 대장 면적으로 줄인 배치가 있으면 그 경계에서 시작
   histCheckpoint('경계 줄이기');
+  { // 단순화: 꺾임 8° 미만 꼭짓점 제거(최대 몇 번 반복)
+    const la = from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180;
+    let xy = from.map(q => solarToXY(q, la));
+    for(let it = 0; it < 6 && xy.length > 3; it++){
+      const keep = xy.filter((p, i) => { const a = xy[(i - 1 + xy.length) % xy.length], b = xy[(i + 1) % xy.length]; const v1x = p.x - a.x, v1y = p.y - a.y, v2x = b.x - p.x, v2y = b.y - p.y; const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y); if(l1 < 0.3 || l2 < 0.3) return false; const turn = Math.abs(Math.atan2(v1x * v2y - v1y * v2x, v1x * v2x + v1y * v2y)) * 180 / Math.PI; return turn >= 8; });
+      if(keep.length === xy.length || keep.length < 3) break; xy = keep;
+    }
+    if(xy.length >= 3 && xy.length < from.length) from = xy.map(q => solarToLatLng(q.x, q.y, la));
+  }
   shrinkEdit = { base: from, lat0: from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180, d: from.map(() => 0), name: currentBoundaryName, preset: ed ? (ed.preset || ed.genPreset) : null, overlays: [] };
   drawShrinkOverlays();
   if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⇲ 경계 줄이기: 각 변 가운데의 화살표 버튼(건물 안쪽을 향한 화살표 = 줄이기, 바깥쪽 = 늘리기)으로 그 변만 옮기고, 가운데 패널로 전체를 줄이거나 늘립니다. 바꿀 때마다 배치가 같은 유형으로 다시 만들어집니다. 끝나면 "완료".'; }
 }
 function shrinkPath(){ const E = shrinkEdit; const xy = E.base.map(q => solarToXY(q, E.lat0)); return insetPathXY(xy, E.d).map(q => solarToLatLng(q.x, q.y, E.lat0)); }
 function drawShrinkOverlays(){
+  // 버튼·패널 위치는 줄이기 시작할 때의 경계(E.base) 기준으로 고정 — 누를 때마다 버튼이 움직이지 않게 내용만 바꿈
   const E = shrinkEdit; if(!E) return; const map = ensureKakaoMap();
-  E.overlays.forEach(o => { try{ o.setMap(null); }catch(e){} }); E.overlays = [];
-  const path = shrinkPath();
-  const step = () => parseFloat((document.getElementById('shrinkStep') || {}).value) || 0.5;
-  const btn = (txt, js, title) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" title="${title}" style="border:1px solid #1A5FB4;background:#fff;color:#1A5FB4;font-weight:800;border-radius:3px;padding:0 5px;cursor:pointer;font-size:11px;line-height:16px;">${txt}</button>`;
-  // 변마다 안쪽 방향(지도 화면 기준: 위=북)을 구해 화살표를 그 방향으로 — 왼쪽 변은 → / ←, 위 변은 ▼ / ▲
-  const pxy = path.map(q => solarToXY(q, E.lat0));
-  const sgnA = (() => { let a = 0; for(let k = 0; k < pxy.length; k++){ const u = pxy[k], v = pxy[(k + 1) % pxy.length]; a += u.x * v.y - v.x * u.y; } return a > 0 ? 1 : -1; })();
-  const arrowOf = (vx, vy) => { const ang = Math.atan2(vy, vx) * 180 / Math.PI; const dirs = ['→', '↗', '↑', '↖', '←', '↙', '↓', '↘']; return dirs[((Math.round(ang / 45) % 8) + 8) % 8]; };
-  path.forEach((p, i) => {
-    const q = path[(i + 1) % path.length];
-    const len = haversineMeters(p, q); if(len < 1.5) return;
-    const mid = new kakao.maps.LatLng((p.getLat() + q.getLat()) / 2, (p.getLng() + q.getLng()) / 2);
-    const u = pxy[i], v = pxy[(i + 1) % pxy.length]; const ex = v.x - u.x, ey = v.y - u.y;
+  const base = E.base, cur = shrinkPath();
+  const btn = (txt, js, title, strong) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" title="${title}" style="border:2px solid ${strong ? '#0B3D91' : '#1A5FB4'};background:${strong ? '#FFD23F' : '#fff'};color:#0B3D91;font-weight:900;border-radius:5px;min-width:30px;height:26px;padding:0 6px;cursor:pointer;font-size:18px;line-height:20px;box-shadow:0 1px 3px rgba(0,0,0,.35);">${txt}</button>`;
+  const bxy = base.map(q => solarToXY(q, E.lat0));
+  const sgnA = (() => { let a = 0; for(let k = 0; k < bxy.length; k++){ const u = bxy[k], v = bxy[(k + 1) % bxy.length]; a += u.x * v.y - v.x * u.y; } return a > 0 ? 1 : -1; })();
+  const arrowOf = (vx, vy) => { const ang = Math.atan2(vy, vx) * 180 / Math.PI; const dirs = ['➡', '⬈', '⬆', '⬉', '⬅', '⬋', '⬇', '⬊']; return dirs[((Math.round(ang / 45) % 8) + 8) % 8]; };
+  if(!E.edgeOv){
+    E.edgeOv = []; E.overlays = [];
+    base.forEach((p, i) => {
+      const q = base[(i + 1) % base.length];
+      if(haversineMeters(p, q) < 1.5){ E.edgeOv.push(null); return; }
+      const mid = new kakao.maps.LatLng((p.getLat() + q.getLat()) / 2, (p.getLng() + q.getLng()) / 2);
+      const ov = new kakao.maps.CustomOverlay({ map, position: mid, clickable: true, zIndex: 45, content: '' });
+      E.edgeOv.push(ov); E.overlays.push(ov);
+    });
+    const c = new kakao.maps.LatLng(base.reduce((a, q) => a + q.getLat(), 0) / base.length, base.reduce((a, q) => a + q.getLng(), 0) / base.length);
+    E.panelOv = new kakao.maps.CustomOverlay({ map, position: c, clickable: true, zIndex: 46, yAnchor: 1.2, content: '' });
+    E.overlays.push(E.panelOv);
+  }
+  base.forEach((p, i) => {
+    const ov = E.edgeOv[i]; if(!ov) return;
+    const u = bxy[i], v = bxy[(i + 1) % bxy.length]; const ex = v.x - u.x, ey = v.y - u.y;
     const nx = -ey * sgnA, ny = ex * sgnA; // 안쪽 법선
-    const inA = arrowOf(nx, ny), outA = arrowOf(-nx, -ny);
-    const bIn = btn(inA, `shrinkEdge(${i}, 1)`, '이 변을 안쪽으로'), bOut = btn(outA, `shrinkEdge(${i}, -1)`, '이 변을 바깥으로');
-    const lab = E.d[i] ? `<span>${E.d[i] > 0 ? '−' : '+'}${Math.abs(E.d[i]).toFixed(1)}m</span>` : '';
-    // 버튼 순서도 화면 방향에 맞춤: 안쪽이 오른쪽(동)을 향하면 [바깥←][안쪽→], 왼쪽이면 [안쪽←][바깥→], 위아래면 [안쪽][바깥]
+    const bIn = btn(arrowOf(nx, ny), `shrinkEdge(${i}, 1)`, '이 변을 안쪽으로(줄이기)', true), bOut = btn(arrowOf(-nx, -ny), `shrinkEdge(${i}, -1)`, '이 변을 바깥으로(늘리기)', false);
+    const lab = `<span style="min-width:44px;text-align:center;font-weight:800;font-size:12px;">${E.d[i] ? `${E.d[i] > 0 ? '−' : '+'}${Math.abs(E.d[i]).toFixed(1)}m` : '0'}</span>`;
     const inner = Math.abs(nx) >= Math.abs(ny) ? (nx > 0 ? bOut + lab + bIn : bIn + lab + bOut) : (ny < 0 ? bIn + lab + bOut : bOut + lab + bIn);
-    const ov = new kakao.maps.CustomOverlay({ map, position: mid, clickable: true, zIndex: 45, content: `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:2px;align-items:center;background:rgba(26,95,180,.9);padding:2px 3px;border-radius:4px;color:#fff;font-size:10.5px;white-space:nowrap;">${inner}</div>` });
-    E.overlays.push(ov);
+    ov.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:3px;align-items:center;background:rgba(11,61,145,.92);padding:3px 4px;border-radius:6px;color:#fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">${inner}</div>`);
   });
-  const c = new kakao.maps.LatLng(path.reduce((a, q) => a + q.getLat(), 0) / path.length, path.reduce((a, q) => a + q.getLng(), 0) / path.length);
-  const area = shoelaceArea(path);
-  const panel = new kakao.maps.CustomOverlay({ map, position: c, clickable: true, zIndex: 46, yAnchor: 1.2, content: `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:4px;align-items:center;background:rgba(26,95,180,.95);padding:4px 7px;border-radius:5px;color:#fff;font-size:11.5px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);">
+  const area = shoelaceArea(cur);
+  const sbtn = (txt, js, title) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" title="${title}" style="border:2px solid #0B3D91;background:#fff;color:#0B3D91;font-weight:800;border-radius:4px;padding:1px 7px;cursor:pointer;font-size:12px;">${txt}</button>`;
+  E.panelOv.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:4px;align-items:center;background:rgba(11,61,145,.95);padding:5px 8px;border-radius:6px;color:#fff;font-size:12px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);">
     <b>⇲ ${Math.round(area).toLocaleString('ko-KR')}㎡</b>
-    <select id="shrinkStep" onmousedown="event.stopPropagation();kakao.maps.event.preventMap();" style="font-size:11px;padding:0 2px;"><option value="0.1">0.1m</option><option value="0.5" selected>0.5m</option><option value="1">1m</option></select>
-    ${btn('전체 줄이기', 'shrinkAll(1)', '모든 변을 안쪽으로')}${btn('전체 늘리기', 'shrinkAll(-1)', '모든 변을 바깥으로')}
-    <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(true)" style="border:none;background:#FFD23F;color:#5A3A00;font-weight:800;border-radius:3px;padding:1px 8px;cursor:pointer;font-size:11px;">완료</button>
-    <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(false)" style="border:none;background:#fff;color:#B3261E;font-weight:800;border-radius:3px;padding:1px 6px;cursor:pointer;font-size:11px;" title="줄이기 전으로">취소</button></div>` });
-  E.overlays.push(panel);
-  if(E.stepVal){ const sel = document.getElementById('shrinkStep'); if(sel) sel.value = E.stepVal; }
+    <select id="shrinkStep" onmousedown="event.stopPropagation();kakao.maps.event.preventMap();" onchange="shrinkStepVal()" style="font-size:12px;padding:0 2px;"><option value="0.1">0.1m</option><option value="0.5">0.5m</option><option value="1">1m</option></select>
+    ${sbtn('전체 줄이기', 'shrinkAll(1)', '모든 변을 안쪽으로')}${sbtn('전체 늘리기', 'shrinkAll(-1)', '모든 변을 바깥으로')}
+    <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(true)" style="border:none;background:#FFD23F;color:#5A3A00;font-weight:800;border-radius:4px;padding:2px 9px;cursor:pointer;font-size:12px;">완료</button>
+    <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(false)" style="border:none;background:#fff;color:#B3261E;font-weight:800;border-radius:4px;padding:2px 7px;cursor:pointer;font-size:12px;" title="줄이기 전으로">취소</button></div>`);
+  const sel = document.getElementById('shrinkStep'); if(sel) sel.value = E.stepVal || '0.5';
 }
 function shrinkStepVal(){ const v = parseFloat((document.getElementById('shrinkStep') || {}).value); if(shrinkEdit && isFinite(v)) shrinkEdit.stepVal = String(v); return isFinite(v) ? v : 0.5; }
 function shrinkEdge(i, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); E.d[i] = Math.round((E.d[i] + dir * st) * 100) / 100; applyShrink(); }
