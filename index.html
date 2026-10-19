@@ -8651,9 +8651,11 @@ async function checkKepcoCapacityInner(){
       const substHasRoom = Number(r.VOL_1) > 0, mtrHasRoom = Number(r.VOL_2) > 0;
       const ctrlVolA = Math.max(DL_CTRL_CAPA - Number(r.DL_PWR), 0);
       const ctrlVolB = Math.max(DL_CTRL_CAPA - Number(r.G_DL_CAPA), 0);
+      const ctrlAvail = (substHasRoom && mtrHasRoom) ? ctrlVolA : 0; // 변전소·주변압기 여유가 있을 때만 조건부 접속 가능
+      const ctrlRow = `<tr style="background:var(--surface-2);"><td>출력제어<br>조건부</td><td>${r.DL_NM ?? '-'}</td><td class="num">${DL_CTRL_CAPA.toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;${ctrlAvail > 0 ? 'color:var(--forest);' : ''}">${ctrlAvail.toLocaleString('ko-KR')}</td></tr>`;
       const ctrlNote = (!substHasRoom || !mtrHasRoom)
-        ? `<p class="hint" style="margin-top:6px;color:#8a6d1f;">⚡ 출력제어 조건부 최대 접속기준용량은 ${DL_CTRL_CAPA.toLocaleString('ko-KR')}kW이지만, <b>변전소 또는 주변압기의 접수기준 여유용량이 없어 실제로는 출력제어 조건으로도 접속 가능한 여유용량이 없습니다.</b></p>`
-        : `<p class="hint" style="margin-top:6px;color:var(--forest);">⚡ 배전선로 출력제어 조건부 최대 접속기준용량: <b>${DL_CTRL_CAPA.toLocaleString('ko-KR')}kW</b> (여유용량 ${ctrlVolA.toLocaleString('ko-KR')}/${ctrlVolB.toLocaleString('ko-KR')} kW) — 배전선로 접속기준용량 초과 시, 변전소·주변압기에 여유가 있다면 출력제어 조건으로 이 용량까지 추가 접속 가능합니다.</p>`;
+        ? `<p class="hint" style="margin-top:4px;font-size:11px;">출력제어 조건부: 배전선로 접속기준용량을 ${DL_CTRL_CAPA.toLocaleString('ko-KR')}kW까지 보되, 변전소 또는 주변압기 여유용량이 0이라 조건부로도 접속 가능한 용량이 없음.</p>`
+        : `<p class="hint" style="margin-top:4px;font-size:11px;">출력제어 조건부: 배전선로 접속기준용량 초과분은 출력제어 조건으로 ${DL_CTRL_CAPA.toLocaleString('ko-KR')}kW까지 접속 가능(조건부 접속가능용량 ${ctrlAvail.toLocaleString('ko-KR')}kW = ${DL_CTRL_CAPA.toLocaleString('ko-KR')} − 사용중 ${Number(r.DL_PWR).toLocaleString('ko-KR')}, 변전소·주변압기 여유 범위 내). 조건부 용량도 연계 가능한 용량임.</p>`;
       return `
         <div style="${i > 0 ? 'margin-top:14px;padding-top:14px;border-top:1px dashed var(--card-line);' : ''}">
           <b>${list.length > 1 ? `배전선로 후보 ${i+1} — ` : ''}${lineOk ? '✅ 변전소·주변압기·배전선로 모두 여유용량 있음 (참고용)' : '⚠ 일부 구간 여유용량 0 — 계통연계 지연 가능'}</b>
@@ -8662,6 +8664,7 @@ async function checkKepcoCapacityInner(){
             <tr><td>변전소</td><td>${r.SUBST_NM ?? '-'}</td><td class="num">${Number(r.SUBST_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.SUBST_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_1).toLocaleString('ko-KR')}</td></tr>
             <tr><td>주변압기</td><td>#${r.MTR_NO ?? '-'}</td><td class="num">${Number(r.MTR_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.MTR_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_2).toLocaleString('ko-KR')}</td></tr>
             <tr><td>배전선로</td><td>${r.DL_NM ?? '-'}</td><td class="num">${Number(r.DL_CAPA).toLocaleString('ko-KR')}</td><td class="num">${Number(r.DL_PWR).toLocaleString('ko-KR')}</td><td class="num" style="font-weight:700;">${Number(r.VOL_3).toLocaleString('ko-KR')}</td></tr>
+            ${ctrlRow}
           </table>
           ${ctrlNote}
         </div>`;
@@ -9016,9 +9019,9 @@ function buildSummaryHtml(r){
     if(L.ctrlCapa){
       const ctrlMax = Math.min(L.ctrlA, L.ctrlB);
       gridText += L.ctrlOk
-        ? `<div style="margin-top:3px;">⚡ 출력제어 조건부 접속기준용량 <b>${L.ctrlCapa.toLocaleString('ko-KR')}kW</b> → 조건부 여유 <b>${L.ctrlA.toLocaleString('ko-KR')} / ${L.ctrlB.toLocaleString('ko-KR')} kW</b> (배전선로 여유 ${L.vol3.toLocaleString('ko-KR')}kW 초과분은 출력제어 조건으로 연계 가능 · 연계 가능 최대 약 <b>${ctrlMax.toLocaleString('ko-KR')}kW</b>)</div>`
-        : `<div style="margin-top:3px;">⚡ 출력제어 조건부 접속기준용량 ${L.ctrlCapa.toLocaleString('ko-KR')}kW — 변전소 또는 주변압기 여유가 0이라 조건부 연계도 불가</div>`;
-      gridCls = (okAll || (L.ctrlOk && ctrlMax > 0)) ? 'ok' : 'warn';
+        ? ` · 출력제어 조건부 접속가능용량 <b>${L.ctrlA.toLocaleString('ko-KR')}</b> kW <span class="sum-muted" style="font-size:11px;">(접속기준 ${L.ctrlCapa.toLocaleString('ko-KR')}kW − 사용중, 조건부도 연계 가능)</span>`
+        : ` · <span class="sum-muted" style="font-size:11px;">출력제어 조건부 접속가능용량 0 (변전소·주변압기 여유 없음)</span>`;
+      gridCls = (okAll || (L.ctrlOk && L.ctrlA > 0)) ? 'ok' : 'warn';
     } else gridCls = okAll ? 'ok' : 'warn';
     if(lastKepcoSummary.guides.length){
       gridText += lastKepcoSummary.guides.map(t => `<div class="sum-guide">${t}</div>`).join('');
