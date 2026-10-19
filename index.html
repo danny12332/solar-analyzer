@@ -618,9 +618,9 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           </select>
           <span style="flex-basis:100%;display:flex;align-items:center;gap:6px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다. '최대'는 2·3·4단을 모두 계산해 장수가 가장 많은 것을 고름">건물 없는 토지는
           <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="font-size:12px;padding:2px 4px;flex:1;">
-            <option value="groundmax" selected>토지 노지 2~4단 중 최대(끝 3m 이격)</option>
+            <option value="ground3" selected>토지 노지 3단(끝 3m 이격)</option>
+            <option value="groundmax">토지 노지 2~4단 중 최대</option>
             <option value="ground2">토지 노지 2단</option>
-            <option value="ground3">토지 노지 3단</option>
             <option value="ground4">토지 노지 4단</option>
             <option value="">끄기</option>
           </select></span>
@@ -2133,6 +2133,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'annot'){ annotPlace(mouseEvent.latLng); }
     else {
       if(Date.now() - (window.__shapeClickAt || 0) < 400) return; // 건물(동) 도형을 클릭한 경우
+      if(document.querySelector('#railPaneLayout.active') && !bldEdit && !fitEdit && !outlineDrag){ clickLayoutAt(mouseEvent.latLng); return; } // 배치도 탭: 클릭 배치
       setMarkerPosition(mouseEvent.latLng);
       // 로드뷰가 열려있는 상태라면 새로 클릭한 지점으로 바로 갱신
       if(roadviewOn){ showRoadviewStage(); }
@@ -5815,7 +5816,7 @@ function onGenerateLayoutClickInner(){
     if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '검색한 필지 경계를 배치 경계로 사용합니다. '; }
   }
   // 지상으로 되어 있는데 그린 경계가 건물 위면 → 건물 슬라브로 자동 전환 (건물은 200평/100kW 기준, 지상은 300평/100kW 기준이라 용량이 크게 달라짐)
-  if(mt === 'ground'){
+  if(mt === 'ground' && !forceGroundOnce){
     let onBld = false;
     try{ onBld = drawnAreaIsOnBuilding(); }catch(e){ console.warn('building check', e); }
     if(onBld){
@@ -7080,7 +7081,7 @@ async function loadParcelBuildings(parcelPath){
       if(ll && mapMode === 'delrow'){ window.__shapeClickAt = Date.now(); delRowClick(ll); return; }
       if(ll && mapMode === 'splitzone'){ splitClick(ll); return; }
       if(ll && mapMode === 'annot'){ annotPlace(ll); return; }
-      window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building') selectParcelBuilding(idx);
+      window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building'){ selectParcelBuilding(idx); if(mapMode === 'normal' && document.querySelector('#railPaneLayout.active')) clickLayoutBuilding(); }
     }); }catch(e){}
     shapes.push(poly);
     parcelBuildings.push({ path, name, floors, poly, area: shoelaceArea(path) });
@@ -7259,6 +7260,50 @@ function generateAllDongs(){
   scheduleLayoutCards();
   st.style.color = 'var(--ink-soft)';
   st.textContent = `✅ ${parcelBuildings.length}동 중 ${ok}동에 배치했습니다 — 지도 위 전체 배치 합계 ${total.toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW. 동별 kW·장수는 각 건물 옆 라벨에 표시됩니다. 위치를 옮기려면 "✥ 배치 이동".`;
+}
+// ===== 🖱 클릭 배치(배치도 탭): 지도에서 클릭한 곳이 건물이면 그 건물에 최대 배치 규칙으로, 토지면 그 필지에 토지 노지(끝 3m)로 바로 배치. 클릭할 때마다 누적 =====
+let forceGroundOnce = false, clickLayoutBusy = false;
+function clickLayoutBuilding(){
+  // 현재 경계(lastAreaPolygonPath = 선택한 건물)에 최대 배치
+  if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) return;
+  applyLayoutPreset('maxfill');
+  try{ onGenerateLayoutClick(); }catch(e){ console.warn('click layout bld', e); }
+}
+async function clickLayoutAt(latlng){
+  if(clickLayoutBusy) return; clickLayoutBusy = true;
+  const st = document.getElementById('roadviewStatus');
+  try{
+    // ① 클릭 지점의 건물(도로명주소 건물도형)
+    const prev = lastAreaPolygonPath;
+    await pickBuildingAt(latlng);
+    if(lastAreaPolygonPath && lastAreaPolygonPath !== prev){ clickLayoutBuilding(); return; }
+    // ② 건물이 없으면 그 필지(연속지적)에 토지 노지 배치
+    st.style.color = 'var(--ink-soft)'; st.textContent = '클릭한 지점의 필지를 찾는 중…';
+    const data = await vworldJsonp({
+      service: 'data', version: '2.0', request: 'GetFeature', format: 'json', errorformat: 'json', size: '1', page: '1',
+      data: 'LP_PA_CBND_BUBUN', geomFilter: `POINT(${latlng.getLng()} ${latlng.getLat()})`,
+      columns: 'pnu,jibun,ag_geom,addr', geometry: 'true', attribute: 'true', crs: 'EPSG:4326', domain: VWORLD_DOMAIN, key: VWORLD_KEY
+    }, 12000);
+    const resp = data && data.response;
+    const feat = resp && resp.status === 'OK' && resp.result && resp.result.featureCollection && resp.result.featureCollection.features && resp.result.featureCollection.features[0];
+    const ring = feat && (parseVworldGeom(feat.geometry) || parseVworldGeom((feat.properties || {}).ag_geom));
+    if(!ring || ring.length < 3){ st.style.color = '#b3402a'; st.textContent = '❌ 클릭한 지점에 건물도 필지 경계도 찾지 못했습니다.'; return; }
+    const path = ring.map(q => new kakao.maps.LatLng(q.lat, q.lng));
+    if(path.length > 3 && haversineMeters(path[0], path[path.length - 1]) < 0.3) path.pop();
+    const props = feat.properties || {}; const name = props.jibun || props.addr || '토지';
+    histCheckpoint('클릭 배치(토지)');
+    if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+    drawConfirmedOutline(path, name, '');
+    lastAreaPolygonPath = path.slice(); currentBoundaryName = name;
+    const landKey = (document.getElementById('autoLandPreset') || {}).value;
+    const key = (landKey && landKey !== 'groundmax' && LAYOUT_PRESETS[landKey]) ? landKey : 'ground3';
+    applyLayoutPreset(key);
+    forceGroundOnce = true;
+    try{ onGenerateLayoutClick(); } finally { forceGroundOnce = false; }
+    const ed = layoutRegistry[layoutRegistry.length - 1];
+    if(ed && sameBoundary(ed.boundary, path)){ const n = ed.modules.filter(m => !m.removed).length; st.style.color = 'var(--ink-soft)'; st.textContent = `🖱 ${name} 필지에 "${LAYOUT_PRESETS[key].label}"(끝 ${LAYOUT_PRESETS[key].setback}m 이격) ${n.toLocaleString('ko-KR')}장 배치. 다른 필지나 건물을 계속 클릭하면 추가됩니다(같은 필지를 다시 클릭하면 교체). 되돌리기 "↶ 이전으로".`; }
+  }catch(e){ st.style.color = '#b3402a'; st.textContent = '❌ 클릭 배치 실패: ' + (e && e.message ? e.message : e); }
+  finally{ clickLayoutBusy = false; }
 }
 async function pickBuildingAt(latlng){
   const st = document.getElementById('roadviewStatus');
