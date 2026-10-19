@@ -1155,6 +1155,8 @@ const JIMOK_NOT_DEV = ['도','철','제','천','구','유','양','수','공','�
 function applyParcelToForm(props, kakaoPath){
   lastParcelPnu = String(props.pnu || '').trim();
   lastParcelPath = kakaoPath || null;
+  lastBldrgst = null; // 다른 필지 → 이전 건축물대장 결과는 버림
+  try{ fetchParcelSlope(lastParcelPath); }catch(e){ console.warn('slope', e); }
   lastAreaPolygonPath = null; // 새 필지 검색 → 배치 경계는 새 필지 경계를 기본으로 씀 (이미 만든 배치는 유지)
   ['landCategory','farmZone','forestType','useZone'].forEach(id => collapseSeg(id, false));
   lastKepcoSummary = null; lastLandInfo = null;
@@ -7058,6 +7060,7 @@ async function loadParcelBuildings(parcelPath){
   if(shapes.length){ shapes.forEach(sh => measureShapes.push(sh)); parcelBldGroupId = registerMeasureGroup(shapes); }
   // 지도 위 안내 띠는 띄우지 않음(사용자 요청 2026-10-15) — 건물 수는 배치도 탭 합계 줄에 표시
   updateAllDongBtn();
+  refreshSummaryDynamicRows();
   autoLayoutAfterSearch();
   updateOffsetInfo(parcelPath[0]);
 }
@@ -8024,6 +8027,7 @@ async function checkBuildingRegister(){
     const data = await res.json();
 
     if(!res.ok || data.error || !data.items || data.items.length === 0){
+      if(res.ok && !data.error){ lastBldrgst = { items: [], addr, blocks: '', fetchedAt: new Date() }; refreshSummaryDynamicRows(); }
       statusEl.innerHTML = `<p class="hint" style="color:#8a6d1f;">📋 이 필지에 등록된 건축물대장이 없습니다(나대지이거나 미등록 건물일 수 있습니다).${data && data.error ? ' ('+data.error+')' : ''} 정확한 확인은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 직접 조회해주세요.</p>`;
       return;
     }
@@ -8057,6 +8061,7 @@ async function checkBuildingRegister(){
     }).join('');
 
     lastBldrgst = { items: data.items, addr, blocks, fetchedAt: new Date() };
+    refreshSummaryDynamicRows();
     statusEl.innerHTML = `
       <div class="keyline" style="margin-top:0;position:relative;">
         <span onclick="closeResultPanel('bldrgstResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
@@ -8840,6 +8845,81 @@ function runAnalysis(){
 
 
 // ===== 핵심 요약 카드 =====
+// ===== 경사도 자동 측정: 필지 꼭짓점·중심의 표고(Open-Meteo Elevation API, Copernicus DEM GLO-90 · 90m 해상도)로 평면을 맞춰 평균 경사 계산 =====
+let lastSlope = null; // { deg, aspect, zmin, zmax, n, pnu } | { error }
+async function fetchParcelSlope(path){
+  lastSlope = null; refreshSummaryDynamicRows();
+  if(!path || path.length < 3) return;
+  const pnu = lastParcelPnu;
+  try{
+    const lat0 = path.reduce((a, q) => a + q.getLat(), 0) / path.length * Math.PI / 180;
+    const xy = path.map(q => solarToXY(q, lat0));
+    const cx = xy.reduce((a, q) => a + q.x, 0) / xy.length, cy = xy.reduce((a, q) => a + q.y, 0) / xy.length;
+    // 표본: 꼭짓점(최대 24개) + 중심 + 중심에서 사방 60m (DEM 격자보다 좁은 필지도 기울기를 잡을 수 있게)
+    let pts = xy.slice(0, 24).concat([{ x: cx, y: cy }]);
+    [[60, 0], [-60, 0], [0, 60], [0, -60]].forEach(([dx, dy]) => pts.push({ x: cx + dx, y: cy + dy }));
+    const lls = pts.map(q => solarToLatLng(q.x, q.y, lat0));
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lls.map(l => l.getLat().toFixed(6)).join(',')}&longitude=${lls.map(l => l.getLng().toFixed(6)).join(',')}`;
+    const res = await fetch(url); const data = await res.json();
+    if(!res.ok || !data || !Array.isArray(data.elevation) || data.elevation.length !== pts.length) throw new Error(data && data.reason || ('HTTP ' + res.status));
+    if(pnu !== lastParcelPnu) return; // 그 사이 다른 필지 검색
+    const z = data.elevation.map(Number);
+    // 최소제곱 평면 z = a + b·x + c·y
+    const n = pts.length; let sx = 0, sy = 0, sz = 0, sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0;
+    pts.forEach((q, i) => { sx += q.x; sy += q.y; sz += z[i]; sxx += q.x * q.x; syy += q.y * q.y; sxy += q.x * q.y; sxz += q.x * z[i]; syz += q.y * z[i]; });
+    const mx = sx / n, my = sy / n, mz = sz / n;
+    const Sxx = sxx - n * mx * mx, Syy = syy - n * my * my, Sxy = sxy - n * mx * my, Sxz = sxz - n * mx * mz, Syz = syz - n * my * mz;
+    const det = Sxx * Syy - Sxy * Sxy; if(Math.abs(det) < 1e-9) throw new Error('표본이 한 줄에 놓여 기울기를 계산할 수 없음');
+    const b = (Sxz * Syy - Syz * Sxy) / det, c = (Syz * Sxx - Sxz * Sxy) / det;
+    const deg = Math.atan(Math.hypot(b, c)) * 180 / Math.PI;
+    const downAz = (Math.atan2(-b, -c) * 180 / Math.PI + 360) % 360; // 내리막 방향 방위각(북 0°, 동 90°)
+    const dirs = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+    lastSlope = { deg, aspect: dirs[Math.round(downAz / 45) % 8], downAz, zmin: Math.min(...z), zmax: Math.max(...z), n, pnu };
+  }catch(e){ lastSlope = { error: String(e && e.message || e), pnu }; }
+  refreshSummaryDynamicRows();
+}
+function slopeRowHtml(){
+  const g = id => document.getElementById(id);
+  const cat = (g('landCategory') || {}).value;
+  let auto;
+  if(!lastParcelPath || lastParcelPath.length < 3) auto = '<span class="sum-muted">필지 경계가 없어 측정하지 않음</span>';
+  else if(!lastSlope) auto = '<span class="sum-muted">표고 조회 중…</span>';
+  else if(lastSlope.error) auto = `<span class="sum-muted">자동 측정 실패(${escLand(lastSlope.error)}) — 현장·지형도 확인 필요</span>`;
+  else { const S = lastSlope; const warn = S.deg >= 15; auto = `자동 측정 <b${warn ? ' style="color:var(--coral);"' : ''}>약 ${S.deg.toFixed(1)}°</b> (${S.aspect}쪽으로 내리막 · 표고 ${S.zmin.toFixed(0)}~${S.zmax.toFixed(0)}m, 표본 ${S.n}점) <span class="sum-muted">— Copernicus DEM 90m 격자 기준 평균 기울기(참고용, 소규모 필지는 오차 큼 · 출처 Open-Meteo)</span>`; }
+  let manual = '';
+  if(cat === 'forest'){ const sv = (g('slope') || {}).value || '10'; const lab = { '10': '10° 미만', '20': '10~20°', '30': '20~30°', '99': '30° 이상' }[sv] || sv + '°'; manual = `<div style="margin-top:3px;">입력값 평균 경사도 <b>${lab}</b> <span class="sum-muted">(왼쪽 "평균 경사도")</span>${sv !== '10' ? ' — 산지 태양광은 통상 15° 초과 시 지자체 조례상 불허 사례가 많아 관할청 확인 필요' : ''}</div>`; }
+  const warnCls = (lastSlope && !lastSlope.error && lastSlope.deg >= 15) || (cat === 'forest' && ((g('slope') || {}).value || '10') !== '10') ? ' warn' : '';
+  return `<div class="sum-row${warnCls}" id="sumSlopeRow"><span class="sum-k">경사도</span><span class="sum-v">${auto}${manual}</span></div>`;
+}
+// 위반(불법)건축물: 건축물대장 조회 결과(동 수·항목에 '위반' 문구)와 필지 안 건물 도형 수를 대조. 위반건축물 표기 자체는 정부24·세움터 대장 열람으로 확인
+function illegalRowHtml(){
+  const shapes = parcelBuildings.length;
+  const esc = escLand;
+  let cls = '', txt;
+  if(!lastBldrgst){
+    txt = `건축물대장 <b>미조회</b> — <a href="#" onclick="event.preventDefault();checkBuildingRegister();">여기서 조회</a>하면 등록 동 수와 필지 안 건물 도형 ${shapes}동을 대조합니다. `;
+    cls = ' check';
+  } else if(!lastBldrgst.items || !lastBldrgst.items.length){
+    txt = `건축물대장 <b>없음</b>(이 지번 기준)${shapes ? ` — 그런데 지도 건물 도형은 <b>${shapes}동</b> → 미등록(무허가) 건물 가능성, 확인 필요` : ' · 지도 건물 도형도 없음'}. `;
+    cls = shapes ? ' warn' : ' ok';
+  } else {
+    const items = lastBldrgst.items;
+    const viol = items.filter(it => Object.entries(it).some(([k, v]) => /위반|viol/i.test(k) || /위반/.test(String(v ?? ''))));
+    const reg = items.length;
+    const diff = shapes - reg;
+    txt = `건축물대장 등록 <b>${reg}동</b>(표제부) · 지도 건물 도형 <b>${shapes}동</b>${diff > 0 ? ` → 대장보다 <b>${diff}동 많음</b>(미등록·무허가 또는 부속건물 가능성, 확인 필요)` : ''}. `;
+    if(viol.length){ txt += `대장 항목에 '위반' 문구 있는 동 <b>${viol.length}</b>: ${viol.map(it => esc(it.dongNm || it.bldNm || '-')).join(', ')}. `; cls = ' warn'; }
+    else { txt += `조회된 표제부 항목에는 '위반' 문구가 없음. `; cls = diff > 0 ? ' warn' : ' ok'; }
+  }
+  txt += `<span class="sum-muted">위반건축물 표기(대장 상단 노란 표시)와 사용승인 여부는 <a href="https://www.gov.kr" target="_blank">정부24 건축물대장 열람</a> 또는 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a>에서 직접 확인하세요. 이 사이트가 쓰는 건축HUB 오픈API 표제부 항목에 위반건축물 전용 필드가 있는지는 확인되지 않았습니다. 불법건축물(미양성화)은 개발행위 전 양성화·철거가 필요합니다(견적서 참고사항).</span>`;
+  return `<div class="sum-row${cls}" id="sumIllegalRow"><span class="sum-k">위반건축물</span><span class="sum-v">${txt}</span></div>`;
+}
+function refreshSummaryDynamicRows(){
+  try{
+    const a = document.getElementById('sumSlopeRow'); if(a) a.outerHTML = slopeRowHtml();
+    const b = document.getElementById('sumIllegalRow'); if(b) b.outerHTML = illegalRowHtml();
+  }catch(e){ console.warn('summary rows', e); }
+}
 function buildSummaryHtml(r){
   const g = id => document.getElementById(id);
   const won = n => Math.round(n).toLocaleString('ko-KR') + '원';
@@ -8924,12 +9004,13 @@ function buildSummaryHtml(r){
       <div class="sum-grid">
         <div class="sum-row"><span class="sum-k">위치</span><span class="sum-v">${addr}${pnu ? ` <span class="sum-muted">PNU ${pnu}</span>` : ''}</span></div>
         <div class="sum-row"><span class="sum-k">토지</span><span class="sum-v">지목 <b>${jimok}</b> · <b>${r.area.toLocaleString('ko-KR')}㎡</b> (약 ${py.toLocaleString('ko-KR')}평, ${areaSrc}) · <b>${r.zone.label}</b> · 공시지가 ${price.toLocaleString('ko-KR')}원/㎡ (${priceSrc})</span></div>
-        ${(() => { if(cat !== 'forest') return ''; const sv = (g('slope') || {}).value || '10'; const lab = { '10': '10° 미만', '20': '10~20°', '30': '20~30°', '99': '30° 이상' }[sv] || sv + '°'; const warn = sv !== '10'; return `<div class="sum-row${warn ? ' warn' : ''}"><span class="sum-k">경사도</span><span class="sum-v">평균 경사도 <b>${lab}</b> <span class="sum-muted">(왼쪽 "평균 경사도" 입력값 · 자동 측정 아님)</span>${warn ? ' — 산지 태양광은 통상 15° 초과 시 지자체 조례상 불허 사례가 많아 관할청 확인 필요' : ''}</span></div>`; })()}
+        ${slopeRowHtml()}
         <div class="sum-row${r.absoluteBlock ? ' warn' : ''}"><span class="sum-k">인허가</span><span class="sum-v">개발행위허가 규모 상한 ${fmtArea(r.effectiveLimit)} → <b>${r.area > r.effectiveLimit ? '규모 초과' : '상한 이내'}</b>${r.absoluteBlock ? `<div style="margin-top:4px;"><b style="color:var(--coral);">⛔ 원칙적 불허: ${r.absoluteBlock}</b></div>` : ''}</span></div>
         <div class="sum-row"><span class="sum-k">예상 용량</span><span class="sum-v">${capText} <span class="sum-muted">— 실무 밀도 기준 개략치</span></span></div>
         <div class="sum-row ${gridCls}"><span class="sum-k">계통</span><span class="sum-v">${gridText}</span></div>
         <div class="sum-row ${setbackCls}"><span class="sum-k">이격거리</span><span class="sum-v">${setbackText}</span></div>
         <div class="sum-row ${roadCls}"><span class="sum-k">진입로</span><span class="sum-v">${roadText}</span></div>
+        ${illegalRowHtml()}
         <div class="sum-row"><span class="sum-k">지자체 연락처</span><span class="sum-v">${(() => {
           const e0 = lastAdmin ? getContactsEntry(lastAdmin) : null;
           const sd = lastAdmin ? getSidoContacts(lastAdmin) : null;
