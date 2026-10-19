@@ -616,6 +616,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <option value="insam">인삼밭</option>
             <option value="zero">제로솔루션</option>
           </select>
+          <label style="display:flex;align-items:center;gap:5px;margin-top:2px;" title="공공 건물도형 면적이 건축물대장 건축면적보다 25% 넘게 크면(필지 모양으로 들어온 경우) 각 변을 같은 거리만큼 안쪽으로 줄여 건축면적에 맞춘 경계에 배치합니다(추정)"><input type="checkbox" id="archFixOn" checked> 건물도형이 대장 건축면적보다 크면 경계 줄이기</label>
           <label for="autoLandPreset" style="font-weight:700;white-space:nowrap;margin-top:4px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다">🌱 건물 없는 토지 자동 배치</label>
           <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="width:100%;font-size:12px;padding:3px 4px;box-sizing:border-box;">
             <option value="ground3" selected>토지 노지 3단(끝 3m 이격)</option>
@@ -4066,7 +4067,7 @@ function applyStdMountUi(mt){
 const layoutRegistry = []; // [{type, groupId, modules:[{poly,removed}], label, boundary, lat0Rad, azRad, modW, modD, fill, ...}]
 function registerLayout(ed){
   if(ed && ed.bldName === undefined) ed.bldName = layoutNameFor(ed.boundary);
-  if(ed){ ed.preset = activePreset; ed.mountType = (document.getElementById('mountType') || {}).value; }
+  if(ed){ ed.preset = activePreset; ed.mountType = (document.getElementById('mountType') || {}).value; if(lastArchOrig && !ed.origBoundary) ed.origBoundary = lastArchOrig.slice(); }
   layoutRegistry.push(ed); raiseModules(ed); scheduleLayoutCards();
 }
 // ===== ⑤ 부속물: 사다리·전기실·인버터·기타 — 지도 클릭으로 놓고, 끌어서 옮기고, 배치도 이미지·DXF에 함께 출력 =====
@@ -4188,7 +4189,7 @@ function renderLayoutCards(){
     const name = ed.bldName || `${i + 1}동`;
     return `<div class="lay-card" draggable="true" data-gid="${ed.groupId}" ondragstart="layCardDragStart(event)" ondragover="layCardDragOver(event)" ondragleave="this.classList.remove('over')" ondrop="layCardDrop(event)" ondragend="layCardDragEnd(event)">
       <div class="lc-head"><span style="color:#9A7A3A;font-weight:700;">${i + 1}</span><span class="lc-name" title="${escLand(name)}">${escLand(name)}</span><span class="lc-kw">${fmt(kw)} kW</span></div>
-      <div class="lc-sub">${escLand(layoutTypeLabel(ed))} · ${area ? Math.round(area).toLocaleString('ko-KR') + '㎡ (' + Math.round(area / 3.305785).toLocaleString('ko-KR') + '평) · ' : ''}${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}장${(ed.tables || []).length ? ' · 테이블 ' + ed.tables.length + '개' : ''}</div>
+      <div class="lc-sub">${escLand(layoutTypeLabel(ed))} · ${area ? Math.round(area).toLocaleString('ko-KR') + '㎡ (' + Math.round(area / 3.305785).toLocaleString('ko-KR') + '평) · ' : ''}${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}장${(ed.tables || []).length ? ' · 테이블 ' + ed.tables.length + '개' : ''}${ed.archFix ? ` · <span style="color:#B3261E;" title="건물도형 ${Math.round(ed.archFix.from)}㎡ → 건축물대장 건축면적 ${Math.round(ed.archFix.reg)}㎡ 기준으로 경계를 ${ed.archFix.d.toFixed(1)}m 줄임(추정)">경계 대장면적 보정</span>` : ''}</div>
       <div class="lc-btns">
         <button type="button" onclick="layCardLocate(${ed.groupId})" title="지도를 이 배치로 이동">📍 위치</button>
         <select onmousedown="event.stopPropagation()" onchange="layCardRelayoutAs(${ed.groupId}, this.value)" title="이 동만 고른 유형으로 바로 다시 배치(기존 배치는 교체, ↶ 이전으로 복구 가능)" style="font-size:11px;padding:1px 3px;border:1px solid var(--card-line);border-radius:5px;background:var(--surface-2);font-family:inherit;max-width:150px;">${layCardTypeOptions(ed)}</select>
@@ -5797,7 +5798,8 @@ function onGenerateLayoutClick(){
       const mtLabel = P ? P.label : ((document.querySelector('#mountType option:checked') || {}).textContent || '');
       const st = document.getElementById('roadviewStatus');
       const ap = ed.autoPick;
-      if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `✅ ${ed.bldName ? ed.bldName + ' · ' : ''}${ap ? `최대 배치 → ${layoutTypeLabel(ed)}` : mtLabel} · ${live.toLocaleString('ko-KR')}장 · ${(live * ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW${vents ? ` · 통풍로 ${vents}` : ''}${ap ? ` — ${ap.orient}(용마루 방위각 ${ap.ridgeAz.toFixed(0)}°) · 비교: ${ap.results.map(r => `${r.label} ${r.n}장`).join(' · ')}` : ''}`; }
+      if(lastArchFix){ ed.archFix = lastArchFix; }
+      if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `${ed.archFix ? `📏 건물도형 ${Math.round(ed.archFix.from).toLocaleString('ko-KR')}㎡가 건축물대장 건축면적 ${Math.round(ed.archFix.reg).toLocaleString('ko-KR')}㎡보다 커서 각 변을 ${ed.archFix.d.toFixed(1)}m 안쪽으로 줄인 경계(${Math.round(ed.archFix.to).toLocaleString('ko-KR')}㎡)에 배치 — 추정 경계이므로 실제 지붕과 다르면 "↔ 조정"으로 맞추세요. ` : ''}✅ ${ed.bldName ? ed.bldName + ' · ' : ''}${ap ? `최대 배치 → ${layoutTypeLabel(ed)}` : mtLabel} · ${live.toLocaleString('ko-KR')}장 · ${(live * ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW${vents ? ` · 통풍로 ${vents}` : ''}${ap ? ` — ${ap.orient}(용마루 방위각 ${ap.ridgeAz.toFixed(0)}°) · 비교: ${ap.results.map(r => `${r.label} ${r.n}장`).join(' · ')}` : ''}`; }
     }
   }
   // 구역 나누기 중이면 다음 구역 안내
@@ -5808,9 +5810,48 @@ function onGenerateLayoutClick(){
     else if(st && !rest.length) st.textContent += '  ✅ 두 구역 모두 배치했습니다.';
   }
 }
+// ===== 건물 도형이 실제 건물보다 크게(필지 모양으로) 들어온 경우: 건축물대장 건축면적(archArea)과 비교해 경계를 안쪽으로 줄임 =====
+// 공공 건물도형(도로명주소 건물) 면적이 대장 건축면적의 1.25배를 넘으면, 각 변을 같은 거리만큼 안쪽으로 옮겨 면적이 건축면적과 같아지는 경계로 배치(추정 — 모양은 원래 도형 비례)
+function insetPathXY(xy, d){
+  const n = xy.length; const sgn = (() => { let a = 0; for(let i = 0; i < n; i++){ const p = xy[i], q = xy[(i + 1) % n]; a += p.x * q.y - q.x * p.y; } return a > 0 ? 1 : -1; })();
+  const lines = xy.map((p, i) => { const q = xy[(i + 1) % n]; const dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy) || 1; const nx = -dy / L * sgn, ny = dx / L * sgn; return { p: { x: p.x + nx * d, y: p.y + ny * d }, v: { x: dx, y: dy } }; });
+  return lines.map((l1, i) => { const l0 = lines[(i - 1 + n) % n]; const den = l0.v.x * l1.v.y - l0.v.y * l1.v.x; if(Math.abs(den) < 1e-9) return l1.p; const t = ((l1.p.x - l0.p.x) * l1.v.y - (l1.p.y - l0.p.y) * l1.v.x) / den; return { x: l0.p.x + l0.v.x * t, y: l0.p.y + l0.v.y * t }; });
+}
+function areaXY(xy){ let a = 0; for(let i = 0; i < xy.length; i++){ const p = xy[i], q = xy[(i + 1) % xy.length]; a += p.x * q.y - q.x * p.y; } return Math.abs(a) / 2; }
+function regArchAreaFor(name){
+  const items = (lastBldrgst && Array.isArray(lastBldrgst.items)) ? lastBldrgst.items.filter(it => parseFloat(it.archArea) > 0) : [];
+  if(!items.length) return null;
+  const nm = String(name || '').replace(/\s/g, '');
+  let it = nm ? items.find(x => [x.dongNm, x.bldNm].some(v => v && (String(v).replace(/\s/g, '') === nm || nm.includes(String(v).replace(/\s/g, '')) || String(v).replace(/\s/g, '').includes(nm)))) : null;
+  if(!it && items.length === 1) it = items[0];
+  return it ? { area: parseFloat(it.archArea), name: it.dongNm || it.bldNm || '' } : null;
+}
+let lastArchFix = null, lastArchOrig = null; // 최근 보정 내역(상태줄 표시용) · 보정 전 원래 경계
+function fitBoundaryToRegister(){
+  lastArchFix = null;
+  if(!((document.getElementById('archFixOn') || { checked: true }).checked)) return;
+  if(!currentBoundaryOfficial || !lastAreaPolygonPath || lastAreaPolygonPath.length < 3) return;
+  // 검색한 필지 안의 건물만(대장은 그 필지 것)
+  if(!lastParcelPath || lastParcelPath.length < 3) return;
+  const lat0 = lastAreaPolygonPath.reduce((a, q) => a + q.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180;
+  const xy = lastAreaPolygonPath.map(q => solarToXY(q, lat0));
+  const c = { x: xy.reduce((a, q) => a + q.x, 0) / xy.length, y: xy.reduce((a, q) => a + q.y, 0) / xy.length };
+  if(!pointInPolygonXY(c, lastParcelPath.map(q => solarToXY(q, lat0)))) return;
+  const reg = regArchAreaFor(currentBoundaryName); if(!reg) return;
+  const A0 = areaXY(xy); if(!(A0 > reg.area * 1.25)) return;
+  let lo = 0, hi = Math.sqrt(A0) / 2, best = null;
+  for(let k = 0; k < 40; k++){ const mid = (lo + hi) / 2; const ins = insetPathXY(xy, mid); const a = areaXY(ins); if(a > reg.area){ lo = mid; best = ins; } else hi = mid; }
+  const d = (lo + hi) / 2, ins = insetPathXY(xy, d);
+  if(!(areaXY(ins) > reg.area * 0.8)) return; // 줄이다 모양이 뒤집히면 포기
+  lastAreaPolygonPath = ins.map(q => solarToLatLng(q.x, q.y, lat0));
+  lastArchFix = { from: A0, to: areaXY(ins), reg: reg.area, d, name: reg.name };
+}
 function onGenerateLayoutClickInner(){
   const mtEl = document.getElementById('mountType');
   let mt = mtEl.value;
+  lastArchOrig = (lastAreaPolygonPath && lastAreaPolygonPath.length >= 3) ? lastAreaPolygonPath.slice() : null;
+  if(lastArchOrig){ for(let i = layoutRegistry.length - 1; i >= 0; i--){ const e = layoutRegistry[i]; if(e.origBoundary && !sameBoundary(e.boundary, lastArchOrig) && sameBoundary(e.origBoundary, lastArchOrig)){ try{ removeMeasureGroup(e.groupId); }catch(x){} layoutRegistry.splice(i, 1); } } } // 같은 건물도형에서 만든 이전(보정) 배치 교체
+  if(mt !== 'ground'){ try{ fitBoundaryToRegister(); }catch(e){ console.warn('arch fix', e); } }
   // 경계를 따로 그리지 않았으면: 지상 배치만 검색한 필지 경계(분홍 선)를 그대로 사용. 지붕 배치는 건물 외곽선이 있어야 함.
   if((!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) && mt !== 'ground'){
     const st = document.getElementById('roadviewStatus');
@@ -7102,6 +7143,12 @@ async function loadParcelBuildings(parcelPath){
     shapes.push(poly);
     parcelBuildings.push({ path, name, floors, poly, area: shoelaceArea(path) });
   });
+  // 다른 건물 도형의 중심을 품고 있는 더 큰 도형(건물군·대지 외곽선)은 목록에서 뺌 — 실제 건물 도형만 배치 대상으로
+  { const la = lat0; const xyOf = b => b.path.map(q => solarToXY(q, la)); const cen = xy => ({ x: xy.reduce((a, q) => a + q.x, 0) / xy.length, y: xy.reduce((a, q) => a + q.y, 0) / xy.length });
+    const drop = new Set();
+    parcelBuildings.forEach((A, i) => { const ax = xyOf(A); parcelBuildings.forEach((B, j) => { if(i === j || drop.has(j)) return; if(A.area > B.area * 1.05 && pointInPolygonXY(cen(xyOf(B)), ax)) drop.add(i); }); });
+    if(drop.size){ const keep = parcelBuildings.filter((b, i) => !drop.has(i)); parcelBuildings.forEach((b, i) => { if(drop.has(i)){ try{ b.poly.setMap(null); }catch(e){} } }); parcelBuildings.length = 0; keep.forEach(b => parcelBuildings.push(b)); }
+  }
   if(shapes.length){ shapes.forEach(sh => measureShapes.push(sh)); parcelBldGroupId = registerMeasureGroup(shapes); }
   // 지도 위 안내 띠는 띄우지 않음(사용자 요청 2026-10-15) — 건물 수는 배치도 탭 합계 줄에 표시
   updateAllDongBtn();
@@ -7116,7 +7163,11 @@ function loadMaxRule(){ try{ const v = JSON.parse(localStorage.getItem('solarMax
 function saveAutoLayoutPreset(){ try{ localStorage.setItem('solarAutoLayout', (document.getElementById('autoLayoutPreset') || {}).value || ''); localStorage.setItem('solarAutoLand', (document.getElementById('autoLandPreset') || {}).value || ''); }catch(e){} }
 function loadAutoLayoutPreset(){ loadMaxRule(); try{ const v = localStorage.getItem('solarAutoLayout'); const el = document.getElementById('autoLayoutPreset'); if(el && v !== null && [...el.options].some(o => o.value === v)) el.value = v; const v2 = localStorage.getItem('solarAutoLand'); const el2 = document.getElementById('autoLandPreset'); if(el2 && v2 !== null && [...el2.options].some(o => o.value === v2)) el2.value = v2; }catch(e){} }
 let autoLayoutPending = false; // 컨설팅 탭에서 검색했으면 배치도 탭으로 넘어갈 때 실행
-function autoLayoutAfterSearch(){
+async function autoLayoutAfterSearch(){
+  try{ if(parcelBuildings.length && document.querySelector('#railPaneLayout.active')) await ensureBldrgstForSide(null); }catch(e){}
+  return autoLayoutAfterSearchInner();
+}
+function autoLayoutAfterSearchInner(){
   const key = (document.getElementById('autoLayoutPreset') || {}).value;
   const landKey = (document.getElementById('autoLandPreset') || {}).value;
   if(!parcelBuildings.length){ // 건물 없는 토지 → 필지 경계에 토지 노지 자동 배치
@@ -7342,7 +7393,9 @@ async function pickBuildingAt(latlng){
     st.style.color = '#b3402a';
     return;
   }
-  const f = feats[0];
+  // 여러 도형이 겹쳐 있으면(큰 외곽선 안에 실제 건물) 클릭 지점을 포함하는 것 중 가장 작은 도형
+  const fArea = ft => { const r = parseVworldGeom(ft.geometry || (ft.properties && ft.properties.ag_geom)); if(!r || r.length < 3) return Infinity; const pp = r.map(q => new kakao.maps.LatLng(q.lat, q.lng)); const la = latlng.getLat() * Math.PI / 180; return pointInPolygonXY(solarToXY(latlng, la), pp.map(q => solarToXY(q, la))) ? shoelaceArea(pp) : Infinity; };
+  const f = feats.length > 1 ? feats.slice().sort((a, b) => fArea(a) - fArea(b))[0] : feats[0];
   const ring = parseVworldGeom(f.geometry || (f.properties && f.properties.ag_geom));
   if(!ring || ring.length < 3){ st.textContent = '❌ 건물 외곽선 좌표를 읽지 못했습니다.'; st.style.color = '#b3402a'; return; }
   histCheckpoint('건물 자동 선택');
