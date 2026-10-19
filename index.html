@@ -2069,11 +2069,18 @@ async function toggleClickedParcel(latlng){
   lastAreaPolygonPath = kakaoPath.slice();
   try{ refreshAlignEdgeOptions(); }catch(e){}
   const st = document.getElementById('roadviewStatus');
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📐 ${props.addr || props.jibun || ''} — 연속지적도 경계 기준 약 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평). 이 필지가 배치 경계로 잡혔습니다 — "배치 생성"을 누르면 여기에 모듈이 배치됩니다(다른 필지의 배치는 그대로 유지). 같은 필지를 다시 클릭하거나 ✕를 누르면 표시가 사라집니다. 면적은 토지대장 공부면적과 소수점 차이가 있을 수 있습니다.`; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📐 ${props.addr || props.jibun || ''} — 연속지적도 경계 기준 약 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(pyeong).toLocaleString('ko-KR')}평). 이 필지가 배치 경계로 잡혔습니다 — "배치 생성"을 누르면 여기에 모듈이 배치됩니다(다른 필지의 배치는 그대로 유지). 같은 필지를 다시 클릭하거나 ✕를 누르면 표시가 사라집니다. 면적은 토지대장 공부면적과 소수점 차이가 있을 수 있습니다.`; if(Object.keys(clickedParcels).length > 1) st.textContent = clickedParcelsSummary() + ' | ' + st.textContent; }
 }
 function removeClickedParcel(pnu){
   const c = clickedParcels[pnu]; if(!c) return;
   removeMeasureGroup(c.groupId); delete clickedParcels[pnu];
+  const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `필지 ${c.jibun || ''} 선택 해제. ` + clickedParcelsSummary(); }
+}
+// 클릭해 둔 필지들의 합산: "선택 필지 N개 합계 ㎡(평) — 지번(평) + …"
+function clickedParcelsSummary(){
+  const list = Object.values(clickedParcels); if(!list.length) return '';
+  const tot = list.reduce((a, c) => a + (c.area || 0), 0);
+  return `∑ 선택 필지 ${list.length}개 합계 ${Math.round(tot).toLocaleString('ko-KR')}㎡ (${Math.round(tot / PYEONG_M2).toLocaleString('ko-KR')}평) = ${list.map(c => `${c.jibun || '?'} ${Math.round((c.area || 0) / PYEONG_M2).toLocaleString('ko-KR')}평`).join(' + ')}`;
 }
 
 (function(){
@@ -4173,11 +4180,11 @@ function renderLayoutCards(){
   const wrap = document.getElementById('layCards'), sum = document.getElementById('laySum');
   if(!wrap || !sum) return;
   const fmt = (v, d) => v.toLocaleString('ko-KR', { maximumFractionDigits: d == null ? 2 : d });
-  let tKw = 0, tEa = 0;
+  let tKw = 0, tEa = 0, tArea = 0;
   const rows = layoutRegistry.map((ed, i) => {
     const live = ed.modules.filter(m => !m.removed).length, kw = live * ed.wattPerPanel / 1000;
     tKw += kw; tEa += live;
-    const area = layoutAreaM2(ed);
+    const area = layoutAreaM2(ed); tArea += area || 0;
     const name = ed.bldName || `${i + 1}동`;
     return `<div class="lay-card" draggable="true" data-gid="${ed.groupId}" ondragstart="layCardDragStart(event)" ondragover="layCardDragOver(event)" ondragleave="this.classList.remove('over')" ondrop="layCardDrop(event)" ondragend="layCardDragEnd(event)">
       <div class="lc-head"><span style="color:#9A7A3A;font-weight:700;">${i + 1}</span><span class="lc-name" title="${escLand(name)}">${escLand(name)}</span><span class="lc-kw">${fmt(kw)} kW</span></div>
@@ -4192,7 +4199,7 @@ function renderLayoutCards(){
   const allBar = rows.length ? `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:0 0 6px;flex-wrap:wrap;"><span style="color:var(--ink-soft);">전체 동을</span><select id="layAllType" style="font-size:11px;padding:1px 3px;border:1px solid var(--card-line);border-radius:5px;background:var(--surface-2);font-family:inherit;">${layCardTypeOptions(null)}</select><button type="button" class="preset-btn" style="padding:2px 8px;font-size:11px;" onclick="layRelayoutAll(document.getElementById('layAllType').value)" title="모든 동을 고른 유형으로 다시 배치">🔁 모두 다시 배치</button></div>` : '';
   wrap.innerHTML = rows.length ? allBar + rows.join('') : '<div class="lay-empty">아직 배치가 없습니다. 지도에서 건물을 클릭하고 ② 유형 → ③ 배치 생성.</div>';
   sum.innerHTML = rows.length
-    ? `<b>${fmt(tKw)} kW</b><span>${tEa.toLocaleString('ko-KR')} EA · ${rows.length}개 배치${parcelBuildings.length ? ' · 필지 안 건물 ' + parcelBuildings.length + '동' : ''}</span>`
+    ? `<b>${fmt(tKw)} kW</b><span>${tEa.toLocaleString('ko-KR')} EA · ${rows.length}개 배치 · 경계 면적 합계 ${Math.round(tArea).toLocaleString('ko-KR')}㎡ (${Math.round(tArea / PYEONG_M2).toLocaleString('ko-KR')}평)${parcelBuildings.length ? ' · 필지 안 건물 ' + parcelBuildings.length + '동' : ''}</span>`
     : `<b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span>`;
 }
 // 카드의 유형 선택 목록: 현재 유형이 선택된 상태로
