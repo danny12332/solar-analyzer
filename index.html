@@ -5262,13 +5262,8 @@ function generateStdLayout(kind){
   const ymid = (Y0 + Y1) / 2; // 용마루(대칭 박공 가정)
   const real = (x, y) => rotateXY(x, y, axis);
   let flat = kind === 'insam_flat' || ridgeHalf <= 0 || wondanFlatRoof; // 용마루 이격 0 / 평지붕 = 한 면으로 취급
-  let autoFlat = false;
-  if(!flat && !wondanFlatRoof && (kind === 'wondan' || kind === 'wondan_barn')){
-    // 면(처마~용마루) 폭에 2줄 틀도 안 들어가면 용마루로 나누지 않고 한 면 전체에 배치 (예: 폭 10m 이하 건물·토지)
-    const fN = Math.min(2, Math.max(1, Math.round(num('stdFrameRows', 3)))); // 최소 틀(2줄)도 안 들어갈 때만
-    const dY0 = L * cosT, faceD = (ymid - ridgeHalf) - (Y0 + setback);
-    if(faceD < fN * dY0 + (fN - 1) * gap - 1e-6){ flat = true; autoFlat = true; }
-  }
+  let autoFlat = false; // 원단: 용마루 남북 분할이 적으면 용마루 넘어 플랫(5°)로 자동 전환됨
+  let tiltUsed = tilt;
   const insideRidge = c => !(ridgeHalf > 0 && kind !== 'parking' && !flat && Math.abs(c.y - ymid) < ridgeHalf - 0.005);
   const sb = setback; // 반복 시작점을 경계 이격만큼 안쪽에서 시작(첫 열이 이격 띠에 걸려 사라지지 않게)
   const fits = cr => cr.every(c => { const r = real(c.x, c.y); return pointInPolygonXY(r, polyXY) && (setback <= 0 || distToPolygonBoundary(r, polyXY) >= setback - 0.02) && insideRidge(c); }); // 2cm 허용오차: 지적·건물 외곽선이 완전한 직사각형이 아니어서 첫 열이 통째로 빠지는 것 방지
@@ -5289,18 +5284,21 @@ function generateStdLayout(kind){
 
   if(kind === 'wondan' || kind === 'wondan_barn'){
     // 모듈: x'(용마루 방향) 폭 W, y'(경사 방향) 투영 L·cosθ. 각 면을 처마→용마루로 채우고, x' 방향 N장마다 1m 이격
-    const dY = L * cosT, dX = W;
+    // 한 번의 배치 시도: flatF(용마루 넘어 한 면) · tiltDeg(모듈 경사 → 투영 길이 L·cosθ) → cands에 넣고 틀 구성 문자열 반환
+    const dX = W;
     const frameN = Math.max(1, Math.round(num('stdFrameRows', 3)));
-    let frameGap = Math.max(num('stdFrameGap', 0.5), gap);
+    const blockGap = Math.max(num('stdBlockGap', 0), 0); // N장마다 추가 이격(기본 0 = 빈 공간 없이 연속)
     let shadeNote = '';
+    const runWondan = (flatF, tiltDeg) => {
+    flat = flatF; const dY = L * Math.cos(tiltDeg * Math.PI / 180);
+    let frameGap = Math.max(num('stdFrameGap', 0.5), gap);
     if(wondanFlatRoof){
       // 평지붕: 틀(블록) 사이 = 틀 뒤쪽 높이 ÷ tan(동지 남중고도) — 지상 배치와 같은 그림자 기준
-      const hBack = frameN * L * Math.sin(tilt * Math.PI / 180);
+      const hBack = frameN * L * Math.sin(tiltDeg * Math.PI / 180);
       const k = Math.max(parseFloat((document.getElementById('flatGapK') || {}).value) || 2.06, 0);
       frameGap = Math.max(hBack * k, frameGap);
       shadeNote = ` · 평지붕: 틀 사이 ${frameGap.toFixed(2)}m(뒤쪽 높이 ${hBack.toFixed(2)}m × ${k})`;
     }
-    const blockGap = Math.max(num('stdBlockGap', 0), 0); // N장마다 추가 이격(기본 0 = 빈 공간 없이 연속)
     const frameSummary = [];
     let blk = 0;
     (flat ? ['f'] : ['a', 'b']).forEach(face => {
@@ -5312,8 +5310,8 @@ function generateStdLayout(kind){
       let m = 0; while(totalW(m + 1) <= D + 1e-6) m++;
       // 기본도면 예시(2단+2단, 2+3+3단, 3+3+3+4단 …)처럼 틀은 최소 2단 — 1단짜리 틀이 남으면 그 1장은 빼고 배치
       if(frameN >= 2 && m > frameN && (m % frameN) === 1) m -= 1;
-      if(frameN === 2 && m % 2 === 1) m -= 1;   // 원단 2단: 항상 2줄씩 붙인 틀만
-      if(frameN >= 2 && m < 2) return;          // 1줄짜리 틀은 만들지 않음
+      if(frameN === 2 && m >= 2 && m % 2 === 1) m -= 1;   // 원단 2단: 항상 2줄씩 붙인 틀만
+      if(frameN >= 2 && m < 2 && flatF) return;  // 1줄짜리 틀은 만들지 않음 (용마루로 나눈 면은 1줄만 들어가면 1줄 허용)
       if(m < 1) return;
       const fCount = Math.ceil(m / frameN), rem = m - (fCount - 1) * frameN;
       const sizes = [rem].concat(Array(fCount - 1).fill(frameN)); // 처마 쪽부터
@@ -5368,7 +5366,29 @@ function generateStdLayout(kind){
       }
       placeFace(best.ys, best.xs, true);
     });
-    summary = `원단 ${frameN}단${shadeNote} — ${autoFlat ? '(면 폭이 좁아 용마루 없이 한 면으로) ' : ''}${flat ? '' : '면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tilt}°, 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 통풍로 2개(3단 이상 틀만)${blockGap > 0 ? ` + ${blockGap}m 이격` : ', 블록 사이 빈 공간 없음'}, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격`;
+    return { frameSummary, frameGap };
+    }; // runWondan
+    let res, altNote = '';
+    if(flat){ res = runWondan(true, tilt); }
+    else {
+      // ① 용마루 기준 남북(양면) 분할, 입력 경사각 → ② 용마루 넘어 플랫 5°(투영 길이 L·cos5°로 재계산). ②가 ①보다 15% 넘게 많을 때만 ②
+      res = runWondan(false, tilt); const candsA = cands.splice(0, cands.length), resA = res;
+      const nA = candsA.filter(c => !c.vent).length;
+      // 면이 좁아 어느 면이든 1줄밖에 못 넣을 때만 대안 검토: 용마루 넘어 플랫 — 입력 경사각과 5°(투영 L·cos5°) 중 많은 쪽
+      const narrow = resA.frameSummary.length < 2 || resA.frameSummary.some(f => f === '1');
+      let picked = null;
+      if(narrow){
+        const resB1 = runWondan(true, tilt); const candsB1 = cands.splice(0, cands.length); const nB1 = candsB1.filter(c => !c.vent).length;
+        const resB2 = runWondan(true, 5); const candsB2 = cands.splice(0, cands.length); const nB2 = candsB2.filter(c => !c.vent).length;
+        const B = nB2 > nB1 ? { res: resB2, cands: candsB2, n: nB2, t: 5 } : { res: resB1, cands: candsB1, n: nB1, t: tilt };
+        if(B.n > nA * 1.15) picked = B;
+        altNote = picked ? ` · 용마루 남북 분할(${tilt}°)은 ${nA}장뿐이라 용마루 넘어 플랫 ${B.t}°(${B.n}장)로 전환 (플랫 ${tilt}° ${nB1}장 / 5° ${nB2}장 비교)` : ` · 비교: 용마루 넘어 플랫 ${tilt}° ${nB1}장 / 5° ${nB2}장 — 15% 이상 차이 없어 남북 분할 유지`;
+      }
+      if(picked){ cands.push(...picked.cands); res = picked.res; flat = true; autoFlat = true; tiltUsed = picked.t; }
+      else { cands.push(...candsA); res = resA; flat = false; tiltUsed = tilt; }
+    }
+    const frameSummary = res.frameSummary, frameGap = res.frameGap;
+    summary = `원단 ${frameN}단${shadeNote} — ${autoFlat ? `(용마루 넘어 한 면, 모듈 ${tiltUsed}°) ` : ''}${flat ? '' : '용마루 기준 남북 면별 '}틀 구성 ${frameSummary.join(' / ') || '-'}단(틀 사이 ${frameGap}m), 모듈 경사 ${tiltUsed}°(투영 ${Math.round(L * Math.cos(tiltUsed * Math.PI / 180) * 1000)}mm), 건물 끝 ${setback}m부터 배치, 용마루 방향 ${blockN}장마다 통풍로 2개(3단 이상 틀만)${blockGap > 0 ? ` + ${blockGap}m 이격` : ', 블록 사이 빈 공간 없음'}, 지붕 끝 ${setback}m·용마루 한쪽 ${ridgeHalf}m 이격${altNote}`;
   } else if(kind === 'insam' || kind === 'insam_flat' || kind === 'zero'){
     // 남북 축에 가까운 축을 열 피치(기울임) 방향으로: axis 방향 벡터 (cos,sin) 의 남북 성분 |sin| 이 크면 x'가 남북
     const xIsNS = Math.abs(Math.sin(axis)) >= Math.abs(Math.cos(axis));
@@ -5455,7 +5475,7 @@ function generateStdLayout(kind){
   label.setMap(map); measureShapes.push(label); measureGroups[solarGroupId].shapes.push(label);
   const first = chosen[0].cr;
   const ed = { type: 'std', kind, modules, mods: modules, label, wattPerPanel: watt, groupId: solarGroupId, boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: axis,
-    modW: Math.abs(first[1].x - first[0].x), modD: Math.abs(first[2].y - first[1].y), fill, areaM2, summary, geomCount: cands.length, tilt, frameN: (kind === 'wondan' || kind === 'wondan_barn') ? Math.round(num('stdFrameRows', 3)) : 0 };
+    modW: Math.abs(first[1].x - first[0].x), modD: Math.abs(first[2].y - first[1].y), fill, areaM2, summary, geomCount: cands.length, tilt: tiltUsed, frameN: (kind === 'wondan' || kind === 'wondan_barn') ? Math.round(num('stdFrameRows', 3)) : 0 };
   registerLayout(ed);
   buildTableOverlays(ed, modules, m => m.cornersRot, (x, y) => real(x, y));
   // 통풍로: 모듈 자리를 비우고(X 표시) 제외 상태로
@@ -8627,7 +8647,8 @@ async function checkKepcoCapacityInner(){
       if(g.delayNotice && !guideHits.some(h => h.text === g.delayNotice)) guideHits.push({ text: g.delayNotice, subst: r.SUBST_NM, delay: true });
     });
     lastKepcoSummary = {
-      lines: list.map(r => ({ subst: r.SUBST_NM ?? '-', mtr: r.MTR_NO ?? '-', dl: r.DL_NM ?? '-', vol1: Number(r.VOL_1), vol2: Number(r.VOL_2), vol3: Number(r.VOL_3), ok: Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0 })),
+      lines: list.map(r => ({ subst: r.SUBST_NM ?? '-', mtr: r.MTR_NO ?? '-', dl: r.DL_NM ?? '-', vol1: Number(r.VOL_1), vol2: Number(r.VOL_2), vol3: Number(r.VOL_3), ok: Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0,
+        ctrlCapa: DL_CTRL_CAPA, ctrlA: Math.max(DL_CTRL_CAPA - Number(r.DL_PWR), 0), ctrlB: Math.max(DL_CTRL_CAPA - Number(r.G_DL_CAPA), 0), ctrlOk: Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 })),
       guides: guideHits.map(h => h.text), jibun: matched ? matched.jibun : jibun, matchLevel
     };
     const reinforceNote = guideHits.length ? `
@@ -8952,7 +8973,13 @@ function buildSummaryHtml(r){
     const L = lastKepcoSummary.lines[0];
     const okAll = lastKepcoSummary.lines.some(x => x.ok);
     gridText = `${L.subst} 변전소 #${L.mtr} · ${L.dl} 선로 — 여유 변전소 <b>${L.vol1.toLocaleString('ko-KR')}</b> / 주변압기 <b>${L.vol2.toLocaleString('ko-KR')}</b> / 배전선로 <b>${L.vol3.toLocaleString('ko-KR')}</b> kW${lastKepcoSummary.lines.length > 1 ? ` (후보 ${lastKepcoSummary.lines.length}개 중 1)` : ''}${lastKepcoSummary.matchLevel !== 'exact' ? ` · 조회 지번 ${lastKepcoSummary.jibun}` : ''}`;
-    gridCls = okAll ? 'ok' : 'warn';
+    if(L.ctrlCapa){
+      const ctrlMax = Math.min(L.ctrlA, L.ctrlB);
+      gridText += L.ctrlOk
+        ? `<div style="margin-top:3px;">⚡ 출력제어 조건부 접속기준용량 <b>${L.ctrlCapa.toLocaleString('ko-KR')}kW</b> → 조건부 여유 <b>${L.ctrlA.toLocaleString('ko-KR')} / ${L.ctrlB.toLocaleString('ko-KR')} kW</b> (배전선로 여유 ${L.vol3.toLocaleString('ko-KR')}kW 초과분은 출력제어 조건으로 연계 가능 · 연계 가능 최대 약 <b>${ctrlMax.toLocaleString('ko-KR')}kW</b>)</div>`
+        : `<div style="margin-top:3px;">⚡ 출력제어 조건부 접속기준용량 ${L.ctrlCapa.toLocaleString('ko-KR')}kW — 변전소 또는 주변압기 여유가 0이라 조건부 연계도 불가</div>`;
+      gridCls = (okAll || (L.ctrlOk && ctrlMax > 0)) ? 'ok' : 'warn';
+    } else gridCls = okAll ? 'ok' : 'warn';
     if(lastKepcoSummary.guides.length){
       gridText += lastKepcoSummary.guides.map(t => `<div class="sum-guide">${t}</div>`).join('');
       gridCls = 'warn';
