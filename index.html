@@ -904,6 +904,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <span style="display:inline-flex;align-items:center;gap:2px;"><button type="button" id="delRowBtn" onclick="toggleDelRowMode()" title="모듈을 클릭하면 그 줄 전체 삭제 · 빈 곳을 두 번 클릭해 선을 그으면 선이 지나는 줄을 한꺼번에 삭제 (↶ 이전으로 복구)">🗑 줄 삭제</button><select id="delRowUnit" title="삭제 단위" style="font-size:11px;padding:0 2px;"><option value="table" selected>N단 묶음</option><option value="tier">모듈 1줄</option></select></span>
             <button type="button" id="moveLayoutBtn" onclick="toggleMoveLayoutMode()" title="배치(모듈 묶음)를 클릭해 선택한 뒤 손잡이를 끌거나 화살표로 전체를 이동">✥ 배치 이동</button>
             <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈을 클릭하면 한 장씩 제외/복원)">➕ 모듈 추가</button>
+            <button type="button" id="fillRectBtn" onclick="toggleFillRectMode()" title="빈 곳의 두 모서리를 클릭하면 그 사각형 안을 가까운 배치의 격자(모듈 크기+간격)에 맞춰 모듈로 채움">▦ 영역 채우기</button>
             <button type="button" id="addRowBtn" onclick="toggleAddRowMode()" title="이격 기준 때문에 못 들어간 줄을 강제로 추가: 줄을 넣을 빈 자리를 클릭하면 가장 가까운 줄과 똑같은 줄이 그 자리에 놓입니다">➕ 줄 추가</button>
             <button type="button" id="moreToolsBtn" onclick="toggleMoreTools()" title="꼭짓점 조정·테이블 추가/제거·영역 제거·지우기">⋯ 더보기</button>
             <span id="moreTools" style="display:none;align-items:center;gap:4px;flex-wrap:wrap;">
@@ -2168,6 +2169,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'radius'){ addRadiusPoint(mouseEvent.latLng); }
     else if(mapMode === 'building'){ pickBuildingAt(mouseEvent.latLng); }
     else if(mapMode === 'addmod'){ addModuleAt(mouseEvent.latLng); }
+    else if(mapMode === 'fillrect'){ fillRectClick(mouseEvent.latLng); }
     else if(mapMode === 'addtable'){ addTableAt(mouseEvent.latLng); }
     else if(mapMode === 'addrow'){ addRowAt(mouseEvent.latLng); }
     else if(mapMode === 'delrow'){ if(Date.now() - (window.__shapeClickAt || 0) >= 300) delRowClick(mouseEvent.latLng); }
@@ -2314,10 +2316,10 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot'].includes(mode));
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot','fillrect'].includes(mode));
     if(mode !== 'annot') annotPending = null;
     try{ annotBtnState(); }catch(e){}
-    [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
+    [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['fillRectBtn','fillrect'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
     });
@@ -4859,6 +4861,8 @@ function moduleClicked(m){
     rectDeleteClick(new kakao.maps.LatLng(cl, cg)); return;
   } else if(mapMode === 'addmod' || mapMode === 'addtable'){
     return;
+  } else if(mapMode === 'fillrect'){
+    const P = m.poly.getPath(); fillRectClick(new kakao.maps.LatLng(P.reduce((a, q) => a + q.getLat(), 0) / P.length, P.reduce((a, q) => a + q.getLng(), 0) / P.length)); return;
   } else if(mapMode === 'addrow'){
     const st = document.getElementById('roadviewStatus'); if(st) st.textContent = '➕ 줄 추가: 모듈 위가 아니라 줄을 넣을 빈 자리를 클릭하세요.'; return;
   } else {
@@ -5072,6 +5076,75 @@ function rectDeleteClick(latlng){
   new Set(hit.map(h => h.ed)).forEach(ed => refreshLayoutLabel(ed));
   document.getElementById('roadviewStatus').textContent = `⬚ 영역 안 모듈 ${hit.length}장을 ${allRemoved ? '복원' : '제외'}했습니다. 계속 두 모서리를 클릭하거나 버튼을 눌러 끝내세요.`;
 }
+// ▦ 영역 채우기: 두 모서리를 클릭하면 그 사각형(가까운 배치의 방향 기준) 안 빈 칸을 그 배치의 격자에 맞춰 채움
+let fillFirst = null, fillPreview = null;
+function toggleFillRectMode(){
+  const st = document.getElementById('roadviewStatus');
+  if(mapMode === 'fillrect'){ setMode('normal'); fillFirst = null; if(fillPreview){ fillPreview.setMap(null); fillPreview = null; } if(st) st.textContent = ''; return; }
+  if(!layoutRegistry.length){ if(st) st.textContent = '먼저 배치를 생성한 뒤 영역을 채울 수 있습니다.'; return; }
+  setMode('fillrect'); fillFirst = null;
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '▦ 영역 채우기: 채울 빈 곳의 한쪽 모서리를 클릭한 뒤 맞은편 모서리를 클릭하세요. 가까운 배치의 방향·모듈 크기·간격 격자에 맞춰 사각형 안 빈 칸에 모듈이 들어갑니다(경계 밖도 채우니 위치를 확인하세요). 되돌리기 "↶ 이전으로".'; }
+}
+function nearestLayoutTo(ll){
+  let best = null, bd = Infinity;
+  layoutRegistry.forEach(ed => { ed.modules.forEach(m => { const P = m.poly.getPath(); const c = new kakao.maps.LatLng(P.reduce((a, q) => a + q.getLat(), 0) / P.length, P.reduce((a, q) => a + q.getLng(), 0) / P.length); const d = haversineMeters(ll, c); if(d < bd){ bd = d; best = ed; } }); });
+  return best;
+}
+function fillRectClick(ll){
+  const st = document.getElementById('roadviewStatus');
+  if(!fillFirst){
+    fillFirst = ll;
+    if(fillPreview){ fillPreview.setMap(null); }
+    fillPreview = new kakao.maps.Polygon({ map: ensureKakaoMap(), path: [ll, ll, ll], strokeWeight: 2, strokeColor: '#0B3D91', strokeStyle: 'dash', fillColor: '#0B3D91', fillOpacity: 0.08, zIndex: 9 });
+    fillFirst.__ed = nearestLayoutTo(ll);
+    if(!window.__fillMoveHook){ window.__fillMoveHook = true; try{ kakao.maps.event.addListener(ensureKakaoMap(), 'mousemove', ev => {
+      if(mapMode !== 'fillrect' || !fillFirst || !fillPreview || !ev || !ev.latLng) return; const ed = fillFirst.__ed; if(!ed) return;
+      const toR = q => { const v = solarToXY(q, ed.lat0Rad); return rotateXY(v.x, v.y, -ed.azRad); }; const ra = toR(fillFirst), rb = toR(ev.latLng);
+      const cr = [[ra.x, ra.y], [rb.x, ra.y], [rb.x, rb.y], [ra.x, rb.y]].map(([x, y]) => { const r = rotateXY(x, y, ed.azRad); return solarToLatLng(r.x, r.y, ed.lat0Rad); });
+      fillPreview.setPath(cr);
+    }); }catch(e){} }
+    if(st) st.textContent = '▦ 맞은편 모서리를 클릭하세요.';
+    return;
+  }
+  const a = fillFirst, b = ll; fillFirst = null;
+  if(fillPreview){ fillPreview.setMap(null); fillPreview = null; }
+  const mid = new kakao.maps.LatLng((a.getLat() + b.getLat()) / 2, (a.getLng() + b.getLng()) / 2);
+  const ed = nearestLayoutTo(mid); if(!ed){ if(st) st.textContent = '❌ 기준이 될 배치를 찾지 못했습니다.'; return; }
+  const gap = Math.max(parseFloat((document.getElementById('panelGap') || {}).value) || 0.02, 0);
+  const stepX = ed.modW + gap, stepY = ed.modD + gap;
+  const toR = q => { const v = solarToXY(q, ed.lat0Rad); return rotateXY(v.x, v.y, -ed.azRad); };
+  const ra = toR(a), rb = toR(b);
+  const x0 = Math.min(ra.x, rb.x), x1 = Math.max(ra.x, rb.x), y0 = Math.min(ra.y, rb.y), y1 = Math.max(ra.y, rb.y);
+  // 기준: 사각형 가운데에서 가장 가까운 모듈(통풍로 제외)의 중심 → 그 격자 위의 칸 중 중심이 사각형 안인 것
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  let ref = null, rd = Infinity; ed.modules.forEach(m => { if(m.vent) return; const c = modCenterRot(ed, m); const d = Math.hypot(c.x - cx, c.y - cy); if(d < rd){ rd = d; ref = c; } });
+  if(!ref){ if(st) st.textContent = '❌ 기준 모듈이 없습니다.'; return; }
+  const hx = ed.modW / 2, hy = ed.modD / 2;
+  void hx; void hy; // 칸 중심이 사각형 안이면 채움(대충 클릭해도 끝 칸까지 들어가게)
+  const i0 = Math.ceil((x0 - ref.x) / stepX - 1e-6), i1 = Math.floor((x1 - ref.x) / stepX + 1e-6);
+  const j0 = Math.ceil((y0 - ref.y) / stepY - 1e-6), j1 = Math.floor((y1 - ref.y) / stepY + 1e-6);
+  const cells = (i1 - i0 + 1) * (j1 - j0 + 1);
+  if(!(cells > 0)){ if(st) st.textContent = '▦ 사각형이 모듈 한 장보다 작습니다. 더 크게 지정하세요.'; return; }
+  if(cells > 3000){ if(st) st.textContent = '▦ 사각형이 너무 큽니다(3,000칸 초과). 나눠서 지정하세요.'; return; }
+  histCheckpoint('영역 채우기');
+  const was = histMuted; histMuted = true;
+  let added = 0, restored = 0;
+  try{
+    const occ = ed.modules.filter(m => !m.removed || m.vent).map(m => modCenterRot(ed, m)); // 살아 있는 모듈·통풍로 자리
+    var skipped = 0;
+    for(let i = i0; i <= i1; i++) for(let j = j0; j <= j1; j++){
+      const qx = ref.x + i * stepX, qy = ref.y + j * stepY;
+      // 기존 모듈과 겹치는 칸(틀 사이 간격 때문에 격자가 어긋난 자리 포함)은 건너뜀 — 같은 자리(5cm 이내)의 제외 모듈은 addModuleAt이 복원
+      if(occ.some(c => Math.abs(c.x - qx) < ed.modW - 0.02 && Math.abs(c.y - qy) < ed.modD - 0.02 && !(Math.abs(c.x - qx) < 0.05 && Math.abs(c.y - qy) < 0.05))){ skipped++; continue; }
+      const pr = rotateXY(qx, qy, ed.azRad);
+      const r = addModuleAt(solarToLatLng(pr.x, pr.y, ed.lat0Rad), ed, true);
+      if(r === 'added') added++; else if(r === 'restored') restored++;
+    }
+  } finally { histMuted = was; }
+  refreshLayoutLabel(ed); raiseModules(ed); scheduleLayoutCards();
+  const live = ed.modules.filter(m => !m.removed).length;
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `▦ ${ed.bldName || ''} 영역 채우기 — 새로 ${added}장${restored ? ` + 복원 ${restored}장` : ''}${skipped ? ` · 기존 모듈과 겹치는 칸 ${skipped}개는 건너뜀` : ''} (이 배치 ${live.toLocaleString('ko-KR')}장 · ${(live * ed.wattPerPanel / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}kW). 다른 곳도 계속 지정하거나 버튼을 다시 눌러 끝내세요.`; }
+}
 // ➕ 모듈 추가 모드: 지도를 클릭하면 가장 가까운 배치의 방향·크기로 그 자리에 모듈 한 장을 추가
 function toggleAddModuleMode(){
   if(mapMode === 'addmod'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
@@ -5101,8 +5174,8 @@ function recomputeTableOutline(ed, t){
   const tiers = new Set(t.mods.map(m => m.tier)); t.tiers = tiers.size || t.tiers;
   t.width = xmax - xmin; t.depth = ymax - ymin;
 }
-function addModuleAt(latlng){
-  if(!layoutRegistry.length) return;
+function addModuleAt(latlng, forceEd, quiet){
+  if(!layoutRegistry.length) return false;
   histCheckpoint('모듈 추가');
   // 가장 가까운 배치(경계 중심 거리) 선택
   let best = null, bestD = Infinity;
@@ -5111,7 +5184,7 @@ function addModuleAt(latlng){
     const d = haversineMeters(latlng, new kakao.maps.LatLng(cl, cg));
     if(d < bestD){ bestD = d; best = ed; }
   });
-  const ed = best;
+  const ed = forceEd || best;
   const map = ensureKakaoMap();
   const gap = Math.max(parseFloat((document.getElementById('panelGap') || {}).value) || 0.02, 0);
   const stepX = ed.modW + gap, stepY = ed.modD + gap;
@@ -5133,9 +5206,9 @@ function addModuleAt(latlng){
   // 그 자리에 이미 모듈이 있으면: 제외된 모듈이면 복원, 살아 있으면 중복 추가하지 않음
   const dup = ed.modules.find(m => { const c = modCenterRot(ed, m); return Math.abs(c.x - cx) < 0.05 && Math.abs(c.y - cy) < 0.05; });
   if(dup){
-    if(dup.removed){ setModuleRemoved(dup, false); refreshLayoutLabel(ed); if(st) st.textContent = '➕ 그 자리에 제외돼 있던 모듈을 복원했습니다.'; }
-    else if(st) st.textContent = '그 자리에는 이미 모듈이 있습니다. 빈 칸을 클릭하세요.';
-    return;
+    if(dup.removed && !dup.vent){ setModuleRemoved(dup, false); if(!quiet) refreshLayoutLabel(ed); if(st && !quiet) st.textContent = '➕ 그 자리에 제외돼 있던 모듈을 복원했습니다.'; return 'restored'; }
+    if(st && !quiet) st.textContent = '그 자리에는 이미 모듈이 있습니다. 빈 칸을 클릭하세요.';
+    return false;
   }
   const hw = ed.modW / 2, hd = ed.modD / 2;
   const cr = [{x: cx - hw, y: cy - hd}, {x: cx + hw, y: cy - hd}, {x: cx + hw, y: cy + hd}, {x: cx - hw, y: cy + hd}];
@@ -5155,6 +5228,7 @@ function addModuleAt(latlng){
     const t = ed.tables.find(x => x.id === table);
     if(t){ t.mods.push(m); recomputeTableOutline(ed, t); }
   }
+  if(quiet) return 'added';
   refreshLayoutLabel(ed); raiseModules(ed);
   if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = snapped ? '➕ 가장 가까운 모듈의 격자(모듈 크기 + 모듈간격)에 맞춰 한 장을 끼워 넣었습니다. 계속 클릭해 추가하거나 버튼을 눌러 끝내세요.' : '➕ 근처에 기준 모듈이 없어 클릭한 자리에 그대로 놓았습니다(방향·크기는 배치와 동일).'; }
 }
@@ -5888,6 +5962,35 @@ function shrinkFrame(E){
   const bb = { u0: Math.min(...uv0.map(p => p.x)), u1: Math.max(...uv0.map(p => p.x)), v0: Math.min(...uv0.map(p => p.y)), v1: Math.max(...uv0.map(p => p.y)) };
   return { ax, toUV, toXY, uv0, bb };
 }
+// 모서리(LB·RB·LT·RT) 쪽 직사각형 R을 다각형에서 빼기: 경계를 따라가다 R 안으로 들어가는 점과 나오는 점 사이를 R의 안쪽 꼭짓점으로 잇기
+function notchCorner(poly, k, du, dv, bb){
+  const cu = k[0] === 'L' ? bb.u0 + du : bb.u1 - du, cv = k[1] === 'B' ? bb.v0 + dv : bb.v1 - dv;
+  const inR = p => (k[0] === 'L' ? p.x < cu - 1e-9 : p.x > cu + 1e-9) && (k[1] === 'B' ? p.y < cv - 1e-9 : p.y > cv + 1e-9);
+  // 선분 a→b가 R과 겹치는 구간 [t0,t1] (Liang–Barsky)
+  const segIn = (a, b) => {
+    let t0 = 0, t1 = 1; const dx = b.x - a.x, dy = b.y - a.y;
+    const lim = (pp, qq) => { if(Math.abs(pp) < 1e-12) return qq >= 0; const r = qq / pp; if(pp < 0){ if(r > t1) return false; if(r > t0) t0 = r; } else { if(r < t0) return false; if(r < t1) t1 = r; } return true; };
+    const okU = k[0] === 'L' ? lim(dx, cu - a.x) : lim(-dx, a.x - cu);
+    const okV = k[1] === 'B' ? lim(dy, cv - a.y) : lim(-dy, a.y - cv);
+    return okU && okV && t1 - t0 > 1e-9 ? [t0, t1] : null;
+  };
+  const at = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  const out = []; const n = poly.length;
+  // 시작점을 R 밖의 꼭짓점으로
+  let st = poly.findIndex(p => !inR(p)); if(st < 0) return poly;
+  for(let j = 0; j < n; j++){
+    const a = poly[(st + j) % n], b = poly[(st + j + 1) % n];
+    if(!inR(a)) out.push(a);
+    const iv = segIn(a, b); if(!iv) continue;
+    const [t0, t1] = iv;
+    if(t0 > 1e-9 || !inR(a)) out.push(at(a, b, t0)); // 들어감
+    if(t1 < 1 - 1e-9){ // 나옴 → 들어간 점과 나온 점 사이에 R의 안쪽 꼭짓점
+      out.push({ x: cu, y: cv }); out.push(at(a, b, t1));
+    }
+  }
+  // 연속 중복 제거
+  return out.filter((p, i) => { const q = out[(i - 1 + out.length) % out.length]; return Math.hypot(p.x - q.x, p.y - q.y) > 1e-6; });
+}
 function clipHalf(poly, keep){ // Sutherland–Hodgman: keep(p) → 남길 쪽, keep.cut(a,b) → 교점
   const out = []; for(let i = 0; i < poly.length; i++){ const a = poly[i], b = poly[(i + 1) % poly.length]; const ia = keep(a), ib = keep(b); if(ia) out.push(a); if(ia !== ib) out.push(keep.cut(a, b)); } return out;
 }
@@ -5917,6 +6020,8 @@ function shrinkPath(){
   if(S.R > 0){ const c = bb.u1 - S.R; uv = clipHalf(uv, half(p => p.x <= c, cutU(c))); }
   if(S.B > 0){ const c = bb.v0 + S.B; uv = clipHalf(uv, half(p => p.y >= c, cutV(c))); }
   if(S.T > 0){ const c = bb.v1 - S.T; uv = clipHalf(uv, half(p => p.y <= c, cutV(c))); }
+  // 모서리 따내기: 바깥 모서리에서 u·v 방향으로 du×dv 직사각형을 잘라내 ㄱ자 모양으로
+  Object.entries(E.notch || {}).forEach(([k, nt]) => { if(nt.du > 0 && nt.dv > 0) uv = notchCorner(uv, k, nt.du, nt.dv, { u0: bb.u0 + Math.max(S.L, 0), u1: bb.u1 - Math.max(S.R, 0), v0: bb.v0 + Math.max(S.B, 0), v1: bb.v1 - Math.max(S.T, 0) }); });
   if(uv.length < 3) uv = F.uv0;
   return uv.map(p => F.toXY(p)).map(q => solarToLatLng(q.x, q.y, E.lat0));
 }
@@ -5935,7 +6040,20 @@ function drawShrinkOverlays(){
     E.sideOv = {}; sides.forEach(sd => { const ov = new kakao.maps.CustomOverlay({ map, position: toLL(sd.pos), clickable: true, zIndex: 45, content: '' }); E.sideOv[sd.k] = ov; E.overlays.push(ov); });
     E.edgeOv = F.uv0.map((p, i) => { if(!shrinkEdgeMovable(F, i)) return null; const q = F.uv0[(i + 1) % F.uv0.length]; const ov = new kakao.maps.CustomOverlay({ map, position: toLL({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }), clickable: true, zIndex: 45, content: '' }); E.overlays.push(ov); return ov; });
     E.panelOv = new kakao.maps.CustomOverlay({ map, position: toLL({ x: um, y: vm }), clickable: true, zIndex: 46, yAnchor: 1.2, content: '' }); E.overlays.push(E.panelOv);
+    E.notch = E.notch || {}; E.cornerOv = {};
+    [['LB', bb.u0, bb.v0], ['RB', bb.u1, bb.v0], ['LT', bb.u0, bb.v1], ['RT', bb.u1, bb.v1]].forEach(([k, u, v]) => { E.notch[k] = E.notch[k] || { du: 0, dv: 0 }; const ov = new kakao.maps.CustomOverlay({ map, position: toLL({ x: u, y: v }), clickable: true, zIndex: 47, content: '' }); E.cornerOv[k] = ov; E.overlays.push(ov); });
   }
+  Object.entries(E.cornerOv || {}).forEach(([k, ov]) => {
+    const nt = E.notch[k]; const iu = dirXY(k[0] === 'L' ? 1 : -1, 0), iv = dirXY(0, k[1] === 'B' ? 1 : -1);
+    const sb = (txt, js, tt, strong) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" title="${tt}" style="border:1.5px solid #7A0E58;background:${strong ? '#FFD23F' : '#fff'};color:#7A0E58;font-weight:900;border-radius:4px;min-width:24px;height:22px;padding:0 4px;cursor:pointer;font-size:14px;line-height:16px;">${txt}</button>`;
+    const open = nt.du > 0 || nt.dv > 0 || E.notchOpen === k;
+    ov.setContent(open
+      ? `<div onmousedown="kakao.maps.event.preventMap();" style="display:grid;grid-template-columns:auto auto auto auto;gap:2px;align-items:center;background:rgba(122,14,88,.94);padding:3px 4px;border-radius:6px;color:#fff;font-size:11px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);transform:translate(-50%,-50%);">
+          <span style="grid-column:1/5;font-weight:800;">모서리 따내기 ${nt.du.toFixed(1)} × ${nt.dv.toFixed(1)}m</span>
+          ${sb(arrowOf(iu.x, iu.y), `shrinkNotch('${k}','du',1)`, '따낼 폭을 늘림', true)}<span>폭</span>${sb(arrowOf(-iu.x, -iu.y), `shrinkNotch('${k}','du',-1)`, '따낼 폭을 줄임', false)}<span></span>
+          ${sb(arrowOf(iv.x, iv.y), `shrinkNotch('${k}','dv',1)`, '따낼 깊이를 늘림', true)}<span>깊이</span>${sb(arrowOf(-iv.x, -iv.y), `shrinkNotch('${k}','dv',-1)`, '따낼 깊이를 줄임', false)}<span></span></div>`
+      : `<div onmousedown="kakao.maps.event.preventMap();" style="transform:translate(-50%,-50%);"><button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();shrinkNotchOpen('${k}')" title="이 모서리를 직사각형으로 따내 ㄱ자 모양 만들기" style="border:1.5px solid #7A0E58;background:#fff;color:#7A0E58;font-weight:800;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:11px;">⌐ 따내기</button></div>`);
+  });
   const wrapBox = (inner, color) => `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:3px;align-items:center;background:${color || 'rgba(11,61,145,.92)'};padding:3px 4px;border-radius:6px;color:#fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">${inner}</div>`;
   const order = (n, bIn, lab, bOut) => Math.abs(n.x) >= Math.abs(n.y) ? (n.x > 0 ? bOut + lab + bIn : bIn + lab + bOut) : (n.y < 0 ? bIn + lab + bOut : bOut + lab + bIn);
   const labOf = v => `<span style="min-width:44px;text-align:center;font-weight:800;font-size:12px;">${v ? `${v > 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}m` : '0'}</span>`;
@@ -5957,6 +6075,8 @@ function drawShrinkOverlays(){
   const sel = document.getElementById('shrinkStep'); if(sel) sel.value = E.stepVal || '0.5';
 }
 function shrinkStepVal(){ const v = parseFloat((document.getElementById('shrinkStep') || {}).value); if(shrinkEdit && isFinite(v)) shrinkEdit.stepVal = String(v); return isFinite(v) ? v : 0.5; }
+function shrinkNotchOpen(k){ const E = shrinkEdit; if(!E) return; E.notchOpen = k; const st = shrinkStepVal(); const nt = E.notch[k]; if(!(nt.du > 0)) nt.du = Math.max(st, 1); if(!(nt.dv > 0)) nt.dv = Math.max(st, 1); applyShrink(); }
+function shrinkNotch(k, which, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); const nt = E.notch[k]; nt[which] = Math.max(0, Math.round((nt[which] + dir * st) * 100) / 100); if(!(nt.du > 0) || !(nt.dv > 0)){ nt.du = 0; nt.dv = 0; if(E.notchOpen === k) E.notchOpen = null; } applyShrink(); }
 function shrinkSide(k, dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; applyShrink(); }
 function shrinkEdge(i, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); E.d[i] = Math.round((E.d[i] + dir * st) * 100) / 100; applyShrink(); }
 function shrinkAll(dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); ['L', 'R', 'B', 'T'].forEach(k => { E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; }); applyShrink(); }
@@ -7303,6 +7423,7 @@ async function loadParcelBuildings(parcelPath){
       const ll = ev && ev.latLng;
       if(ll && ['delmod', 'delline', 'movelayout'].includes(mapMode)){ handleModuleModeClick(ll); return; }
       if(ll && mapMode === 'addmod'){ addModuleAt(ll); return; }
+      if(ll && mapMode === 'fillrect'){ fillRectClick(ll); return; }
       if(ll && mapMode === 'addrow'){ addRowAt(ll); return; }
       if(ll && (mapMode === 'rect3' || mapMode === 'align2' || mapMode === 'trace' || mapMode === 'fitoutline')){ dispatchMapClick(ev); return; }
       if(ll && mapMode === 'delrow'){ window.__shapeClickAt = Date.now(); delRowClick(ll); return; }
