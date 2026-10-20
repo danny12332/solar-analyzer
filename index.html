@@ -625,6 +625,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <label for="autoLandPreset" style="font-weight:700;white-space:nowrap;margin-top:4px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다">🌱 건물 없는 토지 자동 배치</label>
           <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="width:100%;font-size:12px;padding:3px 4px;box-sizing:border-box;">
             <option value="" selected>끄기 (기본)</option>
+            <option value="groundauto">토지 노지 맞춤(단수 자동, 끝 3m 이격)</option>
             <option value="ground3">토지 노지 3단(끝 3m 이격)</option>
             <option value="groundmax">토지 노지 2~4단 중 최대</option>
             <option value="ground2">토지 노지 2단</option>
@@ -675,6 +676,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <div class="type-cards ground" id="typeCardsGround">
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 모듈 세로 4단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 4단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground3')" title="지상(개활지) · 모듈 세로 3단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 3단</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('groundauto')" title="2~5단 기준을 모두 계산해 많이 들어가는 단수로 띠를 놓고, 남는 깊이에는 낮은 단 띠를 더 넣음 · 끝 3m">토지 맞춤(자동)</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 모듈 세로 2단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 2단</button>
           </div>
           <label id="groundDirWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="경계선에 맞춤: 테이블 줄을 부지(그린 경계)의 변과 나란히 놓아 줄 끝이 끊기지 않고 면적을 채움(남향에서 최대 45° 틀어질 수 있음). 정남: 줄을 정동-정서로 놓음(경계가 기울어 있으면 줄 끝이 비스듬히 잘림)">줄 방향 <select id="groundDir" style="font-size:11.5px;padding:0 2px;"><option value="axis" selected>경계선에 맞춤 (끊김 없음)</option><option value="south">정남</option></select></label>
@@ -2766,6 +2768,7 @@ function removeSolarLayout(id){
 // ===== 배치 유형 프리셋: 배치 대상·모듈 방향·단 수·각도·이격을 한 번에 설정 (값은 실무 기본값이며 설정 줄에서 바로 수정 가능) =====
 const LAYOUT_PRESETS = {
   ground4:  { mount: 'ground',  orient: 'portrait', rows: 4, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 4단' },
+  groundauto: { mount: 'ground', orient: 'portrait', rows: 3, auto: true, tilt: 10, setback: 3, cols: 20, label: '토지 노지 맞춤(단수 자동)' },
   ground2:  { mount: 'ground',  orient: 'portrait', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
   ground3:  { mount: 'ground',  orient: 'portrait', rows: 3, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 3단' },
   slab:     { mount: 'slab',    orient: 'portrait',  rows: 2, tilt: 8,  setback: 0.5, aisle: 0.6, label: '평슬라브 경사거치' },
@@ -2801,7 +2804,7 @@ function applyLayoutPreset(key){
   if(P.orient && g('modOrient')) g('modOrient').value = P.orient;
   if(g('panelTilt')) g('panelTilt').value = P.tilt;
   if(g('panelSetback')) g('panelSetback').value = P.setback;
-  if(P.mount === 'ground'){ g('arrRows').value = String(P.rows); if(P.cols) g('arrCols').value = P.cols; }
+  if(P.mount === 'ground'){ g('arrRows').value = String(P.rows); if(P.cols) g('arrCols').value = P.cols; groundAutoRows = !!P.auto; }
   else { g('roofBlockRows').value = String(P.rows); if(P.aisle != null) g('roofAisle').value = P.aisle; if(P.ridgeGap != null) g('roofRidgeGap').value = P.ridgeGap; if(g('slabCols')) g('slabCols').value = ''; }
   activePreset = key;
   document.querySelectorAll('#presetBar .preset-btn').forEach(b => b.classList.toggle('on', (b.getAttribute('onclick') || '').includes("'" + key + "'")));
@@ -4294,7 +4297,7 @@ function renderLayoutCards(){
     : `<b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span>`;
 }
 // 카드의 유형 선택 목록: 현재 유형이 선택된 상태로
-const LAY_CARD_TYPES = ['maxfill', 'wondan2', 'wondan3', 'wondan4', 'wondan5', 'wondan_barn', 'insam', 'insamflat1', 'insamflat2', 'zero', 'slab', 'parking', 'ground2', 'ground3', 'ground4'];
+const LAY_CARD_TYPES = ['maxfill', 'wondan2', 'wondan3', 'wondan4', 'wondan5', 'wondan_barn', 'insam', 'insamflat1', 'insamflat2', 'zero', 'slab', 'parking', 'groundauto', 'ground2', 'ground3', 'ground4'];
 function layCardTypeOptions(ed){
   const cur = ed ? (ed.preset && LAYOUT_PRESETS[ed.preset] ? ed.preset : '') : '';
   return `<option value="">${ed ? '🔁 유형 바꿔 다시 배치…' : '유형 선택…'}</option>` + LAY_CARD_TYPES.filter(k => LAYOUT_PRESETS[k]).map(k => `<option value="${k}"${k === cur ? ' disabled' : ''}>${LAYOUT_PRESETS[k].label}${k === cur ? ' (현재)' : ''}</option>`).join('');
@@ -6534,7 +6537,7 @@ function generateSolarLayout(){
   const setback = Math.max(setbackIn, 3); // 토지: 필지 끝에서 항상 3m 이상 이격(사용자 기준 2026-10-19)
   if(setbackIn < 3) document.getElementById('panelSetback').value = 3;
   // 어레이 구성(세로 R장 × 가로 C장), 좌우 이격, 상하 이격(비우면 그림자 자동), 주향
-  const arrRows = Math.max(1, Math.round(parseFloat(document.getElementById('arrRows').value) || 2));
+  let arrRows = Math.max(1, Math.round(parseFloat(document.getElementById('arrRows').value) || 2));
   const arrCols = Math.max(1, Math.round(parseFloat(document.getElementById('arrCols').value) || 20));
   const arrSideGap = Math.max(parseFloat(document.getElementById('arrSideGap').value) || 0, 0);
   const arrRowGapIn = parseFloat(document.getElementById('arrRowGap').value);
@@ -6573,12 +6576,10 @@ function generateSolarLayout(){
   const minSunAltDeg = Math.max(90 - latAbsDeg - 23.44, 5); // 5도 하한(과도한 간격 방지)
   const minSunAltRad = minSunAltDeg * Math.PI/180;
   const footprintNS = modAlong * Math.cos(tiltRad); // 모듈 한 장의 지면 투영 길이(경사 방향)
-  const arrDepth = arrRows * footprintNS + (arrRows - 1) * gap;               // 어레이(테이블) 투영 깊이
-  const arrHeight = arrRows * modAlong * Math.sin(tiltRad);                    // 어레이 뒤쪽 높이
-  const shadowLen = arrHeight / Math.tan(minSunAltRad);                        // 동지 남중 기준 앞 어레이 그림자
-  // 상하 이격(열간격) = 어레이 앞단 ~ 다음 어레이 앞단 (솔라웍스의 "상하 이격거리"와 같은 기준). 입력 없으면 어레이 깊이 + 그림자
-  const pitch = Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? arrRowGapIn : arrDepth + shadowLen;
-  const rowGap = pitch - arrDepth;
+  const geomFor = R => { const d = R * footprintNS + (R - 1) * gap, h = R * modAlong * Math.sin(tiltRad), sh = h / Math.tan(minSunAltRad); const pt = Number.isFinite(arrRowGapIn) && arrRowGapIn > d ? arrRowGapIn : d + sh; return { arrDepth: d, arrHeight: h, shadowLen: sh, pitch: pt }; };
+  let G = geomFor(arrRows);
+  let arrDepth = G.arrDepth, arrHeight = G.arrHeight, shadowLen = G.shadowLen, pitch = G.pitch;
+  let rowGap = pitch - arrDepth;
   const footprintEW = modAcross;
 
   // 방위각만큼 회전한 좌표계에서 격자를 생성(rows는 회전좌표계의 y축 방향) — 배치 방향을 부지 모양에 맞춰 돌릴 수 있게 함
@@ -6594,16 +6595,22 @@ function generateSolarLayout(){
   const fitsCorner = c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback - 0.02);
   const buildGroundCands = (ox, oy) => {
     const out = []; let rowIdx = 0;
-    for(let y = ymin - setback + oy; y + arrDepth <= ymax + 1e-6; y += pitch, rowIdx++){
+    // 띠(줄) 목록: 기준 단수 띠를 열간격으로 반복하고, 마지막에 남는 깊이에는 들어갈 수 있는 가장 높은 낮은 단(2단 이상) 띠 하나 더
+    const bands = []; let y = ymin - setback + oy;
+    for(; y + arrDepth <= ymax + 1e-6; y += pitch) bands.push({ y, rows: arrRows });
+    if(bands.length){ const yLast = bands[bands.length - 1].y; const nextY = yLast + pitch; // 앞 띠 그림자(열간격)를 지킨 자리에서 낮은 단
+      for(let r = arrRows - 1; r >= 2; r--){ const d = r * footprintNS + (r - 1) * gap; if(nextY + d <= ymax + 1e-6){ bands.push({ y: nextY, rows: r, tail: true }); break; } } }
+    for(const band of bands){ const y = band.y, bandRows = band.rows; rowIdx++;
       let col = 0, tIdx = 0, run = 0;
       let runRows = 0; // 지금 이어지고 있는 테이블의 단 수(단 수가 바뀌면 새 테이블)
       for(let x = xmin - setback + ox; x + footprintEW <= xmax + 1e-6; ){
         // N단 세로 한 줄 → 안 들어가면 (N−1)…2단으로 줄여서(앞 맞춤, 안 되면 뒤 맞춤) 자리 채움
         let colMods = [];
         const tryCol = (rows, yStart) => { const cm = []; for(let k = 0; k < rows; k++){ const y0 = yStart + k * (footprintNS + gap), y1 = y0 + footprintNS; const cornersRot = [ {x, y: y0}, {x: x+footprintEW, y: y0}, {x: x+footprintEW, y: y1}, {x, y: y1} ]; const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad)); if(!cornersReal.every(fitsCorner)) return null; cm.push({ cornersReal, cornersRot, tier: k }); } return cm; };
-        for(let rows = arrRows; rows >= Math.min(2, arrRows) && !colMods.length; rows--){
+        const bandDepth = bandRows * footprintNS + (bandRows - 1) * gap;
+        for(let rows = bandRows; rows >= Math.min(2, bandRows) && !colMods.length; rows--){
           const depthR = rows * footprintNS + (rows - 1) * gap;
-          colMods = tryCol(rows, y) || (rows < arrRows ? tryCol(rows, y + arrDepth - depthR) : null) || [];
+          colMods = tryCol(rows, y) || (rows < bandRows ? tryCol(rows, y + bandDepth - depthR) : null) || [];
         }
         if(colMods.length){
           const rows = colMods.length;
@@ -6621,14 +6628,19 @@ function generateSolarLayout(){
   };
   let cands = [], bestOff = null;
   const stepX = footprintEW + gap;
-  const nY = Math.max(1, Math.min(16, Math.ceil(pitch / 0.25))), nX = 6;
-  for(let iy = 0; iy < nY; iy++){
-    for(let ix = 0; ix < nX; ix++){
-      const ox = setback + ix * stepX / nX, oy = setback + iy * Math.min(pitch, ymax - ymin) / nY;
-      const c = buildGroundCands(ox, oy);
-      if(c.length > cands.length){ cands = c; bestOff = { ox, oy }; }
-    }
-  }
+  const searchBest = () => { let best = [], off = null; const nY = Math.max(1, Math.min(16, Math.ceil(pitch / 0.25))), nX = 6;
+    for(let iy = 0; iy < nY; iy++){ for(let ix = 0; ix < nX; ix++){ const ox = setback + ix * stepX / nX, oy = setback + iy * Math.min(pitch, ymax - ymin) / nY; const c = buildGroundCands(ox, oy); if(c.length > best.length){ best = c; off = { ox, oy }; } } }
+    return { cands: best, off }; };
+  let autoNote = '';
+  if(groundAutoRows){
+    // 맞춤: 기준 단수 2~5단을 모두 계산해 (통풍로 제외 전) 장수가 가장 많은 단수 — 같으면 낮은 단
+    const tries = [];
+    for(const R of [2, 3, 4, 5]){ arrRows = R; G = geomFor(R); arrDepth = G.arrDepth; arrHeight = G.arrHeight; shadowLen = G.shadowLen; pitch = G.pitch; rowGap = pitch - arrDepth; const r = searchBest(); tries.push({ R, n: r.cands.length, r }); }
+    const bestT = tries.reduce((a, t) => (t.n > a.n ? t : a), { n: -1 });
+    arrRows = bestT.R; G = geomFor(arrRows); arrDepth = G.arrDepth; arrHeight = G.arrHeight; shadowLen = G.shadowLen; pitch = G.pitch; rowGap = pitch - arrDepth;
+    cands = bestT.r.cands; bestOff = bestT.r.off;
+    autoNote = ` 맞춤(단수 자동): ${tries.map(t => `${t.R}단 ${t.n}장`).join(' · ')} → ${arrRows}단 기준 선택.`;
+  } else { const r = searchBest(); cands = r.cands; bestOff = r.off; }
   // 실무 밀도 기준(토지 300평/100kW) 적용
   { const byT = {}; cands.forEach(c => { (byT[c.table] = byT[c.table] || []).push(c); });
     Object.values(byT).forEach(list => { const rows = list[0].rowsN || arrRows; if(rows < 3) return; const cols = [...new Set(list.map(c => c.cornersRot[0].x))].sort((a, b) => a - b); if(cols.length < 4) return; const vx = new Set([cols[Math.floor(cols.length / 4)], cols[Math.floor(cols.length * 3 / 4)]]); const midTier = Math.floor((rows - 1) / 2); list.forEach(c => { if(c.tier === midTier && vx.has(c.cornersRot[0].x)) c.vent = true; }); }); }
@@ -6696,7 +6708,7 @@ function generateSolarLayout(){
   groundMods.filter(m => m.vent).forEach(m => setModuleRemoved(m, true)); // 통풍로 자리 비움(X 표시)
   updateGroundLabel(thisGround);
 
-  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW. 모듈 ${landscape ? '가로(눕힘)' : '세로(세움)'} ${arrRows}단×테이블당 가로 ${arrCols}장, 설치각 ${tiltDeg}°, 테이블 ${thisGround.tables.length}개(${tableSummaryText(thisGround)}; 테이블 깊이 ${arrDepth.toFixed(2)}m·뒤쪽 높이 ${arrHeight.toFixed(2)}m), 줄 방향 ${edgeDeg !== null ? '선택한 경계 변과 나란히' : (facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '경계선에 맞춤' : '직접 입력'))}(방위각 ${azimuthDeg}°${azimuthDeg ? ` = 정남에서 ${Math.abs(azimuthDeg)}° ${azimuthDeg > 0 ? '동쪽' : '서쪽'}으로 틀어짐 — 정남으로 하려면 ② "줄 방향: 정남"` : ''}), 세로 한 줄(1~${arrRows}단)이 모두 들어가는 자리에만 배치, 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
+  statusEl.textContent = `✅ 패널 ${panelCount.toLocaleString('ko-KR')}장 배치 완료 — 약 ${totalKw.toLocaleString('ko-KR', {maximumFractionDigits:1})} kW.${autoNote} 모듈 ${landscape ? '가로(눕힘)' : '세로(세움)'} ${arrRows}단×테이블당 가로 ${arrCols}장, 설치각 ${tiltDeg}°, 테이블 ${thisGround.tables.length}개(${tableSummaryText(thisGround)}; 테이블 깊이 ${arrDepth.toFixed(2)}m·뒤쪽 높이 ${arrHeight.toFixed(2)}m), 줄 방향 ${edgeDeg !== null ? '선택한 경계 변과 나란히' : (facingMode === 'south' ? '정남' : (facingMode === 'axis' ? '경계선에 맞춤' : '직접 입력'))}(방위각 ${azimuthDeg}°${azimuthDeg ? ` = 정남에서 ${Math.abs(azimuthDeg)}° ${azimuthDeg > 0 ? '동쪽' : '서쪽'}으로 틀어짐 — 정남으로 하려면 ② "줄 방향: 정남"` : ''}), 세로 한 줄(1~${arrRows}단)이 모두 들어가는 자리에만 배치, 경계 이격 ${setback}m, 좌우 이격 ${arrSideGap}m, 상하 이격(열간격) ${pitch.toFixed(2)}m(${Number.isFinite(arrRowGapIn) && arrRowGapIn > arrDepth ? '입력값' : '어레이 깊이 ' + arrDepth.toFixed(2) + 'm + 동지 그림자 ' + shadowLen.toFixed(2) + 'm 자동'}). ${densityNote(false, siteAreaM2, targetKw, geomCount, panelCount, wattPerPanel)}(열간격 ${pitch.toFixed(2)}m, 동지 태양고도 ${minSunAltDeg.toFixed(1)}° 기준 자기그늘 방지 계산${setback>0?`, 경계에서 ${setback}m 이격`:''}${azimuthDeg!==0?`, 배치방향 ${azimuthDeg}° 회전`:''}). 참고용 배치이며 실제 설계 시 인허가·이격거리 규정을 반드시 재확인하세요.`;
   statusEl.style.color = 'var(--ink-soft)';
 }
 
@@ -7589,10 +7601,10 @@ function autoLayoutAfterSearchInner(){
         if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 ${parcelBuildings.length}동 자동 배치(건물마다 추천 유형): ${done.join(' · ')}. 유형은 동별 카드에서 바꾸고, 경계는 "⇲ 줄이기"로 맞추세요.`; }
       } else {
         lastAreaPolygonPath = lastParcelPath.slice(); currentBoundaryName = jibunShortOf(lastJibunAddress || '') || '토지';
-        applyLayoutPreset('ground3'); forceGroundOnce = true;
+        applyLayoutPreset('groundauto'); forceGroundOnce = true;
         try{ onGenerateLayoutClick(); } finally { forceGroundOnce = false; }
         const ed = layoutRegistry[layoutRegistry.length - 1];
-        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 없는 토지 → 토지 노지 3단 · 필지 끝 3m 이격 자동 배치${ed ? ' ' + ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR') + '장' : ''}. 유형은 동별 카드에서 바꿀 수 있습니다.`; }
+        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 없는 토지 → 토지 노지 맞춤(단수 자동) · 필지 끝 3m 이격 자동 배치${ed ? ' ' + ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR') + '장' : ''}. 유형은 동별 카드에서 바꿀 수 있습니다.`; }
       }
     }catch(e){ console.warn('auto on enter', e); }
     return;
@@ -7758,7 +7770,7 @@ function generateAllDongs(){
   st.textContent = `✅ ${parcelBuildings.length}동 중 ${ok}동에 배치했습니다 — 지도 위 전체 배치 합계 ${total.toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW. 동별 kW·장수는 각 건물 옆 라벨에 표시됩니다. 위치를 옮기려면 "✥ 배치 이동".`;
 }
 // ===== 🖱 클릭 배치(배치도 탭): 지도에서 클릭한 곳이 건물이면 그 건물에 최대 배치 규칙으로, 토지면 그 필지에 토지 노지(끝 3m)로 바로 배치. 클릭할 때마다 누적 =====
-let forceGroundOnce = false, clickLayoutBusy = false;
+let forceGroundOnce = false, clickLayoutBusy = false, groundAutoRows = false; // groundAutoRows: 토지 노지 '맞춤' — 2~5단 기준을 모두 계산해 많이 들어가는 단수, 남는 깊이에는 더 낮은 단 띠
 function clickLayoutBuilding(){
   // 현재 경계(lastAreaPolygonPath = 선택한 건물)에 최대 배치
   if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) return;
@@ -7782,7 +7794,7 @@ function computeReco(kind, path, name, inSearched){
   const ori = roofOrientation(path);
   const roofTxt = reg ? String(reg.roofCdNm || '') : '';
   let rec, why;
-  if(kind === 'land'){ rec = 'ground3'; why = '토지(건물 도형 없음) → 토지 노지 3단 · 필지 끝 3m 이격 (사용자 기준)'; }
+  if(kind === 'land'){ rec = 'groundauto'; why = '토지(건물 도형 없음) → 토지 노지 맞춤: 2~5단 기준을 모두 계산해 많이 들어가는 단수, 남는 깊이에는 낮은 단 띠 · 필지 끝 3m 이격'; }
   else if(/콘크리트|슬래브|슬라브/.test(roofTxt)){ rec = 'slab'; why = `건축물대장 지붕 "${roofTxt}" → 평지붕(슬라브)일 가능성 — 평슬라브 경사거치 (위성사진으로 지붕 모양 확인)`; }
   else {
     const ruleKey = ((document.getElementById(ori.ns ? 'maxNS' : 'maxEW') || {}).value) || (ori.ns ? 'wondan3' : 'insamflat2');
@@ -7803,7 +7815,7 @@ async function showLayoutReco(kind){
   if(kind === 'building' && inSearched){ try{ await ensureBldrgstForSide(null); }catch(e){} }
   if(!recoState || recoState.path !== path) return; // 그 사이 다른 곳 선택
   const { area, reg, ori, rec, why } = computeReco(kind, path, name, inSearched);
-  const alts = kind === 'land' ? ['ground2', 'ground3', 'ground4'] : ['wondan2', 'wondan3', 'wondan4', 'wondan5', 'insamflat1', 'insamflat2', 'insam', 'zero', 'slab', 'parking'];
+  const alts = kind === 'land' ? ['groundauto', 'ground2', 'ground3', 'ground4'] : ['wondan2', 'wondan3', 'wondan4', 'wondan5', 'insamflat1', 'insamflat2', 'insam', 'zero', 'slab', 'parking'];
   const chip = k => `<button type="button" class="preset-btn${k === rec ? ' on' : ''}" style="padding:2px 7px;font-size:11px;" onclick="recoApply('${k}')">${LAYOUT_PRESETS[k].label}</button>`;
   const fmt = v => Math.round(v).toLocaleString('ko-KR');
   const info = [
