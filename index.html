@@ -636,6 +636,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <p class="hint" style="margin:0 0 10px;">주소를 검색하고 이 탭에 들어오면 건물/토지를 인식해 자동 배치합니다. 지도 클릭으로는 배치하지 않고, 건물(하늘색 점선)을 클릭하면 🧭 배치 추천만 뜹니다. 직접 하려면 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
+          <button type="button" class="preset-btn" id="addSpaceBtn2" onclick="toggleAddSpaceMode()" style="background:#E3F3E8;border-color:#0B5A2A;color:#0B5A2A;font-weight:700;" title="② 배치 유형을 먼저 고른 뒤, 모듈을 더 넣을 공간의 모서리를 지도에서 차례로 클릭해 그리면 그 공간 안에 그 유형으로 바로 배치됩니다(기존 배치 유지, 별도 동)">➕ 추가 공간 배치</button>
           <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 오른쪽 클릭하면 완성">✏ 건물 따라 그리기</button>
           <button type="button" class="preset-btn" id="fitBtn" onclick="startFitOutline()" title="잡힌 테두리를 클릭으로 옮기고(테두리 안 클릭 → 옮길 곳 클릭) 회전·크기 버튼으로 위성사진 건물에 맞춥니다" style="background:#FFD23F;border-color:#E8B800;">✋ 외곽선 맞추기</button>
           <button type="button" class="preset-btn" id="rect3Btn" onclick="toggleGeomTool('rect3')" title="직사각형 지붕: 위성사진에서 지붕 모서리 2개(한 변)를 클릭하고, 반대편 변 위 아무 곳을 클릭하면 정확한 직사각형 경계가 만들어집니다">▭ 3점 사각형</button>
@@ -906,6 +907,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <span style="display:inline-flex;align-items:center;gap:2px;"><button type="button" id="delRowBtn" onclick="toggleDelRowMode()" title="모듈을 클릭하면 그 줄 전체 삭제 · 빈 곳을 두 번 클릭해 선을 그으면 선이 지나는 줄을 한꺼번에 삭제 (↶ 이전으로 복구)">🗑 줄 삭제</button><select id="delRowUnit" title="삭제 단위" style="font-size:11px;padding:0 2px;"><option value="table" selected>N단 묶음</option><option value="tier">모듈 1줄</option></select></span>
             <button type="button" id="moveLayoutBtn" onclick="toggleMoveLayoutMode()" title="배치(모듈 묶음)를 클릭해 선택한 뒤 손잡이를 끌거나 화살표로 전체를 이동">✥ 배치 이동</button>
             <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈을 클릭하면 한 장씩 제외/복원)">➕ 모듈 추가</button>
+            <button type="button" id="addSpaceBtn" onclick="toggleAddSpaceMode()" style="font-weight:700;color:#0B5A2A;" title="모듈을 더 넣고 싶은 공간의 모서리를 차례로 클릭해 그리면(첫 점 다시 클릭 또는 오른쪽 클릭으로 완성) 그 공간 안에 ② 배치 유형에서 고른 유형으로 바로 배치합니다. 기존 배치는 그대로 두고 별도 동(추가 공간 N)으로 추가되며, 그린 선 끝까지 채웁니다(이격 0)">➕ 추가 공간 배치</button>
             <button type="button" id="fillRectBtn" onclick="toggleFillRectMode()" title="빈 곳의 두 모서리를 클릭하면 그 사각형 안을 가까운 배치의 격자(모듈 크기+간격)에 맞춰 모듈로 채움">▦ 영역 채우기</button>
             <button type="button" id="addRowBtn" onclick="toggleAddRowMode()" title="이격 기준 때문에 못 들어간 줄을 강제로 추가: 줄을 넣을 빈 자리를 클릭하면 가장 가까운 줄과 똑같은 줄이 그 자리에 놓입니다">➕ 줄 추가</button>
             <button type="button" id="moreToolsBtn" onclick="toggleMoreTools()" title="꼭짓점 조정·테이블 추가/제거·영역 제거·지우기">⋯ 더보기</button>
@@ -2305,7 +2307,7 @@ function updateAddressLabel(pos){
 function setMode(mode){
   if(mapMode === 'fitoutline' && mode !== 'fitoutline' && typeof fitEdit !== 'undefined' && fitEdit){ const f = fitEdit; fitEdit = null; try{ f.poly.setMap(null); }catch(e){} const fp = document.getElementById('fitPanel'); if(fp) fp.style.display = 'none'; }
   if(mapMode === 'movelayout' && mode !== 'movelayout' && typeof endMoveLayout === 'function' && moveSel) endMoveLayout();
-  if(mapMode === 'trace' && mode !== 'trace' && trace){ const t = trace; trace = null; [t.line, t.preview, t.previewLabel].forEach(o => o && o.setMap(null)); t.labels.forEach(o => o.setMap(null)); const b = document.getElementById('traceBtn'); if(b) b.classList.remove('on'); }
+  if(mapMode === 'trace' && mode !== 'trace' && trace){ const t = trace; trace = null; [t.line, t.preview, t.previewLabel].forEach(o => o && o.setMap(null)); t.labels.forEach(o => o.setMap(null)); ['traceBtn', 'addSpaceBtn', 'addSpaceBtn2'].forEach(id => { const b = document.getElementById(id); if(b) b.classList.remove('on'); }); }
   mapMode = mode;
   ['distanceBtn','areaBtn','radiusBtn'].forEach(id => {
     const btn = document.getElementById(id);
@@ -3435,20 +3437,21 @@ function sideViewPages(){
   const groups = sideViewGroups();
   const pages = [];
   const letters = 'ABCDEFGHIJKLMNOP';
-  for(let i = 0; i < groups.length; i++){
+  // 단면(용마루 가로지름)만 — 긴 변 방향(B-B) 측면도는 2026-10-20 사용자 요청으로 뺌. 한 쪽에 두 그룹.
+  for(let i = 0; i < groups.length; i += 2){
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
     g.lineWidth = 6; g.strokeStyle = '#000'; g.strokeRect(40, 40, W - 80, H - 80); g.lineWidth = 2; g.strokeRect(80, 80, W - 160, H - 230);
-    const grp = groups[i];
-    // 왼쪽: 단면(A-A, 용마루 가로지름) · 오른쪽: 긴 변 방향(B-B)
-    const boxA = { x: 200, y: 220, w: (W - 320) / 2 - 80, h: 1020 }, boxB = { x: 160 + (W - 320) / 2 + 40, y: 220, w: (W - 320) / 2 - 80, h: 1020 };
-    let hs = null;
-    const sub0 = `${layoutTypeLabel(grp.ed)} · 적용: ${grp.names.join(', ')}`;
-    try{ drawSideView(g, boxA, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, title: `"A"-"A" 측면도 VIEW SCALE 1:1`, sub: '', onHeight: h => { hs = h; } }); }catch(e){ console.warn('side view', e); }
-    try{ const eH = hs ? hs.eaveH : (isFinite(eaveH) ? eaveH : 6); const kindA = sideViewKind(grp.ed); const half = sideViewData(grp.ed).D / 2; const rH = (kindA === 'gable' || kindA === 'flat') ? eH + half * Math.tan((isFinite(roofDeg) ? roofDeg : 10) * Math.PI / 180) : eH;
-      drawSideViewLong(g, boxB, grp.ed, { eaveH: eH, ridgeH: rH, title: `"B"-"B" 측면도 VIEW SCALE 1:1` }); }catch(e){ console.warn('side view long', e); }
-    const sub = sub0 + (hs && hs.heightSrc ? ` · 처마 ${hs.eaveH.toFixed(2)}m (${hs.heightSrc}${hs.reg && hs.reg.roof ? ' · 지붕 ' + hs.reg.roof : ''})` : '') + ' · B-B(긴 변 방향)의 지주 간격·벤츄레이터는 표시하지 않음(실측 후 설계)';
-    g.fillStyle = '#444'; g.font = '20px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(sub, W / 2, boxA.y + boxA.h + 62);
+    const pair = groups.slice(i, i + 2);
+    pair.forEach((grp, k) => {
+      const box = pair.length === 1 ? { x: 300, y: 200, w: W - 600, h: 1050 } : { x: 160 + k * (W - 320) / 2 + 40, y: 220, w: (W - 320) / 2 - 80, h: 1020 };
+      const L = letters[i + k] || '?';
+      let hs = null;
+      const sub0 = `${layoutTypeLabel(grp.ed)} · 적용: ${grp.names.join(', ')}`;
+      try{ drawSideView(g, box, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, title: `"${L}"-"${L}" 측면도 VIEW SCALE 1:1`, sub: '', onHeight: h => { hs = h; } }); }catch(e){ console.warn('side view', e); }
+      const sub = sub0 + (hs && hs.heightSrc ? ` · 처마 ${hs.eaveH.toFixed(2)}m (${hs.heightSrc}${hs.reg && hs.reg.roof ? ' · 지붕 ' + hs.reg.roof : ''})` : '');
+      g.fillStyle = '#444'; g.font = '20px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(sub, box.x + box.w / 2, box.y + box.h + 62);
+    });
     drawSheetTitleBlock(g, W, H, '모 듈 배 치 측 면 도');
     pages.push(cv);
   }
@@ -6534,8 +6537,8 @@ function generateSolarLayout(){
   const wattPerPanel = parseFloat(document.getElementById('panelWatt').value) || 645;
   const gap = parseFloat(document.getElementById('panelGap').value) || 0.02;
   const setbackIn = Math.max(parseFloat(document.getElementById('panelSetback').value) || 0, 0);
-  const setback = Math.max(setbackIn, 3); // 토지: 필지 끝에서 항상 3m 이상 이격(사용자 기준 2026-10-19)
-  if(setbackIn < 3) document.getElementById('panelSetback').value = 3;
+  const setback = addSpaceGen ? setbackIn : Math.max(setbackIn, 3); // 토지: 필지 끝에서 항상 3m 이상 이격(사용자 기준 2026-10-19) — ➕ 추가 공간은 그린 선 끝까지
+  if(!addSpaceGen && setbackIn < 3) document.getElementById('panelSetback').value = 3;
   // 어레이 구성(세로 R장 × 가로 C장), 좌우 이격, 상하 이격(비우면 그림자 자동), 주향
   let arrRows = Math.max(1, Math.round(parseFloat(document.getElementById('arrRows').value) || 2));
   const arrCols = Math.max(1, Math.round(parseFloat(document.getElementById('arrCols').value) || 20));
@@ -7329,6 +7332,44 @@ function outlineDragEnd(){
 // ===== ✏ 건물 따라 그리기: 위성사진의 지붕 모서리를 클릭해 경계를 만든다 (직각·평행 자동 보정, 변 길이 실시간 표시) =====
 let trace = null; // { pts:[{x,y}], lat0, line, preview, poly, labels:[], firstMarker }
 function traceMetersPerPx(){ try{ const lv = ensureKakaoMap().getLevel(); return 0.25 * Math.pow(2, Math.max(0, lv - 1)); }catch(e){ return 1; } }
+let addSpaceSeq = 0, addSpaceGen = false; // 추가 공간 배치: 그린 공간 끝까지(이격 0) 채우는 중이면 true
+function toggleAddSpaceMode(){
+  if(mapMode === 'trace'){ finishTrace(true); return; }
+  stopBuildingEdit();
+  setMode('trace');
+  ['addSpaceBtn', 'addSpaceBtn2'].forEach(id => { const b = document.getElementById(id); if(b) b.classList.add('on'); });
+  trace = { pts: [], lat0: null, labels: [], line: null, preview: null, previewLabel: null, addSpace: true };
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  const lab = activePreset && LAYOUT_PRESETS[activePreset] ? LAYOUT_PRESETS[activePreset].label : (activePreset === 'maxfill' ? '최대 배치(유형 자동)' : '현재 설정');
+  st.textContent = `➕ 추가 공간: 모듈을 더 넣을 공간의 모서리를 차례로 클릭하세요(첫 점을 다시 클릭하거나 오른쪽 클릭하면 완성 · Esc 취소). 완성되면 그 공간 안에 "${lab}" 유형으로 바로 배치됩니다(기존 배치 유지, 그린 선 끝까지). 다른 유형으로 하려면 먼저 ② 배치 유형에서 고르세요.`;
+}
+function applyAddSpace(path){
+  const st = document.getElementById('roadviewStatus');
+  histCheckpoint('추가 공간 배치');
+  addSpaceSeq++;
+  const name = `추가 공간 ${addSpaceSeq}`;
+  if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  drawConfirmedOutline(path, name);
+  try{ addOutlineEdgeLabels(path); refreshAlignEdgeOptions(); updateBoundaryInfo(); }catch(e){}
+  const preset = activePreset;
+  const before = layoutRegistry.length;
+  histMuted = true; addSpaceGen = true;
+  try{
+    if(preset && LAYOUT_PRESETS[preset]) applyLayoutPreset(preset);
+    const sb = document.getElementById('panelSetback'); if(sb) sb.value = 0; // 그린 선이 곧 배치 범위
+    onGenerateLayoutClick();
+  }catch(e){ console.warn('add space', e); }
+  finally{ histMuted = false; addSpaceGen = false; }
+  const ed = layoutRegistry.length > before ? layoutRegistry[layoutRegistry.length - 1] : (layoutRegistry.find(e => sameBoundary(e.boundary, path)) || null);
+  if(ed){ ed.name = ed.name || name; }
+  const n = ed ? ed.modules.filter(m => !m.removed).length : 0;
+  const area = shoelaceArea(path);
+  st.style.color = n ? 'var(--ink-soft)' : '#b3402a';
+  st.textContent = n
+    ? `✅ ${name}: ${path.length}각형 ${Math.round(area).toLocaleString('ko-KR')}㎡ 안에 ${layoutTypeLabel(ed)} ${n.toLocaleString('ko-KR')}장 추가 배치(이격 0, 기존 배치 유지). 모듈은 끌어서 옮기고, 더 넣으려면 ➕ 모듈 추가 / ▦ 영역 채우기, 유형을 바꾸려면 동별 카드에서 🔁. 되돌리기는 "↶ 이전으로".`
+    : `❌ ${name}(${Math.round(area).toLocaleString('ko-KR')}㎡)에는 고른 유형의 모듈이 들어가지 않습니다. 공간을 더 크게 그리거나 ② 배치 유형에서 낮은 단수(원단 2단·토지 노지 2단 등)를 고르고 다시 그려 보세요. "↶ 이전으로"로 되돌릴 수 있습니다.`;
+  try{ renderLayoutCards(); }catch(e){}
+}
 function toggleTraceMode(){
   if(mapMode === 'trace'){ finishTrace(true); return; }
   setMode('trace');
@@ -7426,10 +7467,11 @@ function finishTrace(cancel){
   if(!t) return;
   [t.line, t.preview, t.previewLabel].forEach(o => o && o.setMap(null)); t.labels.forEach(o => o.setMap(null));
   const st = document.getElementById('roadviewStatus');
-  if(cancel || t.pts.length < 3){ st.textContent = cancel ? '✏ 따라 그리기를 취소했습니다.' : '✏ 점이 3개 이상이어야 경계가 됩니다.'; return; }
+  if(cancel || t.pts.length < 3){ st.textContent = cancel ? (t.addSpace ? '➕ 추가 공간 그리기를 취소했습니다.' : '✏ 따라 그리기를 취소했습니다.') : '✏ 점이 3개 이상이어야 경계가 됩니다.'; return; }
   let P = t.pts;
   if((document.getElementById('traceOrtho') || {}).checked) P = orthogonalizeXY(P);
   const path = P.map(p => solarToLatLng(p.x, p.y, t.lat0));
+  if(t.addSpace){ applyAddSpace(path); return; }
   setTracedBoundary(path, '따라 그린 건물');
 }
 // 확정 경계로 설정: 기존 경계 표시를 지우고 변 길이와 함께 그림
