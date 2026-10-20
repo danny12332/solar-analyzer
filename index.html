@@ -601,11 +601,12 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
       <div class="card" style="padding:16px 16px 14px;">
         <h2 style="margin-bottom:12px;">모듈 배치도</h2>
         <div class="lay-sum" id="laySum"><b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span></div>
+        <div id="recoCard" style="display:none;margin:0 0 10px;"></div>
         <div class="auto-lay-box" style="display:grid;grid-template-columns:minmax(0,1fr);gap:4px;font-size:12px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:6px;padding:7px 9px;margin:0 0 10px;">
           <label for="autoLayoutPreset" style="font-weight:700;white-space:nowrap;" title="주소를 검색하면 필지 안 건물 전부에 고른 유형으로 바로 배치합니다. 배치된 뒤 동별 카드에서 유형을 바꿀 수 있습니다">⚡ 주소 검색 시 건물 자동 배치</label>
           <select id="autoLayoutPreset" onchange="saveAutoLayoutPreset()" style="width:100%;font-size:12px;padding:3px 4px;box-sizing:border-box;">
-            <option value="">끄기</option>
-            <option value="maxfill" selected>최대 배치(방위각 → 원단/인삼밭 플랫 자동)</option>
+            <option value="" selected>끄기 (기본 — 건물·필지를 클릭해 추천 확인 후 배치)</option>
+            <option value="maxfill">최대 배치(방위각 → 원단/인삼밭 플랫 자동)</option>
             <option value="slab">평슬라브</option>
             <option value="wondan2">원단 2단</option>
             <option value="wondan3">원단 3단</option>
@@ -619,14 +620,14 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <label style="display:flex;align-items:center;gap:5px;margin-top:2px;" title="공공 건물도형 면적이 건축물대장 건축면적보다 25% 넘게 크면(필지 모양으로 들어온 경우) 각 변을 같은 거리만큼 안쪽으로 줄여 건축면적에 맞춘 경계에 배치합니다(추정)"><input type="checkbox" id="archFixOn" checked> 건물도형이 대장 건축면적보다 크면 경계 줄이기</label>
           <label for="autoLandPreset" style="font-weight:700;white-space:nowrap;margin-top:4px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다">🌱 건물 없는 토지 자동 배치</label>
           <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="width:100%;font-size:12px;padding:3px 4px;box-sizing:border-box;">
-            <option value="ground3" selected>토지 노지 3단(끝 3m 이격)</option>
+            <option value="" selected>끄기 (기본)</option>
+            <option value="ground3">토지 노지 3단(끝 3m 이격)</option>
             <option value="groundmax">토지 노지 2~4단 중 최대</option>
             <option value="ground2">토지 노지 2단</option>
             <option value="ground4">토지 노지 4단</option>
-            <option value="">끄기</option>
           </select>
         </div>
-        <p class="hint" style="margin:0 0 10px;">지도에서 건물(하늘색 점선)을 클릭하거나 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
+        <p class="hint" style="margin:0 0 10px;">지도에서 건물(하늘색 점선)이나 필지를 클릭하면 🧭 배치 추천이 뜨고(바로 배치하지 않음), 버튼으로 배치합니다. 또는 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
           <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 오른쪽 클릭하면 완성">✏ 건물 따라 그리기</button>
@@ -7283,7 +7284,7 @@ async function loadParcelBuildings(parcelPath){
       if(ll && mapMode === 'delrow'){ window.__shapeClickAt = Date.now(); delRowClick(ll); return; }
       if(ll && mapMode === 'splitzone'){ splitClick(ll); return; }
       if(ll && mapMode === 'annot'){ annotPlace(ll); return; }
-      window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building'){ selectParcelBuilding(idx); if(mapMode === 'normal' && document.querySelector('#railPaneLayout.active')) clickLayoutBuilding(); }
+      window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building'){ selectParcelBuilding(idx); if(mapMode === 'normal' && document.querySelector('#railPaneLayout.active')) showLayoutReco('building'); }
     }); }catch(e){}
     shapes.push(poly);
     parcelBuildings.push({ path, name, floors, poly, area: shoelaceArea(path) });
@@ -7305,8 +7306,8 @@ function updateAllDongBtn(){ const b = document.getElementById('allDongBtn'); if
 // ⚡ 주소 검색 시 건물 자동 배치: 선택한 유형(기본 평슬라브)으로 필지 안 건물 전부에 바로 배치
 function saveMaxRule(){ try{ localStorage.setItem('solarMaxRule', JSON.stringify({ ns: (document.getElementById('maxNS') || {}).value, ew: (document.getElementById('maxEW') || {}).value })); }catch(e){} }
 function loadMaxRule(){ try{ const v = JSON.parse(localStorage.getItem('solarMaxRule') || 'null'); if(!v) return; const a = document.getElementById('maxNS'), b = document.getElementById('maxEW'); if(a && v.ns && [...a.options].some(o => o.value === v.ns)) a.value = v.ns; if(b && v.ew && [...b.options].some(o => o.value === v.ew)) b.value = v.ew; }catch(e){} }
-function saveAutoLayoutPreset(){ try{ localStorage.setItem('solarAutoLayout', (document.getElementById('autoLayoutPreset') || {}).value || ''); localStorage.setItem('solarAutoLand', (document.getElementById('autoLandPreset') || {}).value || ''); }catch(e){} }
-function loadAutoLayoutPreset(){ loadMaxRule(); try{ const v = localStorage.getItem('solarAutoLayout'); const el = document.getElementById('autoLayoutPreset'); if(el && v !== null && [...el.options].some(o => o.value === v)) el.value = v; const v2 = localStorage.getItem('solarAutoLand'); const el2 = document.getElementById('autoLandPreset'); if(el2 && v2 !== null && [...el2.options].some(o => o.value === v2)) el2.value = v2; }catch(e){} }
+function saveAutoLayoutPreset(){ try{ localStorage.setItem('solarAutoLayout2', (document.getElementById('autoLayoutPreset') || {}).value || ''); localStorage.setItem('solarAutoLand2', (document.getElementById('autoLandPreset') || {}).value || ''); }catch(e){} }
+function loadAutoLayoutPreset(){ loadMaxRule(); try{ const v = localStorage.getItem('solarAutoLayout2'); const el = document.getElementById('autoLayoutPreset'); if(el && v !== null && [...el.options].some(o => o.value === v)) el.value = v; const v2 = localStorage.getItem('solarAutoLand2'); const el2 = document.getElementById('autoLandPreset'); if(el2 && v2 !== null && [...el2.options].some(o => o.value === v2)) el2.value = v2; }catch(e){} }
 let autoLayoutPending = false; // 컨설팅 탭에서 검색했으면 배치도 탭으로 넘어갈 때 실행
 async function autoLayoutAfterSearch(){
   try{ if(parcelBuildings.length && document.querySelector('#railPaneLayout.active')) await ensureBldrgstForSide(null); }catch(e){}
@@ -7481,6 +7482,69 @@ function clickLayoutBuilding(){
   applyLayoutPreset('maxfill');
   try{ onGenerateLayoutClick(); }catch(e){ console.warn('click layout bld', e); }
 }
+// ===== 🧭 배치 추천: 선택한 경계의 종류(건물/토지)·면적·건축물대장 지붕·용마루 방향을 보여주고, 근거와 함께 유형을 추천 — 배치는 사용자가 버튼으로 =====
+let recoState = null; // { kind, path, name }
+function regItemFor(name){
+  const items = (lastBldrgst && Array.isArray(lastBldrgst.items)) ? lastBldrgst.items : [];
+  if(!items.length) return null;
+  const nm = String(name || '').replace(/\s/g, '');
+  let it = nm ? items.find(x => [x.dongNm, x.bldNm].some(v => v && (String(v).replace(/\s/g, '') === nm || nm.includes(String(v).replace(/\s/g, '')) || String(v).replace(/\s/g, '').includes(nm)))) : null;
+  if(!it && items.length === 1) it = items[0];
+  return it || null;
+}
+async function showLayoutReco(kind){
+  const card = document.getElementById('recoCard'); if(!card) return;
+  if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){ card.style.display = 'none'; return; }
+  const path = lastAreaPolygonPath.slice(), name = currentBoundaryName || '';
+  recoState = { kind, path, name };
+  card.style.display = ''; card.innerHTML = '<div class="hint">선택한 경계 정보를 확인하는 중…</div>';
+  // 검색한 필지 안 건물이면 건축물대장(지붕·구조·건축면적) 확인
+  let inSearched = false;
+  try{ if(lastParcelPath && lastParcelPath.length >= 3){ const la = path[0].getLat() * Math.PI / 180; const c = path.reduce((a, q) => { const v = solarToXY(q, la); return { x: a.x + v.x / path.length, y: a.y + v.y / path.length }; }, { x: 0, y: 0 }); inSearched = pointInPolygonXY(c, lastParcelPath.map(q => solarToXY(q, la))); } }catch(e){}
+  if(kind === 'building' && inSearched){ try{ await ensureBldrgstForSide(null); }catch(e){} }
+  if(!recoState || recoState.path !== path) return; // 그 사이 다른 곳 선택
+  const area = shoelaceArea(path);
+  const reg = (kind === 'building' && inSearched) ? regItemFor(name) : null;
+  const ori = roofOrientation(path);
+  const roofTxt = reg ? String(reg.roofCdNm || '') : '';
+  // 추천 규칙(근거를 그대로 표시)
+  let rec, why;
+  if(kind === 'land'){ rec = 'ground3'; why = '토지(건물 도형 없음) → 토지 노지 3단 · 필지 끝 3m 이격 (사용자 기준)'; }
+  else if(/콘크리트|슬래브|슬라브/.test(roofTxt)){ rec = 'slab'; why = `건축물대장 지붕 "${roofTxt}" → 평지붕(슬라브)일 가능성 — 평슬라브 경사거치 (위성사진으로 지붕 모양 확인)`; }
+  else {
+    const ruleKey = ((document.getElementById(ori.ns ? 'maxNS' : 'maxEW') || {}).value) || (ori.ns ? 'wondan3' : 'insamflat2');
+    rec = LAYOUT_PRESETS[ruleKey] ? ruleKey : (ori.ns ? 'wondan3' : 'insamflat2');
+    why = `${roofTxt ? `건축물대장 지붕 "${roofTxt}" · ` : (kind === 'building' ? '건축물대장 지붕 정보 없음 · ' : '')}용마루(긴 변) 방위각 ${ori.ridgeAz.toFixed(0)}° → ${ori.orient} → "최대 배치 규칙" 설정값(${ori.ns ? '남북' : '동서'}지붕 = ${(LAYOUT_PRESETS[rec] || {}).label || rec})`;
+  }
+  const alts = kind === 'land' ? ['ground2', 'ground3', 'ground4'] : ['wondan2', 'wondan3', 'wondan4', 'wondan5', 'insamflat1', 'insamflat2', 'insam', 'zero', 'slab', 'parking'];
+  const chip = k => `<button type="button" class="preset-btn${k === rec ? ' on' : ''}" style="padding:2px 7px;font-size:11px;" onclick="recoApply('${k}')">${LAYOUT_PRESETS[k].label}</button>`;
+  const fmt = v => Math.round(v).toLocaleString('ko-KR');
+  const info = [
+    `<b>${kind === 'land' ? '🌱 토지' : '🏢 건물'}</b> ${escLand(name || '')} · ${fmt(area)}㎡ (${fmt(area / PYEONG_M2)}평)`,
+    reg ? `건축물대장: 지붕 ${escLand(reg.roofCdNm || '-')} · 구조 ${escLand(reg.strctCdNm || '-')} · 건축면적 ${reg.archArea ? fmt(parseFloat(reg.archArea)) + '㎡' : '-'} · 높이 ${reg.heit ? reg.heit + 'm' : '-'}` : (kind === 'building' ? `<span class="sum-muted">건축물대장: ${inSearched ? '이 건물과 맞는 항목 없음(동 이름 불일치 또는 미등재)' : '검색한 필지 밖 건물이라 조회 안 함'}</span>` : ''),
+    kind === 'building' ? `용마루(긴 변) 방위각 ${ori.ridgeAz.toFixed(0)}° · ${ori.orient}` : `긴 변 방위각 ${ori.ridgeAz.toFixed(0)}°`,
+  ].filter(Boolean);
+  card.innerHTML = `<div style="border:1.5px solid #1A5FB4;border-radius:8px;background:#F3F7FD;padding:8px 10px;font-size:12px;line-height:1.55;">
+    <div style="display:flex;justify-content:space-between;align-items:center;"><b style="color:#0B3D91;">🧭 배치 추천</b><span style="cursor:pointer;color:#666;" onclick="document.getElementById('recoCard').style.display='none'">✕</span></div>
+    ${info.map(t => `<div>${t}</div>`).join('')}
+    <div style="margin-top:5px;padding:5px 7px;background:#fff;border-radius:6px;border:1px solid #C9D8EE;">추천: <b style="color:#B3261E;">${LAYOUT_PRESETS[rec].label}</b><div class="sum-muted" style="font-size:11px;">근거: ${why}</div></div>
+    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;"><button type="button" class="run" style="width:auto;margin:0;padding:5px 12px;font-size:12px;background:#0B3D91;color:#fff;" onclick="recoApply('${rec}')">추천대로 배치</button><span class="sum-muted" style="font-size:11px;">다른 유형:</span>${alts.filter(k => LAYOUT_PRESETS[k]).map(chip).join('')}</div>
+    <div id="recoResult" class="sum-muted" style="font-size:11px;margin-top:4px;">건물·필지를 클릭하면 배치하지 않고 이 추천만 보여줍니다. 버튼을 눌러야 배치됩니다.</div></div>`;
+  try{ card.scrollIntoView({ block: 'nearest' }); }catch(e){}
+}
+function recoApply(key){
+  const R = recoState; if(!R || !LAYOUT_PRESETS[key]) return;
+  lastAreaPolygonPath = R.path.slice(); currentBoundaryName = R.name;
+  if(R.kind === 'building') currentBoundaryOfficial = true;
+  applyLayoutPreset(key);
+  const isGround = LAYOUT_PRESETS[key].mount === 'ground';
+  if(isGround) forceGroundOnce = true;
+  try{ onGenerateLayoutClick(); } finally { forceGroundOnce = false; }
+  const ed = layoutRegistry[layoutRegistry.length - 1];
+  const out = document.getElementById('recoResult');
+  if(out){ out.innerHTML = ed && (sameBoundary(ed.boundary, R.path) || (ed.origBoundary && sameBoundary(ed.origBoundary, R.path))) ? `✅ "${LAYOUT_PRESETS[key].label}" ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장 · ${(ed.modules.filter(m => !m.removed).length * ed.wattPerPanel / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}kW 배치 — 다른 유형 버튼을 누르면 교체됩니다.` : '❌ 이 유형으로는 모듈이 들어가지 않았습니다. 다른 유형을 눌러 보세요.'; }
+  document.querySelectorAll('#recoCard .preset-btn').forEach(b => b.classList.toggle('on', (b.getAttribute('onclick') || '').includes("'" + key + "'")));
+}
 async function clickLayoutAt(latlng){
   if(clickLayoutBusy) return; clickLayoutBusy = true;
   const st = document.getElementById('roadviewStatus');
@@ -7488,7 +7552,7 @@ async function clickLayoutAt(latlng){
     // ① 클릭 지점의 건물(도로명주소 건물도형)
     const prev = lastAreaPolygonPath;
     await pickBuildingAt(latlng);
-    if(lastAreaPolygonPath && lastAreaPolygonPath !== prev){ clickLayoutBuilding(); return; }
+    if(lastAreaPolygonPath && lastAreaPolygonPath !== prev){ await showLayoutReco('building'); return; }
     // ② 건물이 없으면 그 필지(연속지적)에 토지 노지 배치
     st.style.color = 'var(--ink-soft)'; st.textContent = '클릭한 지점의 필지를 찾는 중…';
     const data = await vworldJsonp({
@@ -7503,17 +7567,13 @@ async function clickLayoutAt(latlng){
     const path = ring.map(q => new kakao.maps.LatLng(q.lat, q.lng));
     if(path.length > 3 && haversineMeters(path[0], path[path.length - 1]) < 0.3) path.pop();
     const props = feat.properties || {}; const name = props.jibun || props.addr || '토지';
-    histCheckpoint('클릭 배치(토지)');
+    histCheckpoint('토지 경계 선택');
     if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
     drawConfirmedOutline(path, name, '');
     lastAreaPolygonPath = path.slice(); currentBoundaryName = name;
-    const landKey = (document.getElementById('autoLandPreset') || {}).value;
-    const key = (landKey && landKey !== 'groundmax' && LAYOUT_PRESETS[landKey]) ? landKey : 'ground3';
-    applyLayoutPreset(key);
-    forceGroundOnce = true;
-    try{ onGenerateLayoutClick(); } finally { forceGroundOnce = false; }
-    const ed = layoutRegistry[layoutRegistry.length - 1];
-    if(ed && sameBoundary(ed.boundary, path)){ const n = ed.modules.filter(m => !m.removed).length; st.style.color = 'var(--ink-soft)'; st.textContent = `🖱 ${name} 필지에 "${LAYOUT_PRESETS[key].label}"(끝 ${LAYOUT_PRESETS[key].setback}m 이격) ${n.toLocaleString('ko-KR')}장 배치. 다른 필지나 건물을 계속 클릭하면 추가됩니다(같은 필지를 다시 클릭하면 교체). 되돌리기 "↶ 이전으로".`; }
+    await showLayoutReco('land');
+    const ed = null;
+    if(ed){ const n = ed.modules.filter(m => !m.removed).length; st.style.color = 'var(--ink-soft)'; st.textContent = `🖱 ${name} 필지에 "${LAYOUT_PRESETS[key].label}"(끝 ${LAYOUT_PRESETS[key].setback}m 이격) ${n.toLocaleString('ko-KR')}장 배치. 다른 필지나 건물을 계속 클릭하면 추가됩니다(같은 필지를 다시 클릭하면 교체). 되돌리기 "↶ 이전으로".`; }
   }catch(e){ st.style.color = '#b3402a'; st.textContent = '❌ 클릭 배치 실패: ' + (e && e.message ? e.message : e); }
   finally{ clickLayoutBusy = false; }
 }
