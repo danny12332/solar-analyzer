@@ -8455,7 +8455,7 @@ function kepcoOneLiner(list){
     const extra = ctrlOk && ctrl > Number(r.VOL_3) ? ` <span class="sum-muted" style="font-size:11px;">(출력제어 조건부 ${mw(ctrl)})</span>` : '';
     return base + extra;
   });
-  const copyTxt = list.map(r => `${r.SUBST_NM ?? '-'}변전소 ${mw(r.VOL_1)}, #${r.MTR_NO ?? '-'} MTR-${mw(r.VOL_2)}, ${r.DL_NM ?? '-'}DL-${mw(r.VOL_3)}`).join(' / ');
+  const copyTxt = list.map(r => { const ctrlOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0; const ctrl = Math.max(14000 - Number(r.DL_PWR), 0); return `${r.SUBST_NM ?? '-'}변전소 ${mw(r.VOL_1)}, #${r.MTR_NO ?? '-'} MTR-${mw(r.VOL_2)}, ${r.DL_NM ?? '-'}DL-${mw(r.VOL_3)}` + (ctrlOk && ctrl > Number(r.VOL_3) ? ` (출력제어 조건부 ${mw(ctrl)})` : ''); }).join(' / ');
   return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--surface-2);border-left:3px solid var(--sky-deep);border-radius:0 4px 4px 0;font-size:12.5px;line-height:1.6;">${rows.join('<br>')} <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText(${JSON.stringify(copyTxt).replace(/"/g, '&quot;')}).then(() => { this.textContent = '복사됨'; setTimeout(() => this.textContent = '복사', 1200); })" style="border:1px solid var(--card-line);background:#fff;border-radius:4px;padding:0 6px;font-size:11px;cursor:pointer;vertical-align:middle;">복사</button><br><span class="sum-muted" style="font-size:11px;">실제 여유용량 기준(변전소·주변압기·배전선로), kW → MW</span></p>`;
 }
 function kepcoPhoneLine(admin){
