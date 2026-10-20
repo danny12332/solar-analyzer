@@ -8855,6 +8855,15 @@ async function checkKepcoCapacityInner(){
     // 같은 리 안이 다른 리보다 항상 우선: 가까운 지번 순으로 목록 전체(최대 320개, 40개씩 8묶음)까지 시도한 뒤에야 다른 리로 넘어감
     result = await tryArea(admin.lidong, admin.li, 320);
     if(result) matchLevel = eqJibun(result.matched.jibun, jibun) ? 'exact' : 'sameArea';
+    // 1-1) 읍 승격·면 환원 등으로 한전ON 주소 목록이 옛 이름(예: 여주시 "가남읍" → 한전ON "가남면")인 경우: 읍↔면 이름을 바꿔 같은 리에서 다시 시도
+    if(!result && /[읍면]$/.test(admin.lidong || '')){
+      const alt = admin.lidong.replace(/읍$/, '\u0000').replace(/면$/, '읍').replace('\u0000', '면');
+      result = await tryArea(alt, admin.li, 320);
+      if(result){
+        matchLevel = eqJibun(result.matched.jibun, jibun) ? 'exact' : 'sameArea';
+        kepcoLooseNote = (kepcoLooseNote ? kepcoLooseNote + ' ' : '') + `ℹ 한전ON 주소 목록에는 "${admin.lidong}"이 없어 옛 이름 <b>"${alt}"</b>으로 조회했습니다(읍·면 명칭 변경 지역).`;
+      }
+    }
 
     // 2) 같은 면 안의 다른 리에서 시도
     if(!result){
