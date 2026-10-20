@@ -2869,7 +2869,7 @@ async function exportLayoutSheet(fmt, opts){
   // 영역: 바깥 테두리, 지도 영역, 하단 표/표제란
   const M = { x: 200, y: 110, w: 1980, h: 1110 };
   // 그릴 도형 수집
-  const layouts = layoutRegistry.map(ed => ({ ed, live: ed.modules.filter(m => !m.removed), vents: ed.modules.filter(m => m.vent && m.removed) }));
+  const layouts = proposalLayouts().map(ed => ({ ed, live: ed.modules.filter(m => !m.removed), vents: ed.modules.filter(m => m.vent && m.removed) }));
   const allPts = [];
   layouts.forEach(L => { L.ed.modules.forEach(m => m.poly.getPath().forEach(q => allPts.push(q))); (L.ed.boundary || []).forEach(q => allPts.push(q)); });
   const lats = allPts.map(q => q.getLat()), lngs = allPts.map(q => q.getLng());
@@ -3031,7 +3031,7 @@ async function exportLayoutSheet(fmt, opts){
       const toLL = (x, y) => { const r = rotateXY(x, y, az); return solarToLatLng(r.x, r.y, lat0); };
       const pa = toLL(xm, y0), pb = toLL(xm, y1);
       const A = toC(pa.getLat(), pa.getLng()), Bp = toC(pb.getLat(), pb.getLng());
-      const L = letters[gi] || '?';
+      const L = 'A'; void letters; void gi;
       g.strokeStyle = '#1A2FD6'; g.fillStyle = '#1A2FD6'; g.lineWidth = 3; g.setLineDash([16, 10]);
       g.beginPath(); g.moveTo(A.x, A.y); g.lineTo(Bp.x, Bp.y); g.stroke(); g.setLineDash([]);
       const dx = Bp.x - A.x, dy = Bp.y - A.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
@@ -3253,6 +3253,53 @@ function bldHeightFor(ed){
   if(!(h > 0)) return null;
   return { height: h, roof: it.roofCdNm || '', floors: it.grndFlrCnt, name: it.dongNm || it.bldNm || '' };
 }
+// 긴 변(용마루) 방향에서 본 측면(B-B): 건물 길이 전체, 테이블마다 x' 구간·기울임 방향, 지주
+function sideViewLongData(ed){
+  const lat0 = ed.lat0Rad, az = ed.azRad || 0;
+  const B = ed.boundary.map(q => { const xy = solarToXY(q, lat0); return rotateXY(xy.x, xy.y, -az); });
+  const bx = B.map(q => q.x); const x0 = Math.min(...bx), x1 = Math.max(...bx);
+  const live = ed.modules.filter(m => !m.removed);
+  const units = (ed.tables && ed.tables.length) ? ed.tables.filter(t => t.mods.some(m => !m.removed)).map(t => t.mods.filter(m => !m.removed)) : [live];
+  const blocks = [];
+  units.forEach(ms => { let a = Infinity, b = -Infinity; ms.forEach(m => modCornersRot(ed, m).forEach(c => { a = Math.min(a, c.x); b = Math.max(b, c.x); })); if(a < b) blocks.push([a, b]); });
+  blocks.sort((p, q) => p[0] - q[0]);
+  const merged = []; blocks.forEach(bl => { const last = merged[merged.length - 1]; if(last && bl[0] <= last[1] + 0.05){ last[1] = Math.max(last[1], bl[1]); } else merged.push(bl.slice()); });
+  // 기울임 방향이 x'(긴 변)인가: 인삼밭·플랫·제로솔루션에서 열이 x' 방향으로 반복될 때(tiltAlongX 저장값), 없으면 false
+  return { x0, x1, L: x1 - x0, blocks: merged, tiltAlongX: !!ed.tiltAlongX };
+}
+function drawSideViewLong(g, box, ed, opts){
+  const sv = sideViewLongData(ed); if(!sv.blocks.length) return;
+  const kind = sideViewKind(ed);
+  const tiltDeg = (typeof ed.tilt === 'number' ? ed.tilt : (opts.tilt || 10));
+  const eaveH = kind === 'ground' ? 0 : Math.max(0, opts.eaveH || 0);
+  const ridgeH = kind === 'ground' ? 0 : (opts.ridgeH != null ? opts.ridgeH : eaveH);
+  const L = sv.L;
+  // 모듈 높이(처마 기준): 플랫 = 용마루 위 0.5m, 경사(원단·인삼밭) = 지붕면 위 ~0.5m(긴 변 방향에서는 용마루 높이 근처로 보임), 평면 = 바닥 위 0.5~1m
+  const base = kind === 'flat' ? ridgeH + 0.5 : (kind === 'gable' ? ridgeH + 0.3 : (kind === 'ground' ? 1.0 : (kind === 'parking' ? 3.0 : eaveH + 0.5)));
+  const segs = [], posts = []; let top = base;
+  sv.blocks.forEach(bl => {
+    const a = bl[0] - sv.x0, b = bl[1] - sv.x0;
+    if(sv.tiltAlongX){ const rise = (b - a) * Math.tan(tiltDeg * Math.PI / 180); segs.push([[a, base], [b, base + rise]]); top = Math.max(top, base + rise); posts.push([[a, kind === 'flat' ? ridgeH : eaveH], [a, base]], [[b, kind === 'flat' ? ridgeH : eaveH], [b, base + rise]]); }
+    else { segs.push([[a, base], [b, base]]); if(kind === 'flat' || kind === 'ground' || kind === 'slab' || kind === 'parking'){ const step = Math.max(3, (b - a) / Math.max(1, Math.round((b - a) / 4))); for(let x = a; x <= b + 1e-6; x += step) posts.push([[x, kind === 'flat' ? ridgeH : eaveH], [x, base]]); } }
+  });
+  const totalH = Math.max(top + 0.5, ridgeH + 1);
+  const padL = 150, padR = 150, padT = 100, padB = 80;
+  const sc = Math.min((box.w - padL - padR) / L, (box.h - padT - padB) / totalH);
+  const ox = box.x + padL + ((box.w - padL - padR) - L * sc) / 2, oy = box.y + box.h - padB;
+  const X = x => ox + x * sc, Y = z => oy - z * sc;
+  g.lineWidth = 2.2; g.strokeStyle = '#000'; g.setLineDash([]);
+  if(kind !== 'ground'){ g.strokeRect(X(0), Y(ridgeH), L * sc, ridgeH * sc); if(ridgeH > eaveH + 0.05){ g.lineWidth = 1; g.beginPath(); g.moveTo(X(0), Y(eaveH)); g.lineTo(X(L), Y(eaveH)); g.stroke(); g.lineWidth = 2.2; } }
+  else { g.beginPath(); g.moveTo(X(-0.5), Y(0)); g.lineTo(X(L + 0.5), Y(0)); g.stroke(); }
+  g.lineWidth = 2; g.strokeStyle = '#1C4FD8'; posts.forEach(([a, b]) => { g.beginPath(); g.moveTo(X(a[0]), Y(a[1])); g.lineTo(X(b[0]), Y(b[1])); g.stroke(); });
+  g.lineWidth = 6; g.strokeStyle = '#FF00FF'; segs.forEach(([a, b]) => { g.beginPath(); g.moveTo(X(a[0]), Y(a[1])); g.lineTo(X(b[0]), Y(b[1])); g.stroke(); });
+  // 치수(빨강): 건물 길이, 모듈 상단 높이
+  const mm = v => Math.round(v * 1000).toLocaleString('ko-KR');
+  g.strokeStyle = '#E00000'; g.fillStyle = '#E00000'; g.lineWidth = 1.4; g.font = 'bold 20px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  { const zPx = Y(0) + 40; g.beginPath(); g.moveTo(X(0), zPx); g.lineTo(X(L), zPx); g.moveTo(X(0), zPx - 8); g.lineTo(X(0), zPx + 8); g.moveTo(X(L), zPx - 8); g.lineTo(X(L), zPx + 8); g.stroke(); g.fillText(mm(L), X(L / 2), zPx - 6); }
+  if(kind !== 'ground'){ const xPx = X(L) + 30; g.beginPath(); g.moveTo(xPx, Y(0)); g.lineTo(xPx, Y(top)); g.moveTo(xPx - 8, Y(0)); g.lineTo(xPx + 8, Y(0)); g.moveTo(xPx - 8, Y(top)); g.lineTo(xPx + 8, Y(top)); g.stroke(); g.save(); g.translate(xPx + 24, (Y(0) + Y(top)) / 2); g.rotate(-Math.PI / 2); g.fillText(mm(top), 0, 0); g.restore(); }
+  { const xPx = X(0) - 30; g.beginPath(); g.moveTo(xPx, Y(kind === 'ground' ? 0 : ridgeH)); g.lineTo(xPx, Y(top)); g.moveTo(xPx - 8, Y(top)); g.lineTo(xPx + 8, Y(top)); g.moveTo(xPx - 8, Y(kind === 'ground' ? 0 : ridgeH)); g.lineTo(xPx + 8, Y(kind === 'ground' ? 0 : ridgeH)); g.stroke(); g.save(); g.translate(xPx - 16, (Y(kind === 'ground' ? 0 : ridgeH) + Y(top)) / 2); g.rotate(-Math.PI / 2); g.fillText(mm(top - (kind === 'ground' ? 0 : ridgeH)), 0, 0); g.restore(); }
+  g.fillStyle = '#1A2FD6'; g.font = 'bold 30px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.fillText(opts.title || '', box.x + box.w / 2, box.y + box.h + 30);
+}
 function sideViewKind(ed){
   if(ed.type === 'ground') return 'ground';
   if(ed.type === 'roof') return ed.kind === 'slab' ? 'slab' : 'gable';
@@ -3369,7 +3416,7 @@ function sideViewGroups(){
   const g = id => document.getElementById(id);
   const rep = !g('sideRep') || g('sideRep').checked;
   const groups = [];
-  layoutRegistry.forEach((ed, i) => {
+  proposalLayouts().forEach((ed, i) => {
     if(!ed.boundary || ed.boundary.length < 3 || !ed.modules.some(m => !m.removed)) return;
     const key = rep ? [ed.type, ed.kind || '', ed.frameN || ed.blockRows || ed.arrRows || '', ed.orient || '', (ed.stdRows || '')].join('|') : String(ed.groupId);
     let grp = groups.find(x => x.key === key);
@@ -3385,20 +3432,20 @@ function sideViewPages(){
   const groups = sideViewGroups();
   const pages = [];
   const letters = 'ABCDEFGHIJKLMNOP';
-  for(let i = 0; i < groups.length; i += 2){
+  for(let i = 0; i < groups.length; i++){
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
     g.lineWidth = 6; g.strokeStyle = '#000'; g.strokeRect(40, 40, W - 80, H - 80); g.lineWidth = 2; g.strokeRect(80, 80, W - 160, H - 230);
-    const pair = groups.slice(i, i + 2);
-    pair.forEach((grp, k) => {
-      const box = pair.length === 1 ? { x: 300, y: 200, w: W - 600, h: 1050 } : { x: 160 + k * (W - 320) / 2 + 40, y: 220, w: (W - 320) / 2 - 80, h: 1020 };
-      const L = letters[i + k] || '?';
-      let hs = null;
-      const sub0 = `${layoutTypeLabel(grp.ed)} · 적용: ${grp.names.join(', ')}`;
-      try{ drawSideView(g, box, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, title: `"${L}"-"${L}" 측면도 VIEW SCALE 1:1`, sub: '', onHeight: h => { hs = h; } }); }catch(e){ console.warn('side view', e); }
-      const sub = sub0 + (hs && hs.heightSrc ? ` · 처마 ${hs.eaveH.toFixed(2)}m (${hs.heightSrc}${hs.reg && hs.reg.roof ? ' · 지붕 ' + hs.reg.roof : ''})` : '');
-      g.fillStyle = '#444'; g.font = '20px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(sub, box.x + box.w / 2, box.y + box.h + 62);
-    });
+    const grp = groups[i];
+    // 왼쪽: 단면(A-A, 용마루 가로지름) · 오른쪽: 긴 변 방향(B-B)
+    const boxA = { x: 200, y: 220, w: (W - 320) / 2 - 80, h: 1020 }, boxB = { x: 160 + (W - 320) / 2 + 40, y: 220, w: (W - 320) / 2 - 80, h: 1020 };
+    let hs = null;
+    const sub0 = `${layoutTypeLabel(grp.ed)} · 적용: ${grp.names.join(', ')}`;
+    try{ drawSideView(g, boxA, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, title: `"A"-"A" 측면도 VIEW SCALE 1:1`, sub: '', onHeight: h => { hs = h; } }); }catch(e){ console.warn('side view', e); }
+    try{ const eH = hs ? hs.eaveH : (isFinite(eaveH) ? eaveH : 6); const kindA = sideViewKind(grp.ed); const half = sideViewData(grp.ed).D / 2; const rH = (kindA === 'gable' || kindA === 'flat') ? eH + half * Math.tan((isFinite(roofDeg) ? roofDeg : 10) * Math.PI / 180) : eH;
+      drawSideViewLong(g, boxB, grp.ed, { eaveH: eH, ridgeH: rH, title: `"B"-"B" 측면도 VIEW SCALE 1:1` }); }catch(e){ console.warn('side view long', e); }
+    const sub = sub0 + (hs && hs.heightSrc ? ` · 처마 ${hs.eaveH.toFixed(2)}m (${hs.heightSrc}${hs.reg && hs.reg.roof ? ' · 지붕 ' + hs.reg.roof : ''})` : '') + ' · B-B(긴 변 방향)의 지주 간격·벤츄레이터는 표시하지 않음(실측 후 설계)';
+    g.fillStyle = '#444'; g.font = '20px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(sub, W / 2, boxA.y + boxA.h + 62);
     drawSheetTitleBlock(g, W, H, '모 듈 배 치 측 면 도');
     pages.push(cv);
   }
@@ -3461,7 +3508,7 @@ async function exportProposalPdf(){
   const moduleName = g0('sheetModule') || '현대 645Wp(양면)';
   const designer = g0('sheetDesigner');
   const today = new Date(); const dateStr = `${today.getFullYear()}. ${today.getMonth() + 1}. ${today.getDate()}.`;
-  const layouts = layoutRegistry.map((ed, i) => { const live = ed.modules.filter(m => !m.removed).length; return { ed, i, name: ed.bldName || `${i + 1}동`, live, kw: live * ed.wattPerPanel / 1000, area: layoutAreaM2(ed), type: layoutTypeLabel(ed) }; });
+  const layouts = proposalLayouts().map((ed, i) => { const live = ed.modules.filter(m => !m.removed).length; return { ed, i, name: ed.bldName || `${i + 1}동`, live, kw: live * ed.wattPerPanel / 1000, area: layoutAreaM2(ed), type: layoutTypeLabel(ed) }; });
   const totalN = layouts.reduce((a, L) => a + L.live, 0), totalKw = layouts.reduce((a, L) => a + L.kw, 0);
   const fmtKw = v => v.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
   // 1) 조감도(음영 포함) 캔버스 → 표지
@@ -3634,7 +3681,7 @@ function numToHangul(n){
 }
 // 배치 유형 → 시공 방식 추정
 function guessMethod(){
-  const eds = layoutRegistry; if(!eds.length) return null;
+  const eds = proposalLayouts(); if(!eds.length) return null;
   const score = {};
   eds.forEach(ed => {
     const k = ed.mountType || ed.kind || '';
@@ -3647,7 +3694,7 @@ function guessMethod(){
 let __qMethodAuto = true;
 function quoteInputs(){
   const g = id => document.getElementById(id), v = id => (g(id) || {}).value, num = (id, d) => { const x = parseFloat(v(id)); return isFinite(x) ? x : d; };
-  const autoCount = layoutRegistry.reduce((a, ed) => a + ed.modules.filter(m => !m.removed).length, 0);
+  const autoCount = proposalLayouts().reduce((a, ed) => a + ed.modules.filter(m => !m.removed).length, 0);
   const count = Math.max(0, Math.round(num('qCount', NaN))) || autoCount;
   const mod = QUOTE.modules[v('qModule')] || QUOTE.modules.h1;
   const kW = count * mod.wp / 1000;
@@ -3949,7 +3996,7 @@ function wrapText(g, text, x, y, maxW, lh){
 function exportLayoutDxf(){
   const st = document.getElementById('roadviewStatus');
   const items = []; // { layer, color, path:[{x,y}] , closed, text? }
-  const lat0Rad = layoutRegistry.length ? layoutRegistry[0].lat0Rad
+  const lat0Rad = proposalLayouts().length ? proposalLayouts()[0].lat0Rad
     : ((lastAreaPolygonPath && lastAreaPolygonPath.length) ? lastAreaPolygonPath.reduce((a, p) => a + p.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180
     : (annots.length ? annots[0].center.getLat() * Math.PI / 180 : null));
   if(lat0Rad === null){ if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 내보낼 배치나 경계가 없습니다. 배치를 먼저 생성하세요.'; } return; }
@@ -3958,13 +4005,13 @@ function exportLayoutDxf(){
   // 경계(필지·건물·면적재기)
   const seenB = [];
   const addBoundary = (path, layer) => { if(!path || path.length < 3) return; if(seenB.some(b => sameBoundary(b, path))) return; seenB.push(path); items.push({ layer, path: path.map(xy), closed: true }); };
-  layoutRegistry.forEach(ed => addBoundary(ed.boundary, 'BOUNDARY'));
+  proposalLayouts().forEach(ed => addBoundary(ed.boundary, 'BOUNDARY'));
   if(lastParcelPath) addBoundary(lastParcelPath, 'PARCEL');
   Object.values(clickedParcels || {}).forEach(c => addBoundary(c.path, 'PARCEL'));
   if(lastAreaPolygonPath) addBoundary(lastAreaPolygonPath, 'BOUNDARY');
   // 모듈·테이블·라벨
   let modCount = 0, kwTotal = 0;
-  layoutRegistry.forEach((ed, i) => {
+  proposalLayouts().forEach((ed, i) => {
     const live = ed.modules.filter(m => !m.removed);
     live.forEach(m => { items.push({ layer: 'MODULE', path: pathOf(m.poly), closed: true }); modCount++; });
     ed.modules.filter(m => m.vent && m.removed).forEach(m => { const q = pathOf(m.poly); if(q.length === 4){ items.push({ layer: 'VENT', path: [q[0], q[2]], closed: false }, { layer: 'VENT', path: [q[1], q[3]], closed: false }, { layer: 'VENT', path: q, closed: true }); } });
@@ -3973,7 +4020,7 @@ function exportLayoutDxf(){
     const b = ed.boundary.map(xy); const cx = b.reduce((a, q) => a + q.x, 0) / b.length, cy = Math.max(...b.map(q => q.y)) + 2;
     items.push({ layer: 'TEXT', text: `${live.length}EA x ${ed.wattPerPanel}W = ${kw.toFixed(2)}kW`, x: cx, y: cy, h: 1.2 });
   });
-  layoutRegistry.forEach(ed => layoutEdgeSetbacks(ed, 3.5).slice(0, 6).forEach(dm => {
+  proposalLayouts().forEach(ed => layoutEdgeSetbacks(ed, 3.5).slice(0, 6).forEach(dm => {
     const A = xy(dm.from), Bp = xy(dm.to);
     items.push({ layer: 'DIM', path: [A, Bp], closed: false });
     items.push({ layer: 'DIM', text: `${Math.round(dm.d * 1000)}`, x: (A.x + Bp.x) / 2, y: (A.y + Bp.y) / 2, h: 0.35 });
@@ -4230,8 +4277,10 @@ function renderLayoutCards(){
     const name = ed.bldName || `${i + 1}동`;
     return `<div class="lay-card" draggable="true" data-gid="${ed.groupId}" ondragstart="layCardDragStart(event)" ondragover="layCardDragOver(event)" ondragleave="this.classList.remove('over')" ondrop="layCardDrop(event)" ondragend="layCardDragEnd(event)">
       <div class="lc-head"><span style="color:#9A7A3A;font-weight:700;">${i + 1}</span><span class="lc-name" title="${escLand(name)}">${escLand(name)}</span><span class="lc-kw">${fmt(kw)} kW</span></div>
-      <div class="lc-sub">${escLand(layoutTypeLabel(ed))} · ${area ? Math.round(area).toLocaleString('ko-KR') + '㎡ (' + Math.round(area / 3.305785).toLocaleString('ko-KR') + '평) · ' : ''}${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}장${(ed.tables || []).length ? ' · 테이블 ' + ed.tables.length + '개' : ''}${ed.archFix ? ` · <span style="color:#B3261E;" title="건물도형 ${Math.round(ed.archFix.from)}㎡ → 건축물대장 건축면적 ${Math.round(ed.archFix.reg)}㎡ 기준으로 경계를 ${ed.archFix.d.toFixed(1)}m 줄임(추정)">경계 대장면적 보정</span>` : ''}</div>
+      <div class="lc-sub">${ed.alt ? `<b style="color:#7A0E58;">${ed.alt.label}</b> · ` : ''}${escLand(layoutTypeLabel(ed))} · ${area ? Math.round(area).toLocaleString('ko-KR') + '㎡ (' + Math.round(area / 3.305785).toLocaleString('ko-KR') + '평) · ' : ''}${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}장${(ed.tables || []).length ? ' · 테이블 ' + ed.tables.length + '개' : ''}${ed.archFix ? ` · <span style="color:#B3261E;" title="건물도형 ${Math.round(ed.archFix.from)}㎡ → 건축물대장 건축면적 ${Math.round(ed.archFix.reg)}㎡ 기준으로 경계를 ${ed.archFix.d.toFixed(1)}m 줄임(추정)">경계 대장면적 보정</span>` : ''}</div>
       <div class="lc-btns">
+        <label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:${ed.inProposal === false ? '#999' : '#0E5A3A'};border:1px solid var(--card-line);border-radius:5px;padding:1px 6px;background:${ed.inProposal === false ? '#fff' : '#E9F5EE'};" title="체크한 배치만 배치도·측면도·제안서·견적에 들어갑니다"><input type="checkbox" ${ed.inProposal === false ? '' : 'checked'} onchange="layCardToggleProposal(${ed.groupId}, this.checked)" style="margin:0;"> 제안서 포함</label>
+        ${ed.alt ? `<button type="button" onclick="layCardBringBack(${ed.groupId})" title="비켜 둔 배치를 원래 건물 자리로 되돌림(그 자리의 다른 배치는 교체)">↩ 제자리로</button>` : `<button type="button" onclick="layCardSetAside(${ed.groupId})" title="이 배치를 옆으로 비켜 두고(제안서 제외) 건물에 다른 유형을 만들어 나란히 비교">📑 대안으로 비켜두기</button>`}
         <button type="button" onclick="layCardLocate(${ed.groupId})" title="지도를 이 배치로 이동">📍 위치</button>
         <select onmousedown="event.stopPropagation()" onchange="layCardRelayoutAs(${ed.groupId}, this.value)" title="이 동만 고른 유형으로 바로 다시 배치(기존 배치는 교체, ↶ 이전으로 복구 가능)" style="font-size:11px;padding:1px 3px;border:1px solid var(--card-line);border-radius:5px;background:var(--surface-2);font-family:inherit;max-width:150px;">${layCardTypeOptions(ed)}</select>
         <button type="button" onclick="layCardMove(${ed.groupId})" title="이 배치를 선택해 화살표·손잡이로 옮기고 회전(⟲⟳)">✥ 이동·회전</button>
@@ -4264,6 +4313,41 @@ function layRelayoutAll(key){
   try{ gids.forEach(gid => { applyLayoutPreset(key); layCardRelayoutInner(gid); }); } finally { histMuted = false; }
   scheduleLayoutCards();
   const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🔁 ${gids.length}개 동을 "${LAYOUT_PRESETS[key].label}"으로 다시 배치했습니다 (↶ 이전으로 복구 가능).`; }
+}
+// 제안서·배치도·측면도·견적에 들어갈 배치만(대안으로 비켜 둔 배치는 기본 제외, 카드에서 체크)
+function proposalLayouts(){ return layoutRegistry.filter(ed => ed.inProposal !== false); }
+function layCardToggleProposal(gid, on){ const ed = layoutByGroup(gid); if(!ed) return; ed.inProposal = !!on; scheduleLayoutCards(); try{ renderQuotePanel(); }catch(e){} }
+// 📑 대안 비교: 이 배치를 건물 옆(동쪽)으로 비켜 두고(경계 복사본과 함께) 건물 경계는 그대로 남김 → 다른 유형으로 다시 배치해 나란히 비교
+function layCardSetAside(gid){
+  const ed = layoutByGroup(gid); if(!ed || !ed.boundary || ed.boundary.length < 3) return;
+  histCheckpoint('대안으로 비켜두기');
+  const lat0 = ed.lat0Rad, xy = ed.boundary.map(q => solarToXY(q, lat0));
+  const w = Math.max(...xy.map(q => q.x)) - Math.min(...xy.map(q => q.x));
+  const n = layoutRegistry.filter(e => e.alt).length;
+  const dx = w + 8 + n * 4, dy = 0;
+  const origB = ed.boundary.slice();
+  const was = moveWithOutline; moveWithOutline = true;
+  const keepPath = lastAreaPolygonPath, keepName = currentBoundaryName, keepOff = currentBoundaryOfficial;
+  try{ moveLayoutBy(ed, dx, dy); ed.boundary = shiftPath(origB, dx, dy, lat0); } finally { moveWithOutline = was; }
+  // 건물 경계(분홍 테두리)는 원래 자리에 그대로 — 비켜 둔 배치는 자기 경계 복사본을 점선으로
+  if(keepPath && sameBoundary(keepPath, origB)){ lastAreaPolygonPath = keepPath; currentBoundaryName = keepName; currentBoundaryOfficial = keepOff; }
+  else { if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; } drawConfirmedOutline(origB.slice(), ed.bldName || ''); currentBoundaryOfficial = true; }
+  ed.alt = { label: '대안 ' + String.fromCharCode(65 + n), dx, dy, origBoundary: origB };
+  ed.inProposal = false;
+  try{ const map = ensureKakaoMap(); const pl = new kakao.maps.Polygon({ map, path: ed.boundary.slice(), strokeWeight: 2, strokeColor: '#7A0E58', strokeStyle: 'dash', strokeOpacity: 0.9, fillOpacity: 0, zIndex: 1 }); measureShapes.push(pl); if(measureGroups[ed.groupId]) measureGroups[ed.groupId].shapes.push(pl); ed.altOutline = pl; }catch(e){}
+  refreshLayoutLabel(ed); scheduleLayoutCards();
+  const st = document.getElementById('roadviewStatus');
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📑 "${ed.bldName || ''}" 배치를 ${ed.alt.label}으로 동쪽 ${dx.toFixed(0)}m 옆에 비켜 두었습니다(제안서에서는 제외). 건물 경계는 그대로이니 ② 유형을 고르고 ③ 배치 생성(또는 🧭 추천 카드)으로 다른 유형을 만들어 나란히 비교하세요. 카드의 "제안서 포함" 체크로 어느 안을 넣을지 고릅니다.`; }
+}
+function layCardBringBack(gid){
+  const ed = layoutByGroup(gid); if(!ed || !ed.alt) return;
+  histCheckpoint('대안 제자리로');
+  // 원래 자리에 다른 배치가 있으면 그 배치를 지움(교체)
+  for(let i = layoutRegistry.length - 1; i >= 0; i--){ const e = layoutRegistry[i]; if(e !== ed && sameBoundary(e.boundary, ed.alt.origBoundary)){ try{ removeMeasureGroup(e.groupId); }catch(x){} layoutRegistry.splice(i, 1); } }
+  moveLayoutBy(ed, -ed.alt.dx, -ed.alt.dy); ed.boundary = ed.alt.origBoundary.slice();
+  if(ed.altOutline){ try{ ed.altOutline.setMap(null); }catch(e){} ed.altOutline = null; }
+  ed.alt = null; ed.inProposal = true;
+  refreshLayoutLabel(ed); scheduleLayoutCards();
 }
 function layCardLocate(gid){
   const ed = layoutByGroup(gid); if(!ed) return;
@@ -5522,6 +5606,7 @@ function generateStdLayout(kind){
   } else if(kind === 'insam' || kind === 'insam_flat' || kind === 'zero'){
     // 남북 축에 가까운 축을 열 피치(기울임) 방향으로: axis 방향 벡터 (cos,sin) 의 남북 성분 |sin| 이 크면 x'가 남북
     const xIsNS = Math.abs(Math.sin(axis)) >= Math.abs(Math.cos(axis));
+    window.__lastTiltAlongX = xIsNS; // 긴 변 방향 측면도용
     const tiltLen = (landscape ? W : L) * cosT;   // 기울임 방향 투영 길이(모듈 1장)
     const across = landscape ? L : W;            // 열 방향(좌우) 치수
     const tb = kind === 'zero' ? { pitch: num('stdPitch', 1.7) * rows, exact: true } : stdPitchFromTable(tilt, landscape, rows);
@@ -5605,6 +5690,8 @@ function generateStdLayout(kind){
   label.setMap(map); measureShapes.push(label); measureGroups[solarGroupId].shapes.push(label);
   const first = chosen[0].cr;
   const ed = { type: 'std', kind, modules, mods: modules, label, wattPerPanel: watt, groupId: solarGroupId, boundary: lastAreaPolygonPath.slice(), lat0Rad, azRad: axis,
+    tiltAlongX: (kind === 'insam' || kind === 'insam_flat' || kind === 'zero') ? !!window.__lastTiltAlongX : false,
+    stdRows: (kind === 'insam' || kind === 'insam_flat' || kind === 'zero') ? rows : 0,
     modW: Math.abs(first[1].x - first[0].x), modD: Math.abs(first[2].y - first[1].y), fill, areaM2, summary, geomCount: cands.length, tilt: tiltUsed, frameN: (kind === 'wondan' || kind === 'wondan_barn') ? Math.round(num('stdFrameRows', 3)) : 0 };
   registerLayout(ed);
   buildTableOverlays(ed, modules, m => m.cornersRot, (x, y) => real(x, y));
@@ -6057,7 +6144,7 @@ function drawShrinkOverlays(){
   const wrapBox = (inner, color) => `<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;gap:3px;align-items:center;background:${color || 'rgba(11,61,145,.92)'};padding:3px 4px;border-radius:6px;color:#fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">${inner}</div>`;
   const order = (n, bIn, lab, bOut) => Math.abs(n.x) >= Math.abs(n.y) ? (n.x > 0 ? bOut + lab + bIn : bIn + lab + bOut) : (n.y < 0 ? bIn + lab + bOut : bOut + lab + bIn);
   const labOf = v => `<span style="min-width:44px;text-align:center;font-weight:800;font-size:12px;">${v ? `${v > 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}m` : '0'}</span>`;
-  sides.forEach(sd => { const n = dirXY(sd.inn.x, sd.inn.y); E.sideOv[sd.k].setContent(wrapBox(order(n, btn(arrowOf(n.x, n.y), `shrinkSide('${sd.k}', 1)`, '이 옆면을 안쪽으로(줄이기)', true), labOf(E.side[sd.k]), btn(arrowOf(-n.x, -n.y), `shrinkSide('${sd.k}', -1)`, '이 옆면을 바깥으로(늘리기)', false)))); });
+  sides.forEach(sd => { const n = dirXY(sd.inn.x, sd.inn.y); const grip = `<span onmousedown="shrinkDragStart(event, '${sd.k}')" title="누른 채 끌면 이 옆면이 따라 움직입니다(놓으면 배치 다시 생성)" style="cursor:grab;font-size:16px;font-weight:900;padding:0 4px;user-select:none;">⠿</span>`; E.sideOv[sd.k].setContent(wrapBox(grip + order(n, btn(arrowOf(n.x, n.y), `shrinkSide('${sd.k}', 1)`, '이 옆면을 안쪽으로(줄이기)', true), labOf(E.side[sd.k]), btn(arrowOf(-n.x, -n.y), `shrinkSide('${sd.k}', -1)`, '이 옆면을 바깥으로(늘리기)', false)))); });
   (E.edgeOv || []).forEach((ov, i) => {
     if(!ov) return; const a = F.uv0[i], b = F.uv0[(i + 1) % F.uv0.length];
     const sgnA = (() => { let s2 = 0; for(let k = 0; k < F.uv0.length; k++){ const u = F.uv0[k], v = F.uv0[(k + 1) % F.uv0.length]; s2 += u.x * v.y - v.x * u.y; } return s2 > 0 ? 1 : -1; })();
@@ -6077,6 +6164,25 @@ function drawShrinkOverlays(){
 function shrinkStepVal(){ const v = parseFloat((document.getElementById('shrinkStep') || {}).value); if(shrinkEdit && isFinite(v)) shrinkEdit.stepVal = String(v); return isFinite(v) ? v : 0.5; }
 function shrinkNotchOpen(k){ const E = shrinkEdit; if(!E) return; E.notchOpen = k; const st = shrinkStepVal(); const nt = E.notch[k]; if(!(nt.du > 0)) nt.du = Math.max(st, 1); if(!(nt.dv > 0)) nt.dv = Math.max(st, 1); applyShrink(); }
 function shrinkNotch(k, which, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); const nt = E.notch[k]; nt[which] = Math.max(0, Math.round((nt[which] + dir * st) * 100) / 100); if(!(nt.du > 0) || !(nt.dv > 0)){ nt.du = 0; nt.dv = 0; if(E.notchOpen === k) E.notchOpen = null; } applyShrink(); }
+// 옆면 손잡이 끌기: 끄는 동안은 경계 미리보기(점선)만, 놓으면 그 값으로 배치 다시 생성
+let shrinkDrag = null;
+function shrinkDragStart(ev, k){
+  const E = shrinkEdit; if(!E) return; try{ kakao.maps.event.preventMap(); }catch(e){} ev.preventDefault(); ev.stopPropagation();
+  const F = shrinkFrame(E); const inn = { L: [1, 0], R: [-1, 0], B: [0, 1], T: [0, -1] }[k];
+  const n = F.toXY({ x: inn[0], y: inn[1] }); // 안쪽 법선(실제 좌표)
+  let start; try{ start = solarToXY(mapLatLngFromClient(ev.clientX, ev.clientY), E.lat0); }catch(e){ return; }
+  const base = E.side[k];
+  shrinkDrag = { k, n, start, base };
+  try{ ensureKakaoMap().setDraggable(false); }catch(e){}
+  document.body.classList.add('mod-drag');
+  if(!E.previewPoly){ E.previewPoly = new kakao.maps.Polygon({ map: ensureKakaoMap(), path: shrinkPath(), strokeWeight: 3, strokeColor: '#0B3D91', strokeStyle: 'dash', fillColor: '#0B3D91', fillOpacity: 0.06, zIndex: 44 }); E.overlays.push(E.previewPoly); }
+  const mv = e => { const D = shrinkDrag; if(!D) return; let cur; try{ cur = solarToXY(mapLatLngFromClient(e.clientX, e.clientY), E.lat0); }catch(x){ return; }
+    const d = (cur.x - D.start.x) * D.n.x + (cur.y - D.start.y) * D.n.y; // 안쪽으로 끈 거리(m)
+    E.side[D.k] = Math.round((D.base + d) * 10) / 10; try{ E.previewPoly.setPath(shrinkPath()); }catch(x){}
+    const lab = E.sideOv[D.k]; if(lab){ const st = document.getElementById('roadviewStatus'); if(st) st.textContent = `⇲ ${D.k === 'L' ? '왼쪽' : D.k === 'R' ? '오른쪽' : D.k === 'B' ? '아래' : '위'} 옆면 ${E.side[D.k] > 0 ? '−' : '+'}${Math.abs(E.side[D.k]).toFixed(1)}m — 놓으면 배치를 다시 만듭니다`; } };
+  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); document.body.classList.remove('mod-drag'); try{ ensureKakaoMap().setDraggable(true); }catch(x){} if(!shrinkDrag) return; shrinkDrag = null; if(E.previewPoly){ try{ E.previewPoly.setMap(null); }catch(x){} E.overlays = E.overlays.filter(o => o !== E.previewPoly); E.previewPoly = null; } applyShrink(); };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
 function shrinkSide(k, dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; applyShrink(); }
 function shrinkEdge(i, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); E.d[i] = Math.round((E.d[i] + dir * st) * 100) / 100; applyShrink(); }
 function shrinkAll(dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); ['L', 'R', 'B', 'T'].forEach(k => { E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; }); applyShrink(); }
