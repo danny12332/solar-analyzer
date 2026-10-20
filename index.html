@@ -1514,21 +1514,41 @@ async function checkAccessRoad(kakaoPath, ownPnu){
   return { ok: true, total: neighbors.length, roads, waters, nearRoads };
 }
 
-async function checkNearbyBuildings(kakaoPath){
-  const data = await vworldJsonp({
+async function checkNearbyBuildings(kakaoPath, opts){
+  opts = opts || {};
+  const q = geomFilter => vworldJsonp({
     service: 'data', version: '2.0', request: 'GetFeature',
     format: 'json', errorformat: 'json', size: '1000', page: '1',
     data: 'LT_C_SPBD',
-    geomFilter: pathToWkt(kakaoPath), buffer: '200',
+    geomFilter, buffer: '200',
     geometry: 'true', attribute: 'true', crs: 'EPSG:4326',
     domain: VWORLD_DOMAIN, key: VWORLD_KEY
   }, 15000);
-  const resp = data && data.response;
-  if(!resp || resp.status !== 'OK') return { ok: false, reason: resp && resp.status, total: 0 };
-  const feats = (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
-  const total = (resp.result && resp.result.featureCollection && resp.result.featureCollection.totalCount) || feats.length;
+  const lat0 = kakaoPath.reduce((a, p) => a + p.getLat(), 0) / kakaoPath.length * Math.PI / 180;
+  const polyXY = kakaoPath.map(p => solarToXY(p, lat0));
+  let data = null, reason = '', method = opts.point ? '지점 기준' : '필지 경계';
+  // 1차: 필지 경계 그대로 / 실패하면 2차: 꼭짓점을 줄인 볼록 외곽(경계를 포함) — 꼭짓점이 많은 필지는 요청 주소가 너무 길어 실패할 수 있음
+  try{ data = await q(pathToWkt(kakaoPath)); }catch(e){ reason = e && e.message ? e.message : String(e); }
+  let resp = data && data.response;
+  if(!resp || resp.status !== 'OK'){
+    reason = reason || (resp && (resp.status + (resp.error && resp.error.text ? ' ' + resp.error.text : ''))) || '응답 없음';
+    try{
+      let hull = convexHullXY(polyXY.map(p => ({ x: p.x, y: p.y })));
+      if(hull.length > 24){ const step = Math.ceil(hull.length / 24); hull = hull.filter((_, i) => i % step === 0); hull = convexHullXY(hull); }
+      const hullLL = hull.map(p => solarToLatLng(p.x, p.y, lat0));
+      data = await q(pathToWkt(hullLL)); resp = data && data.response;
+      if(resp && resp.status === 'OK') method += ' (볼록 외곽으로 재조회)';
+    }catch(e){ reason += ' / 재조회 ' + (e && e.message ? e.message : e); }
+  }
+  if(!resp || resp.status !== 'OK') return { ok: false, reason: reason + (resp && resp.status && !reason.includes(resp.status) ? ' / ' + resp.status : ''), total: 0 };
+  let feats = (resp.result && resp.result.featureCollection && resp.result.featureCollection.features) || [];
+  // 볼록 외곽으로 받았으면 실제 필지 경계에서 200m 넘는 건물은 뺌(건물 꼭짓점 중 하나라도 200m 안이면 포함)
+  if(method.includes('볼록')){
+    feats = feats.filter(f => { const r = parseVworldGeom(f.geometry || (f.properties && f.properties.ag_geom)); if(!r || !r.length) return true; return r.some(v => { const pt = solarToXY(new kakao.maps.LatLng(v.lat, v.lng), lat0); return pointInPolygonXY(pt, polyXY) || distToPolygonBoundary(pt, polyXY) <= 200; }); });
+  }
+  const total = method.includes('볼록') ? feats.length : ((resp.result && resp.result.featureCollection && resp.result.featureCollection.totalCount) || feats.length);
   const keys = feats.length ? Object.keys(feats[0].properties || {}).filter(k => k !== 'ag_geom') : [];
-  const result = { ok: true, total: Number(total) || feats.length, feats, keys, houses: null, unknown: null, others: null, classified: false, classifyError: '' };
+  const result = { ok: true, total: Number(total) || feats.length, feats, keys, houses: null, unknown: null, others: null, classified: false, classifyError: '', method, regItems: 0, dongs: [] };
   try { await classifyBuildingsByRegister(result); } catch(e){ result.classifyError = e && e.message ? e.message : String(e); }
   return result;
 }
@@ -1569,8 +1589,9 @@ async function classifyBuildingsByRegister(result){
   if(!dongs.length){ result.houses = 0; result.unknown = feats.length; result.others = 0; result.classified = true; result.classifyError = 'bd_mgt_sn 속성 없음'; return; }
   // 법정동별 표제부 목록 → "대지구분|본번|부번" → 주용도 목록
   const purpsByLot = {};
+  result.dongs = dongs.slice(0, 4);
   for(const dong of dongs.slice(0, 4)){ // 반경 200m는 보통 1~3개 법정동
-    const items = await fetchBldrgstList(dong);
+    const items = await fetchBldrgstList(dong); result.regItems += items.length;
     items.forEach(it => {
       const key = dong + '|' + String(it.platGbCd ?? '0') + '|' + String(it.bun || '').padStart(4, '0') + '|' + String(it.ji || '').padStart(4, '0');
       (purpsByLot[key] = purpsByLot[key] || []).push(String(it.mainPurpsCdNm || ''));
@@ -1580,14 +1601,16 @@ async function classifyBuildingsByRegister(result){
   feats.forEach(f => {
     const pnu = f._pnu;
     if(!pnu){ unknown++; f._cls = 'unknown'; return; }
-    const platGb = pnu[10] === '2' ? '1' : '0';
-    const key = pnu.slice(0, 10) + '|' + platGb + '|' + pnu.slice(11, 15) + '|' + pnu.slice(15, 19);
-    const purps = purpsByLot[key];
+    const c = pnu[10]; const gbs = c === '2' ? ['1'] : (c === '1' ? ['1', '0'] : ['0']);
+    let purps = null; for(const gb of gbs){ purps = purpsByLot[pnu.slice(0, 10) + '|' + gb + '|' + pnu.slice(11, 15) + '|' + pnu.slice(15, 19)]; if(purps) break; }
+    // 대장에 없으면 건물도형 속성 중 용도 문구(있을 때만)로 보조 판별
+    if(!purps){ const txt = Object.entries(f.properties || {}).filter(([k]) => k !== 'ag_geom').map(([, v]) => String(v ?? '')).join(' '); if(HOUSE_PURPS_RE.test(txt)){ houses++; f._cls = 'house'; f._purps = '건물도형 속성'; return; } }
     if(!purps){ unknown++; f._cls = 'unknown'; return; }
     if(purps.some(pn => HOUSE_PURPS_RE.test(pn))){ houses++; f._cls = 'house'; f._purps = purps.filter(pn => HOUSE_PURPS_RE.test(pn)).join('/'); }
     else { others++; f._cls = 'other'; f._purps = purps.join('/'); }
   });
   result.houses = houses; result.others = others; result.unknown = unknown; result.classified = true;
+  if(!result.regItems) result.regNote = `건축물대장 목록 0건(법정동코드 ${result.dongs.join(', ')}) — 대장 서비스에서 이 법정동 자료를 받지 못해 주택 여부를 대조하지 못함`;
 }
 
 function drawSiteChecks(map){
@@ -1614,6 +1637,14 @@ function drawSiteChecks(map){
   if(shapes.length) siteCheckGroupId = registerMeasureGroup(shapes);
 }
 
+async function runSitePointCheck(){
+  if(!lastLatLng) return;
+  const la = lastLatLng.getLat() * Math.PI / 180, c = solarToXY(lastLatLng, la);
+  const sq = [[-1,-1],[1,-1],[1,1],[-1,1]].map(([dx, dy]) => solarToLatLng(c.x + dx, c.y + dy, la));
+  autoSite.road = null;
+  autoSite.houses = await checkNearbyBuildings(sq, { point: true }).catch(e => ({ ok: false, reason: e.message, total: 0 }));
+  try { drawSiteChecks(ensureKakaoMap()); } catch(e){}
+}
 async function runSiteChecks(kakaoPath, ownPnu){
   autoSite.road = null; autoSite.houses = null;
   const [r, h] = await Promise.all([
@@ -1691,7 +1722,7 @@ async function autoAnalyzeFromParcel(){
   if(lastParcelPnu){
     zoneNote.className = 'auto-note'; zoneNote.textContent = '토지대장·개별공시지가·토지이용계획 조회 중...';
     try{
-      const siteChecks = lastParcelPath ? runSiteChecks(lastParcelPath, lastParcelPnu) : Promise.resolve();
+      const siteChecks = lastParcelPath ? runSiteChecks(lastParcelPath, lastParcelPnu) : runSitePointCheck();
       const info = await fetchLandInfo(lastParcelPnu);
       await siteChecks;
       if(my !== autoAnalyzeSeq) return;
@@ -9267,7 +9298,9 @@ function buildSummaryHtml(r){
   } else if(h && h.ok){
     setbackText = h.total < 5 ? `200m 내 건물 ${h.total}동 → 5호 미만, 적용 대상 아님` : `200m 내 건물 ${h.total}동 → 주택 여부 확인 필요`;
     setbackCls = h.total < 5 ? 'ok' : 'check';
-  } else { setbackText = '<span class="sum-muted">자동 조회 안 됨 — 주소 검색 후 확인</span>'; setbackCls = 'muted'; }
+  } else if(h && !h.ok){ setbackText = `<span class="sum-muted">반경 200m 건물 자동 조회 실패 (${escLand(String(h.reason || '응답 없음'))}) — 위성사진·로드뷰로 주택 수 확인</span>`; setbackCls = 'check'; }
+  else { setbackText = '<span class="sum-muted">자동 조회 안 됨 — 필지 경계를 찾지 못했거나 주소 검색 전</span>'; setbackCls = 'muted'; }
+  if(h && h.ok && (h.regNote || (h.method && h.method !== '필지 경계'))) setbackText += ` <span class="sum-muted" style="font-size:11px;">(${[h.method !== '필지 경계' ? h.method : '', h.regNote || ''].filter(Boolean).join(' · ')})</span>`;
   let roadText, roadCls;
   if(rd && rd.ok){
     if(rd.roads.length){ roadText = `지적상 도로 접함 (${rd.roads.slice(0,3).map(n => n.props.jibun || '').join(', ')}${rd.roads.length > 3 ? ' 외' : ''}) — 폭·현황 확인`; roadCls = 'ok'; }
