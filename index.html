@@ -620,7 +620,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <option value="zero">제로솔루션</option>
           </select>
           </div>
-          <label style="display:flex;align-items:center;gap:5px;margin-top:2px;" title="공공 건물도형 면적이 건축물대장 건축면적보다 25% 넘게 크면(필지 모양으로 들어온 경우) 각 변을 같은 거리만큼 안쪽으로 줄여 건축면적에 맞춘 경계에 배치합니다(추정)"><input type="checkbox" id="archFixOn" checked> 건물도형이 대장 건축면적보다 크면 경계 줄이기</label>
+          <label style="display:flex;align-items:center;gap:5px;margin-top:2px;" title="공공 건물도형 면적이 건축물대장 건축면적보다 25% 넘게 크면(필지 모양으로 들어온 경우) 각 변을 같은 거리만큼 안쪽으로 줄여 건축면적에 맞춘 경계에 배치합니다(추정)"><input type="checkbox" id="archFixOn"> 건물도형이 대장 건축면적보다 크면 경계 줄이기(추정 · 기본 꺼짐)</label>
           <div style="display:none;">
           <label for="autoLandPreset" style="font-weight:700;white-space:nowrap;margin-top:4px;" title="필지 안에 건물 도형이 없으면(토지) 필지 경계에서 3m 이격한 토지 노지 배치를 자동으로 만듭니다">🌱 건물 없는 토지 자동 배치</label>
           <select id="autoLandPreset" onchange="saveAutoLayoutPreset()" style="width:100%;font-size:12px;padding:3px 4px;box-sizing:border-box;">
@@ -6230,7 +6230,7 @@ function regArchAreaFor(name){
 let lastArchFix = null, lastArchOrig = null; // 최근 보정 내역(상태줄 표시용) · 보정 전 원래 경계
 function fitBoundaryToRegister(){
   lastArchFix = null;
-  if(!((document.getElementById('archFixOn') || { checked: true }).checked)) return;
+  if(!((document.getElementById('archFixOn') || { checked: false }).checked)) return; // 기본 꺼짐(2026-10-21): 대장 동 이름 매칭이 틀리면 큰 지붕을 크게 줄여 배치가 적어짐
   if(!currentBoundaryOfficial || !lastAreaPolygonPath || lastAreaPolygonPath.length < 3) return;
   // 검색한 필지 안의 건물만(대장은 그 필지 것)
   if(!lastParcelPath || lastParcelPath.length < 3) return;
