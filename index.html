@@ -643,6 +643,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="preset-btn" id="align2Btn" onclick="toggleGeomTool('align2')" title="잡힌 테두리가 위치·각도·크기가 다를 때: 테두리 꼭짓점 → 위성사진의 같은 모서리, 다른 꼭짓점 → 위성사진의 같은 모서리 순서로 4번 클릭하면 테두리 전체가 이동·회전·확대되어 맞춰집니다">📌 2점 맞춤</button>
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
+          <button type="button" class="preset-btn" id="bldMergeBtn" onclick="toggleBldMergeMode()" title="한 지붕인데 공공 건물도형이 여러 동으로 나뉘어 있을 때: 도형들을 차례로 클릭한 뒤 이 버튼을 다시 누르면 하나로 합쳐(사이 빈 곳 포함) 최대 배치">🔗 건물 합치기</button>
           <button type="button" class="preset-btn" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
           <button type="button" class="preset-btn" onclick="startFromParcel()" title="검색한 필지 경계를 배치 경계로 가져온 뒤 바로 조정 모드로 — 지붕이 필지를 거의 다 덮는 공장 등에서 노란 네모(변)를 끌어 지붕선에 맞추기">▭ 필지 경계로 시작</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
@@ -2308,6 +2309,7 @@ function setMode(mode){
   if(mapMode === 'fitoutline' && mode !== 'fitoutline' && typeof fitEdit !== 'undefined' && fitEdit){ const f = fitEdit; fitEdit = null; try{ f.poly.setMap(null); }catch(e){} const fp = document.getElementById('fitPanel'); if(fp) fp.style.display = 'none'; }
   if(mapMode === 'movelayout' && mode !== 'movelayout' && typeof endMoveLayout === 'function' && moveSel) endMoveLayout();
   if(mapMode === 'trace' && mode !== 'trace' && trace){ const t = trace; trace = null; [t.line, t.preview, t.previewLabel].forEach(o => o && o.setMap(null)); t.labels.forEach(o => o.setMap(null)); ['traceBtn', 'addSpaceBtn', 'addSpaceBtn2'].forEach(id => { const b = document.getElementById(id); if(b) b.classList.remove('on'); }); }
+  if(mapMode === 'bldmerge' && mode !== 'bldmerge' && typeof bldMergeClear === 'function') bldMergeClear();
   mapMode = mode;
   ['distanceBtn','areaBtn','radiusBtn'].forEach(id => {
     const btn = document.getElementById(id);
@@ -2320,7 +2322,7 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot','fillrect'].includes(mode));
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot','fillrect','bldmerge'].includes(mode));
     if(mode !== 'annot') annotPending = null;
     try{ annotBtnState(); }catch(e){}
     [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['fillRectBtn','fillrect'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
@@ -7611,9 +7613,34 @@ async function loadParcelBuildings(parcelPath){
     if(off0.dx || off0.dy){ const moved = offsetPath(path, off0); path.length = 0; moved.forEach(q => path.push(q)); }
     const name = [props.buld_nm || props.BULD_NM || '', props.buld_nm_dc || props.BULD_NM_DC || ''].filter(Boolean).join(' ').trim();
     const floors = props.gro_flo_co || props.GRO_FLO_CO || '';
-    const idx = parcelBuildings.length;
-    const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 2, strokeColor: '#19B5D6', strokeOpacity: 0.95, strokeStyle: 'shortdash', fillColor: '#19B5D6', fillOpacity: 0.12, zIndex: 0 });
-    try{ kakao.maps.event.addListener(poly, 'click', (ev) => {
+    const entry = { path, name, floors, poly: null, area: shoelaceArea(path) };
+    const poly = makeParcelBldPoly(entry);
+    shapes.push(poly);
+    parcelBuildings.push(entry);
+  });
+  // 다른 건물 도형의 중심을 품고 있는 더 큰 도형(건물군·대지 외곽선)은 목록에서 뺌 — 실제 건물 도형만 배치 대상으로
+  { const la = lat0; const xyOf = b => b.path.map(q => solarToXY(q, la)); const cen = xy => ({ x: xy.reduce((a, q) => a + q.x, 0) / xy.length, y: xy.reduce((a, q) => a + q.y, 0) / xy.length });
+    const drop = new Set();
+    parcelBuildings.forEach((A, i) => { const ax = xyOf(A); parcelBuildings.forEach((B, j) => { if(i === j || drop.has(j)) return; if(A.area > B.area * 1.05 && pointInPolygonXY(cen(xyOf(B)), ax)) drop.add(i); }); });
+    if(drop.size){ const keep = parcelBuildings.filter((b, i) => !drop.has(i)); parcelBuildings.forEach((b, i) => { if(drop.has(i)){ try{ b.poly.setMap(null); }catch(e){} } }); parcelBuildings.length = 0; keep.forEach(b => parcelBuildings.push(b)); }
+  }
+  // 맞닿은(1.5m 이내) 건물 도형은 한 동으로 합침 — 공공 건물도형이 한 지붕을 여러 조각으로 나눠 둔 경우(2026-10-21)
+  try{ const merged = autoMergeTouchingBuildings(); merged.forEach(e => shapes.push(e.poly)); }catch(e){ console.warn('auto merge', e); }
+  if(shapes.length){ shapes.forEach(sh => measureShapes.push(sh)); parcelBldGroupId = registerMeasureGroup(shapes); }
+  // 지도 위 안내 띠는 띄우지 않음(사용자 요청 2026-10-15) — 건물 수는 배치도 탭 합계 줄에 표시
+  updateAllDongBtn();
+  refreshSummaryDynamicRows();
+  autoLayoutAfterSearch();
+  updateOffsetInfo(parcelPath[0]);
+}
+// 필지 건물 도형(하늘색 점선) 하나를 지도에 그리고 클릭 동작을 붙임 — 항목 객체 기준(목록 순서가 바뀌어도 맞음)
+function makeParcelBldPoly(entry){
+  const map = ensureKakaoMap();
+  const poly = new kakao.maps.Polygon({ map, path: entry.path, strokeWeight: 2, strokeColor: '#19B5D6', strokeOpacity: 0.95, strokeStyle: 'shortdash', fillColor: '#19B5D6', fillOpacity: 0.12, zIndex: 0 });
+  entry.poly = poly;
+  try{ kakao.maps.event.addListener(poly, 'click', (ev) => {
+      const idx = parcelBuildings.indexOf(entry); if(idx < 0) return;
+      if(mapMode === 'bldmerge'){ window.__shapeClickAt = Date.now(); bldMergeToggle(entry); return; }
       const ll = ev && ev.latLng;
       if(ll && ['delmod', 'delline', 'movelayout'].includes(mapMode)){ handleModuleModeClick(ll); return; }
       if(ll && mapMode === 'addmod'){ addModuleAt(ll); return; }
@@ -7625,22 +7652,133 @@ async function loadParcelBuildings(parcelPath){
       if(ll && mapMode === 'annot'){ annotPlace(ll); return; }
       window.__shapeClickAt = Date.now(); if(mapMode === 'normal' || mapMode === 'building'){ selectParcelBuilding(idx); if(mapMode === 'normal' && document.querySelector('#railPaneLayout.active')) showLayoutReco('building'); }
     }); }catch(e){}
-    shapes.push(poly);
-    parcelBuildings.push({ path, name, floors, poly, area: shoelaceArea(path) });
-  });
-  // 다른 건물 도형의 중심을 품고 있는 더 큰 도형(건물군·대지 외곽선)은 목록에서 뺌 — 실제 건물 도형만 배치 대상으로
-  { const la = lat0; const xyOf = b => b.path.map(q => solarToXY(q, la)); const cen = xy => ({ x: xy.reduce((a, q) => a + q.x, 0) / xy.length, y: xy.reduce((a, q) => a + q.y, 0) / xy.length });
-    const drop = new Set();
-    parcelBuildings.forEach((A, i) => { const ax = xyOf(A); parcelBuildings.forEach((B, j) => { if(i === j || drop.has(j)) return; if(A.area > B.area * 1.05 && pointInPolygonXY(cen(xyOf(B)), ax)) drop.add(i); }); });
-    if(drop.size){ const keep = parcelBuildings.filter((b, i) => !drop.has(i)); parcelBuildings.forEach((b, i) => { if(drop.has(i)){ try{ b.poly.setMap(null); }catch(e){} } }); parcelBuildings.length = 0; keep.forEach(b => parcelBuildings.push(b)); }
-  }
-  if(shapes.length){ shapes.forEach(sh => measureShapes.push(sh)); parcelBldGroupId = registerMeasureGroup(shapes); }
-  // 지도 위 안내 띠는 띄우지 않음(사용자 요청 2026-10-15) — 건물 수는 배치도 탭 합계 줄에 표시
-  updateAllDongBtn();
-  refreshSummaryDynamicRows();
-  autoLayoutAfterSearch();
-  updateOffsetInfo(parcelPath[0]);
+  return poly;
 }
+// ===== 건물 도형 합치기 =====
+// 여러 건물 외곽선을 하나로: 가장 큰 도형의 축으로 돌린 0.2m 격자에 칠한 뒤 바깥 테두리를 따라 직각 외곽선을 만듦
+//   mode 'touch': 1.5m 이내 틈만 메움(맞닿은 조각 합치기) · mode 'fill': 사이 빈 곳도 가로·세로로 메움(사용자가 고른 도형 = 한 지붕)
+function mergeBuildingPaths(paths, mode){
+  const all = paths.flat(); const lat0 = all.reduce((a, q) => a + q.getLat(), 0) / all.length * Math.PI / 180;
+  const XY = paths.map(pp => pp.map(q => solarToXY(q, lat0)));
+  const big = XY.reduce((a, b) => areaXY(b) > areaXY(a) ? b : a, XY[0]);
+  const th = principalAxes(big);
+  const R = XY.map(pp => pp.map(q => rotateXY(q.x, q.y, -th)));
+  const cs = 0.2, pad = 8;
+  const xs = R.flat().map(q => q.x), ys = R.flat().map(q => q.y);
+  const x0 = Math.min(...xs) - pad * cs, y0 = Math.min(...ys) - pad * cs;
+  const W = Math.ceil((Math.max(...xs) - x0) / cs) + pad, H = Math.ceil((Math.max(...ys) - y0) / cs) + pad;
+  if(W * H > 6e6) return null;
+  let g = new Uint8Array(W * H);
+  R.forEach(pp => { const bx0 = Math.floor((Math.min(...pp.map(q => q.x)) - x0) / cs), bx1 = Math.ceil((Math.max(...pp.map(q => q.x)) - x0) / cs), by0 = Math.floor((Math.min(...pp.map(q => q.y)) - y0) / cs), by1 = Math.ceil((Math.max(...pp.map(q => q.y)) - y0) / cs);
+    for(let j = Math.max(0, by0); j < Math.min(H, by1); j++) for(let i = Math.max(0, bx0); i < Math.min(W, bx1); i++){ if(pointInPolygonXY({ x: x0 + (i + 0.5) * cs, y: y0 + (j + 0.5) * cs }, pp)) g[j * W + i] = 1; } });
+  const boxMax = (src, r, val) => { // 가로·세로 r칸 상자 안에 val이 하나라도 있으면 val
+    const t = new Uint8Array(W * H), o = new Uint8Array(W * H);
+    for(let j = 0; j < H; j++){ let last = -1e9; for(let i = 0; i < W; i++){ if(src[j * W + i] === val) last = i; t[j * W + i] = (i - last <= r) ? val : 1 - val; } last = 1e9; for(let i = W - 1; i >= 0; i--){ if(src[j * W + i] === val) last = i; if(last - i <= r) t[j * W + i] = val; } }
+    for(let i = 0; i < W; i++){ let last = -1e9; for(let j = 0; j < H; j++){ if(t[j * W + i] === val) last = j; o[j * W + i] = (j - last <= r) ? val : 1 - val; } last = 1e9; for(let j = H - 1; j >= 0; j--){ if(t[j * W + i] === val) last = j; if(last - j <= r) o[j * W + i] = val; } }
+    return o; };
+  const rc = Math.round(1.6 / cs / 2); // 1.5m 틈 메우기(닫힘 연산)
+  g = boxMax(boxMax(g, rc, 1), rc, 0);
+  if(mode === 'fill'){ // 가로 → 세로 → 가로로 사이를 메움
+    const rowFill = () => { for(let j = 0; j < H; j++){ let a = -1, b = -1; for(let i = 0; i < W; i++) if(g[j * W + i]){ if(a < 0) a = i; b = i; } if(a >= 0) for(let i = a; i <= b; i++) g[j * W + i] = 1; } };
+    const colFill = () => { for(let i = 0; i < W; i++){ let a = -1, b = -1; for(let j = 0; j < H; j++) if(g[j * W + i]){ if(a < 0) a = j; b = j; } if(a >= 0) for(let j = a; j <= b; j++) g[j * W + i] = 1; } };
+    rowFill(); colFill(); rowFill();
+  }
+  // 구멍 메우기(바깥과 이어지지 않은 빈칸)
+  { const ext = new Uint8Array(W * H), st = []; for(let i = 0; i < W; i++){ st.push(i, (H - 1) * W + i); } for(let j = 0; j < H; j++){ st.push(j * W, j * W + W - 1); }
+    while(st.length){ const k = st.pop(); if(ext[k] || g[k]) continue; ext[k] = 1; const i = k % W, j = (k / W) | 0; if(i > 0) st.push(k - 1); if(i < W - 1) st.push(k + 1); if(j > 0) st.push(k - W); if(j < H - 1) st.push(k + W); }
+    for(let k = 0; k < W * H; k++) if(!ext[k]) g[k] = 1; }
+  // 덩어리 수
+  const lab = new Int32Array(W * H); let nComp = 0; const compArea = [];
+  for(let k0 = 0; k0 < W * H; k0++){ if(!g[k0] || lab[k0]) continue; nComp++; let a = 0; const st = [k0]; while(st.length){ const k = st.pop(); if(!g[k] || lab[k]) continue; lab[k] = nComp; a++; const i = k % W, j = (k / W) | 0; if(i > 0) st.push(k - 1); if(i < W - 1) st.push(k + 1); if(j > 0) st.push(k - W); if(j < H - 1) st.push(k + W); } compArea[nComp] = a; }
+  if(!nComp) return null;
+  let bestC = 1; for(let c = 2; c <= nComp; c++) if(compArea[c] > compArea[bestC]) bestC = c;
+  // 바깥 테두리 따라가기(칸 모서리 격자점, 채운 칸을 왼쪽에 두고 반시계)
+  const inC = (i, j) => i >= 0 && j >= 0 && i < W && j < H && lab[j * W + i] === bestC;
+  const next = new Map(); const key = (i, j) => i * 100003 + j;
+  for(let j = 0; j < H; j++) for(let i = 0; i < W; i++){ if(!inC(i, j)) continue;
+    if(!inC(i, j - 1)) next.set(key(i, j), [i + 1, j]);
+    if(!inC(i + 1, j)) next.set(key(i + 1, j), [i + 1, j + 1]);
+    if(!inC(i, j + 1)) next.set(key(i + 1, j + 1), [i, j + 1]);
+    if(!inC(i - 1, j)) next.set(key(i, j + 1), [i, j]); }
+  let start = null; for(let j = 0; j < H && !start; j++) for(let i = 0; i < W; i++) if(inC(i, j)){ start = [i, j]; break; }
+  const loop = []; let cur = start, guard = 0;
+  do { loop.push(cur); cur = next.get(key(cur[0], cur[1])); guard++; } while(cur && (cur[0] !== start[0] || cur[1] !== start[1]) && guard < 4 * W * H);
+  // 꺾이는 점만
+  const pts = loop.filter((q, k) => { const a = loop[(k - 1 + loop.length) % loop.length], b = loop[(k + 1) % loop.length]; return (q[0] - a[0]) * (b[1] - q[1]) - (q[1] - a[1]) * (b[0] - q[0]) !== 0; });
+  const out = pts.map(([i, j]) => { const r = rotateXY(x0 + i * cs, y0 + j * cs, th); return solarToLatLng(r.x, r.y, lat0); });
+  return { path: out, pieces: nComp };
+}
+// 두 외곽선 사이 최소 거리(m)
+function pathGapM(A, B){
+  const lat0 = A[0].getLat() * Math.PI / 180; const a = A.map(q => solarToXY(q, lat0)), b = B.map(q => solarToXY(q, lat0));
+  if(a.some(q => pointInPolygonXY(q, b)) || b.some(q => pointInPolygonXY(q, a))) return 0;
+  return Math.min(...a.map(q => distToPolygonBoundary(q, b)), ...b.map(q => distToPolygonBoundary(q, a)));
+}
+// 맞닿은 조각(1.5m 이내)을 묶어서 한 동으로 바꿈 → 새로 만든 항목 목록
+function autoMergeTouchingBuildings(){
+  const n = parcelBuildings.length; if(n < 2) return [];
+  const par = parcelBuildings.map((_, i) => i); const f = i => par[i] === i ? i : (par[i] = f(par[i]));
+  for(let i = 0; i < n; i++) for(let j = i + 1; j < n; j++){ if(pathGapM(parcelBuildings[i].path, parcelBuildings[j].path) <= 1.5) par[f(i)] = f(j); }
+  const groups = {}; parcelBuildings.forEach((b, i) => { (groups[f(i)] = groups[f(i)] || []).push(b); });
+  const made = [];
+  Object.values(groups).forEach(list => { if(list.length < 2) return; const e = mergeParcelEntries(list, 'touch'); if(e) made.push(e); });
+  return made;
+}
+// 항목 여러 개 → 합친 항목 하나(원래 도형은 숨기고 members로 보관)
+function mergeParcelEntries(list, mode){
+  const r = mergeBuildingPaths(list.map(b => b.path), mode); if(!r || r.path.length < 3) return null;
+  if(mode === 'touch' && r.pieces > 1) return null;
+  const named = list.slice().sort((a, b) => b.area - a.area).find(b => b.name) || null;
+  const fl = Math.max(...list.map(b => parseInt(b.floors, 10) || 0));
+  const entry = { path: r.path, name: named ? named.name : '', floors: fl ? String(fl) : '', poly: null, area: shoelaceArea(r.path), members: list.slice(), merged: true };
+  list.forEach(b => { try{ b.poly.setMap(null); }catch(e){} });
+  const at = Math.min(...list.map(b => parcelBuildings.indexOf(b)).filter(i => i >= 0));
+  const keep = parcelBuildings.filter(b => !list.includes(b)); keep.splice(Math.max(0, Math.min(at, keep.length)), 0, entry);
+  parcelBuildings.length = 0; keep.forEach(b => parcelBuildings.push(b));
+  makeParcelBldPoly(entry);
+  return entry;
+}
+// 🔗 건물 합치기 도구: 하늘색 건물 도형을 클릭해 고른 뒤 버튼을 다시 누르면 하나로 합쳐 최대 배치
+let bldMergeSel = [];
+function bldMergeToggle(entry){
+  const k = bldMergeSel.indexOf(entry);
+  if(k >= 0){ bldMergeSel.splice(k, 1); try{ entry.poly.setOptions({ strokeColor: '#19B5D6', fillColor: '#19B5D6', fillOpacity: 0.12, strokeStyle: 'shortdash' }); }catch(e){} }
+  else { bldMergeSel.push(entry); try{ entry.poly.setOptions({ strokeColor: '#FF7A00', fillColor: '#FF7A00', fillOpacity: 0.3, strokeStyle: 'solid' }); }catch(e){} }
+  const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
+  st.textContent = `🔗 합칠 건물 ${bldMergeSel.length}개 선택(${Math.round(bldMergeSel.reduce((a, b) => a + b.area, 0)).toLocaleString('ko-KR')}㎡) — 더 고르거나, "🔗 건물 합치기"를 다시 누르면 하나로 합쳐 최대 배치합니다. 취소: Esc.`;
+}
+function bldMergeClear(){ bldMergeSel.forEach(b => { try{ b.poly.setOptions({ strokeColor: '#19B5D6', fillColor: '#19B5D6', fillOpacity: 0.12, strokeStyle: 'shortdash' }); }catch(e){} }); bldMergeSel = []; ['bldMergeBtn'].forEach(id => { const b = document.getElementById(id); if(b) b.classList.remove('on'); }); }
+function toggleBldMergeMode(){
+  const st = document.getElementById('roadviewStatus');
+  if(mapMode === 'bldmerge'){
+    const list = bldMergeSel.slice();
+    if(list.length < 2){ bldMergeClear(); setMode('normal'); st.textContent = list.length ? '🔗 2개 이상 골라야 합칠 수 있습니다. 취소했습니다.' : '🔗 건물 합치기를 끝냈습니다.'; return; }
+    histCheckpoint('건물 합치기');
+    // 고른 도형 위의 기존 배치는 지움
+    list.forEach(b => { try{ removeLayoutsOnOutline(b.path); }catch(e){} });
+    bldMergeClear(); setMode('normal');
+    const e = mergeParcelEntries(list, 'fill');
+    if(!e){ st.style.color = '#b3402a'; st.textContent = '❌ 합칠 수 없었습니다(도형이 너무 큼).'; return; }
+    try{ if(parcelBldGroupId && measureGroups[parcelBldGroupId]){ measureGroups[parcelBldGroupId].shapes.push(e.poly); } measureShapes.push(e.poly); }catch(err){}
+    try{ removeLayoutsOnOutline(e.path); }catch(err){}
+    selectParcelBuilding(parcelBuildings.indexOf(e));
+    const before = layoutRegistry.length;
+    const r = computeReco('building', lastAreaPolygonPath.slice(), currentBoundaryName, true);
+    applyLayoutPreset(r.rec === 'slab' ? 'slab' : 'maxfill');
+    try{ onGenerateLayoutClick(); }catch(err){ console.warn('merge layout', err); }
+    const ed = layoutRegistry.length > before ? layoutRegistry[layoutRegistry.length - 1] : null;
+    scheduleLayoutCards(); updateAllDongBtn();
+    st.style.color = 'var(--ink-soft)';
+    st.textContent = `✅ 건물 ${list.length}개를 한 동으로 합쳤습니다(${Math.round(e.area).toLocaleString('ko-KR')}㎡, 사이 빈 곳도 지붕으로 채움)${ed ? ` → ${layoutTypeLabel(ed)} ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장` : ''}. 외곽선이 실제 지붕보다 크면 "⇲ 줄이기", 되돌리기는 주소를 다시 검색하세요.`;
+    return;
+  }
+  if(!parcelBuildings.length){ st.style.color = '#b3402a'; st.textContent = '❌ 먼저 주소를 검색해 필지 안 건물 도형(하늘색 점선)을 불러오세요.'; return; }
+  stopBuildingEdit(); setMode('bldmerge'); bldMergeSel = [];
+  const b = document.getElementById('bldMergeBtn'); if(b) b.classList.add('on');
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = '🔗 건물 합치기: 한 지붕인데 여러 동으로 나뉜 하늘색 건물 도형을 차례로 클릭하세요(주황색으로 표시). 다 골랐으면 "🔗 건물 합치기"를 다시 누르면 하나로 합쳐 최대 배치합니다. 취소: Esc.';
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && mapMode === 'bldmerge'){ bldMergeClear(); setMode('normal'); const st = document.getElementById('roadviewStatus'); if(st) st.textContent = '🔗 건물 합치기를 취소했습니다.'; } });
 function updateAllDongBtn(){ const b = document.getElementById('allDongBtn'); if(b) b.style.display = parcelBuildings.length ? '' : 'none'; scheduleLayoutCards(); }
 // ⚡ 주소 검색 시 건물 자동 배치: 선택한 유형(기본 평슬라브)으로 필지 안 건물 전부에 바로 배치
 function saveMaxRule(){ try{ localStorage.setItem('solarMaxRule', JSON.stringify({ ns: (document.getElementById('maxNS') || {}).value, ew: (document.getElementById('maxEW') || {}).value })); }catch(e){} }
@@ -7663,7 +7801,9 @@ function autoLayoutAfterSearchInner(){
     try{
       if(parcelBuildings.length){
         const done = [];
+        const tiny = parcelBuildings.filter(b => b.area < 30).length; // 30㎡ 미만(창고·부속 조각)은 자동 배치하지 않음
         parcelBuildings.forEach((b, i) => {
+          if(b.area < 30) return;
           selectParcelBuilding(i);
           const path = lastAreaPolygonPath.slice(), name = currentBoundaryName;
           const r = computeReco('building', path, name, true);
@@ -7676,7 +7816,7 @@ function autoLayoutAfterSearchInner(){
           done.push(`${name || (i + 1) + '동'} ${ed ? layoutTypeLabel(ed) + ' ' + ed.modules.filter(m => !m.removed).length + '장' : LAYOUT_PRESETS[key].label + ' (안 들어감)'}`);
         });
         scheduleLayoutCards();
-        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 ${parcelBuildings.length}동 자동 선택 → 최대 배치: ${done.join(' · ')}. 유형은 동별 카드에서 바꾸고, 경계는 "⇲ 줄이기"로 맞추세요.`; }
+        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 ${parcelBuildings.length - tiny}동 자동 선택 → 최대 배치: ${done.join(' · ')}${tiny ? ` (30㎡ 미만 도형 ${tiny}개 제외)` : ''}. 한 지붕인데 여러 동으로 나뉘었으면 ① "🔗 건물 합치기". 유형은 동별 카드에서 바꾸고, 경계는 "⇲ 줄이기"로 맞추세요.`; }
       } else {
         lastAreaPolygonPath = lastParcelPath.slice(); currentBoundaryName = jibunShortOf(lastJibunAddress || '') || '토지';
         applyLayoutPreset('groundauto'); forceGroundOnce = true;
