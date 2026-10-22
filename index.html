@@ -9153,9 +9153,9 @@ function contactHtml(admin){
     return dept + `
     <div class="keyline" style="margin-top:10px;background:var(--amber-tint);border-left-color:var(--amber);">
       <b>📋 ${admin.siText || admin.guText || admin.do} 실사 확인 자료 (사용자 제공 데이터, 방문 확인일 기준)</b>
-      <p style="margin:8px 0 4px;font-size:13px;"><b>개발행위허가 규모/기준:</b> ${localData.devScale}</p>
-      <p style="margin:8px 0 4px;font-size:13px;"><b>한전선로용량 관련:</b> ${localData.kepco}</p>
-      <p style="margin:8px 0 0;font-size:13px;"><b>지자체 담당자·특이사항:</b> ${localData.contact}</p>
+      ${localData.devScale ? `<p style="margin:8px 0 4px;font-size:13px;"><b>개발행위허가 규모/기준:</b> ${localData.devScale}</p>` : ''}
+      ${localData.kepco ? `<p style="margin:8px 0 4px;font-size:13px;"><b>한전선로용량 관련:</b> ${localData.kepco}</p>` : ''}
+      ${localData.contact ? `<p style="margin:8px 0 0;font-size:13px;"><b>지자체 담당자·특이사항:</b> ${localData.contact}</p>` : ''}
       ${SETBACK_LAW_NOTICE}
       <p class="footnote" style="margin-top:8px;">사용자가 직접 확인한 자료이며, 시점 경과로 담당자·기준이 바뀌었을 수 있어 최종 확인은 필요합니다.</p>
     </div>`;
