@@ -8914,37 +8914,51 @@ async function checkBuildingRegister(){
   btn.disabled = true;
   statusEl.innerHTML = '<p class="hint">법정동코드 확인 중...</p>';
   try{
-    const parsed = parseAddressParts(addr);
-    if(!parsed){
-      statusEl.innerHTML = '<p class="hint" style="color:#b3402a;">❌ 주소 끝에서 지번(예: 178-1)을 찾지 못했습니다.</p>';
+    // 조회 후보(순서대로 시도, 결과가 나오면 멈춤):
+    //  ① 확인된 지번주소 + 좌표 법정동코드 → ② 같은 지번 + bjdong.txt 코드 → ③ 입력창 주소(도로명이면 지번으로 변환) + bjdong.txt 코드
+    const attempts = [];
+    const seen = new Set();
+    const addAttempt = (label, a, code) => { if(!a || !code) return; const pz = parseAddressParts(a); if(!pz) return; const key = `${code}|${pz.isMountain?1:0}|${pz.bobn}|${pz.bubn}`; if(seen.has(key)) return; seen.add(key); attempts.push({ label, addr: a, parsed: pz, code }); };
+    const roadLike = a => /(로|길)\s*\d/.test(a || ''); // 도로명주소(…로 49, …길 12-3)는 끝 숫자가 건물번호라 지번으로 쓰면 안 됨
+    const parsed0 = roadLike(addr) ? null : parseAddressParts(addr);
+    let live = null;
+    if(lastLatLng){ live = await fetchLiveBcode(lastLatLng.getLat(), lastLatLng.getLng()); }
+    if(parsed0 && live) addAttempt('지번주소 + 좌표 법정동코드', addr, live.code);
+    statusEl.innerHTML = '<p class="hint">법정동코드 데이터(bjdong.txt) 불러오는 중...</p>';
+    await loadBjdong();
+    if(parsed0){ const f = findBjdongCode(parsed0.dongText); if(f.hit) addAttempt('지번주소 + 법정동 목록 코드', addr, f.hit.code); }
+    // 입력창 주소가 다르면(도로명 등) 지번으로 바꿔 한 번 더
+    if(typedAddr && (typedAddr !== addr || roadLike(typedAddr))){
+      let jib = typedAddr;
+      if(!parseAddressParts(typedAddr) || roadLike(typedAddr)){
+        try{ jib = await new Promise(resolve => { const g = new kakao.maps.services.Geocoder(); g.addressSearch(typedAddr, (r, st) => { resolve(st === kakao.maps.services.Status.OK && r[0] ? ((r[0].address && r[0].address.address_name) || r[0].address_name || '') : ''); }); }); }catch(e){ jib = ''; }
+      }
+      if(jib){ const pz = parseAddressParts(jib); if(pz){ const f = findBjdongCode(pz.dongText); if(f.hit) addAttempt('입력 주소를 지번으로 변환', jib, f.hit.code); if(live) addAttempt('입력 주소 지번 + 좌표 법정동코드', jib, live.code); } }
+    }
+    if(!attempts.length){
+      statusEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ ${parsed0 ? `"${parsed0.dongText}"에 해당하는 법정동을 찾지 못했습니다.` : '주소 끝에서 지번(예: 178-1)을 찾지 못했고, 입력한 주소를 지번으로 바꾸지도 못했습니다. 지번주소(예: ○○리 178-1)로 다시 검색해 주세요.'}</p>`;
       return;
     }
 
-    let hit = null;
-    if(lastLatLng){
-      const live = await fetchLiveBcode(lastLatLng.getLat(), lastLatLng.getLng());
-      if(live){ hit = live; }
-    }
-    if(!hit){
-      statusEl.innerHTML = '<p class="hint">법정동코드 데이터(bjdong.txt) 불러오는 중...</p>';
-      await loadBjdong();
-      const found = findBjdongCode(parsed.dongText);
-      hit = found.hit;
-    }
-    if(!hit){
-      statusEl.innerHTML = `<p class="hint" style="color:#b3402a;">❌ "${parsed.dongText}"에 해당하는 법정동을 찾지 못했습니다.</p>`;
-      return;
+    let data = null, used = null, lastErr = '';
+    const tried = [];
+    for(const at of attempts){
+      statusEl.innerHTML = `<p class="hint">건축물대장 조회 중... (${at.label}: ${escLand(at.addr)})</p>`;
+      try{
+        const res = await fetch(`https://rough-moon-e02c.ruwk66.workers.dev/bldrgst?code=${at.code}&isMountain=${at.parsed.isMountain?1:0}&bobn=${at.parsed.bobn}&bubn=${at.parsed.bubn}`);
+        const d = await res.json();
+        tried.push(`${at.label}(${at.code} ${at.parsed.isMountain ? '산' : ''}${at.parsed.bobn}-${at.parsed.bubn})`);
+        if(res.ok && !d.error && d.items && d.items.length){ data = d; used = at; break; }
+        if(d && d.error) lastErr = d.error;
+      }catch(e){ lastErr = e && e.message ? e.message : String(e); }
     }
 
-    statusEl.innerHTML = '<p class="hint">건축물대장 조회 중...</p>';
-    const res = await fetch(`https://rough-moon-e02c.ruwk66.workers.dev/bldrgst?code=${hit.code}&isMountain=${parsed.isMountain?1:0}&bobn=${parsed.bobn}&bubn=${parsed.bubn}`);
-    const data = await res.json();
-
-    if(!res.ok || data.error || !data.items || data.items.length === 0){
-      if(res.ok && !data.error){ lastBldrgst = { items: [], addr, blocks: '', fetchedAt: new Date() }; refreshSummaryDynamicRows(); }
-      statusEl.innerHTML = `<p class="hint" style="color:#8a6d1f;">📋 이 필지에 등록된 건축물대장이 없습니다(나대지이거나 미등록 건물일 수 있습니다).${data && data.error ? ' ('+data.error+')' : ''} 정확한 확인은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 직접 조회해주세요.</p>`;
+    if(!data){
+      if(!lastErr){ lastBldrgst = { items: [], addr, blocks: '', fetchedAt: new Date() }; refreshSummaryDynamicRows(); }
+      statusEl.innerHTML = `<p class="hint" style="color:#8a6d1f;">📋 이 필지에 등록된 건축물대장이 없습니다(나대지이거나 미등록 건물일 수 있습니다).${lastErr ? ' ('+escLand(lastErr)+')' : ''} 시도한 조회: ${tried.map(escLand).join(' → ')}. 정확한 확인은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 직접 조회해주세요.</p>`;
       return;
     }
+    const usedNote = attempts.indexOf(used) > 0 ? `<p class="hint" style="margin:0 0 6px;color:#8a6d1f;">첫 조회(${escLand(attempts[0].label)})에는 결과가 없어 "${escLand(used.label)}"(${escLand(used.addr)})로 다시 조회한 결과입니다.</p>` : '';
 
     const blocks = data.items.map((it, i) => {
       const isMulti = data.items.length > 1;
@@ -8979,7 +8993,7 @@ async function checkBuildingRegister(){
     statusEl.innerHTML = `
       <div class="keyline" style="margin-top:0;position:relative;">
         <span onclick="closeResultPanel('bldrgstResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
-        <b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
+        ${usedNote}<b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
         <div style="margin:8px 0 4px;display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sky-deep);" onclick="downloadBldrgstPdf()">🖨 PDF로 저장</button>
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sun);color:#2A1A00;" onclick="startEaisAutomation()">📄 건축물대장 및 현황도 발급 (세움터)</button>
