@@ -678,7 +678,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <div class="type-cards ground" id="typeCardsGround">
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground4')" title="지상(개활지) · 모듈 세로 4단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 4단</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground3')" title="지상(개활지) · 모듈 세로 3단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 3단</button>
-          <button type="button" class="preset-btn" onclick="applyLayoutPreset('groundauto')" title="2~5단 기준을 모두 계산해 많이 들어가는 단수로 띠를 놓고, 남는 깊이에는 낮은 단 띠를 더 넣음 · 끝 3m">토지 맞춤(자동)</button>
+          <button type="button" class="preset-btn" onclick="applyLayoutPreset('groundauto')" title="띠마다 2단·3단을 섞어 가장 많이 들어가게 자동 배치(4단 이상은 쓰지 않음) · 필지 끝 3m">토지 맞춤(자동)</button>
           <button type="button" class="preset-btn" onclick="applyLayoutPreset('ground2')" title="지상(개활지) · 모듈 세로 2단 · 10° · 경계 3m · 줄 방향은 옆 선택(경계선에 맞춤/정남)">토지 노지 2단</button>
           </div>
           <label id="groundDirWrap" style="display:none;font-size:11.5px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:5px;padding:2px 6px;" title="경계선에 맞춤: 테이블 줄을 부지(그린 경계)의 변과 나란히 놓아 줄 끝이 끊기지 않고 면적을 채움(남향에서 최대 45° 틀어질 수 있음). 정남: 줄을 정동-정서로 놓음(경계가 기울어 있으면 줄 끝이 비스듬히 잘림)">줄 방향 <select id="groundDir" style="font-size:11.5px;padding:0 2px;"><option value="axis" selected>경계선에 맞춤 (끊김 없음)</option><option value="south">정남</option></select></label>
@@ -929,6 +929,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             </span>
             <button type="button" id="delLineBtn" onclick="toggleLineDeleteMode()" title="모듈을 클릭하면 그 모듈이 속한 테이블(줄) 전체 제외/복원">🗑 테이블 제거</button>
             <button type="button" id="delRectBtn" onclick="toggleRectDeleteMode()" title="두 모서리를 클릭한 사각형 안의 모듈을 모두 제외">⬚ 영역 제거</button>
+            <button type="button" id="delLassoBtn" onclick="toggleLassoDeleteMode()" title="마우스를 누른 채 올가미(자유 곡선)로 둘러싼 모듈을 모두 제외 (이미 제외된 모듈만 있으면 복원) · ↶ 이전으로 복구">⭕ 올가미 제거</button>
             <button type="button" onclick="clearLayoutAndOutline()" title="현재 경계와 그 경계의 배치를 지웁니다">🧹 지우기</button>
             </span>
           </div>
@@ -2214,6 +2215,7 @@ function ensureKakaoMap(){
   container.addEventListener('contextmenu', function(e){
     if(mapMode === 'distance' || mapMode === 'area' || mapMode === 'radius' || mapMode === 'trace'){ e.preventDefault(); }
   });
+  container.addEventListener('mousedown', e => { if(mapMode === 'dellasso') lassoStart(e); });
   kakao.maps.event.addListener(kakaoMapObj, 'mousemove', ev => window.__mapMoveHandler(ev));
   window.__mapMoveHandler = function(mouseEvent){
     if(mapMode === 'rect3' || mapMode === 'align2'){ geomToolMove(mouseEvent.latLng); return; }
@@ -2284,7 +2286,7 @@ function renderAddressLabel(pos, jibun, road){
   lastLatLng = pos;
   try{ localStorage.setItem('solarLastSite', JSON.stringify({ lat: pos.getLat(), lng: pos.getLng(), addr: jibun || road || '', t: Date.now() })); }catch(e){}
   const esc = s => (s || '').replace(/'/g, "\\'");
-  const content = `<div onmousedown="kakao.maps.event.preventMap();" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 16px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;">
+  const content = `<div onmousedown="addrDragStart(event)" title="끌어서 옮길 수 있습니다" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 16px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;cursor:grab;">
     <div style="position:absolute;top:10px;right:10px;">${closeBtnHtml('closeAddressOverlay()')}</div>
     <div style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.4;white-space:nowrap;">${road || jibun || '주소 정보 없음'}</div>
     <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;">${road ? `(지번) ${jibun || '지번 정보 없음'}` : '(이 위치엔 도로명주소 없음 — 위 주소는 지번)'}</div>
@@ -2302,6 +2304,25 @@ function renderAddressLabel(pos, jibun, road){
   }
 }
 
+// 주소 팻말 드래그(버튼·✕ 위에서는 동작 안 함)
+let addrDrag = null;
+function addrDragStart(ev){
+  try{ kakao.maps.event.preventMap(); }catch(e){}
+  if(ev.button !== 0 || !addressOverlay) return;
+  if(ev.target && ev.target.closest && ev.target.closest('button')) return;
+  const proj = ensureKakaoMap().getProjection();
+  const pt = proj.containerPointFromCoords(addressOverlay.getPosition());
+  addrDrag = { sx: ev.clientX, sy: ev.clientY, px: pt.x, py: pt.y, moved: false };
+  const mv = e => {
+    if(!addrDrag) return;
+    const dx = e.clientX - addrDrag.sx, dy = e.clientY - addrDrag.sy;
+    if(!addrDrag.moved && Math.hypot(dx, dy) < 3) return;
+    addrDrag.moved = true; e.preventDefault();
+    addressOverlay.setPosition(proj.coordsFromContainerPoint(new kakao.maps.Point(addrDrag.px + dx, addrDrag.py + dy)));
+  };
+  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if(addrDrag && addrDrag.moved) addressOverlay.__moved = true; addrDrag = null; };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
 function updateAddressLabel(pos){
   if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services) return;
   const geocoder = new kakao.maps.services.Geocoder();
@@ -2318,6 +2339,7 @@ function setMode(mode){
   if(mapMode === 'movelayout' && mode !== 'movelayout' && typeof endMoveLayout === 'function' && moveSel) endMoveLayout();
   if(mapMode === 'trace' && mode !== 'trace' && trace){ const t = trace; trace = null; [t.line, t.preview, t.previewLabel].forEach(o => o && o.setMap(null)); t.labels.forEach(o => o.setMap(null)); ['traceBtn', 'addSpaceBtn', 'addSpaceBtn2'].forEach(id => { const b = document.getElementById(id); if(b) b.classList.remove('on'); }); }
   if(mapMode === 'bldmerge' && mode !== 'bldmerge' && typeof bldMergeClear === 'function') bldMergeClear();
+  if(mapMode === 'dellasso' && mode !== 'dellasso'){ if(typeof lassoEnd === 'function') lassoEnd(true); try{ ensureKakaoMap().setDraggable(true); }catch(e){} }
   mapMode = mode;
   ['distanceBtn','areaBtn','radiusBtn'].forEach(id => {
     const btn = document.getElementById(id);
@@ -2330,10 +2352,10 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot','fillrect','bldmerge'].includes(mode));
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot','fillrect','bldmerge','dellasso'].includes(mode));
     if(mode !== 'annot') annotPending = null;
     try{ annotBtnState(); }catch(e){}
-    [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['fillRectBtn','fillrect'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
+    [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['fillRectBtn','fillrect'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['delLassoBtn','dellasso'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
       const el = document.getElementById(id); if(!el) return;
       el.style.background = mode === md ? 'var(--ink)' : ''; el.style.color = mode === md ? '#F6F7F3' : '';
     });
@@ -2780,7 +2802,7 @@ function removeSolarLayout(id){
 // ===== 배치 유형 프리셋: 배치 대상·모듈 방향·단 수·각도·이격을 한 번에 설정 (값은 실무 기본값이며 설정 줄에서 바로 수정 가능) =====
 const LAYOUT_PRESETS = {
   ground4:  { mount: 'ground',  orient: 'portrait', rows: 4, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 4단' },
-  groundauto: { mount: 'ground', orient: 'portrait', rows: 3, auto: true, tilt: 10, setback: 3, cols: 20, label: '토지 노지 맞춤(단수 자동)' },
+  groundauto: { mount: 'ground', orient: 'portrait', rows: 3, auto: true, tilt: 10, setback: 3, cols: 20, label: '토지 노지 맞춤(2·3단 자동)' },
   ground2:  { mount: 'ground',  orient: 'portrait', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
   ground3:  { mount: 'ground',  orient: 'portrait', rows: 3, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 3단' },
   slab:     { mount: 'slab',    orient: 'portrait',  rows: 2, tilt: 8,  setback: 0.5, aisle: 0.6, label: '평슬라브 경사거치' },
@@ -5162,6 +5184,47 @@ function toggleLineDeleteMode(){
   st.textContent = '🗑 테이블 제거: 모듈을 클릭하면 그 모듈이 속한 테이블(줄) 전체가 제외됩니다. 제외된 테이블을 다시 클릭하면 복원됩니다. 한 장씩 빼려면 이 모드를 끄고 모듈을 바로 클릭하세요. 끝내려면 버튼을 다시 누르세요.';
 }
 // ⬚ 영역 제거: 지도에서 두 점을 클릭해 사각형을 지정하면 그 안의 모듈이 모두 제외됨 (그늘 지는 구역을 한 번에)
+// ⭕ 올가미 제거: 지도 위에서 마우스를 누른 채 그린 자유 곡선 안의 모듈을 제외
+let lasso = null; // { pts:[LatLng], line, lat0 }
+function toggleLassoDeleteMode(){
+  const st = document.getElementById('roadviewStatus');
+  if(mapMode === 'dellasso'){ setMode('normal'); lassoEnd(true); try{ ensureKakaoMap().setDraggable(true); }catch(e){} if(st) st.textContent = ''; return; }
+  if(!layoutRegistry.length){ if(st) st.textContent = '먼저 배치를 생성하세요.'; return; }
+  setMode('dellasso');
+  try{ ensureKakaoMap().setDraggable(false); }catch(e){}
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⭕ 올가미 제거: 지도에서 마우스를 누른 채 제외할 모듈들을 둘러싸듯 그린 뒤 놓으세요. 둘러싼 모듈이 모두 제외됩니다(이미 제외된 모듈만 있으면 복원). 끝내려면 버튼을 다시 누르세요. 되돌리기 "↶ 이전으로".'; }
+}
+function lassoContainerLL(e){
+  const map = ensureKakaoMap(); const el = document.getElementById('kakaoMap'); const r = el.getBoundingClientRect();
+  return map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(e.clientX - r.left, e.clientY - r.top));
+}
+function lassoStart(e){
+  if(mapMode !== 'dellasso' || e.button !== 0) return;
+  if(e.target && e.target.closest && e.target.closest('button, .cap-badge, .layout-tools, .map-status')) return;
+  e.preventDefault();
+  const map = ensureKakaoMap();
+  const ll = lassoContainerLL(e);
+  lasso = { pts: [ll], line: new kakao.maps.Polyline({ map, path: [ll], strokeWeight: 2.5, strokeColor: '#FF3B30', strokeOpacity: 0.95, strokeStyle: 'shortdash', zIndex: 60 }) };
+  const mv = ev => { if(!lasso) return; const q = lassoContainerLL(ev); const last = lasso.pts[lasso.pts.length - 1]; if(Math.abs(q.getLat() - last.getLat()) + Math.abs(q.getLng() - last.getLng()) < 1e-7) return; lasso.pts.push(q); lasso.line.setPath(lasso.pts.concat([lasso.pts[0]])); };
+  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); lassoEnd(false); };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
+function lassoEnd(cancel){
+  const L = lasso; lasso = null; if(!L) return;
+  try{ L.line.setMap(null); }catch(e){}
+  const st = document.getElementById('roadviewStatus');
+  if(cancel || L.pts.length < 3) return;
+  const lat0 = L.pts[0].getLat() * Math.PI / 180;
+  const poly = L.pts.map(q => solarToXY(q, lat0));
+  const hit = [];
+  layoutRegistry.forEach(ed => { ed.modules.forEach(m => { const p = m.poly.getPath(); const c = new kakao.maps.LatLng(p.reduce((a, q) => a + q.getLat(), 0) / p.length, p.reduce((a, q) => a + q.getLng(), 0) / p.length); if(pointInPolygonXY(solarToXY(c, lat0), poly)) hit.push({ ed, m }); }); });
+  if(!hit.length){ if(st) st.textContent = '⭕ 올가미 안에 모듈이 없습니다. 다시 그려 보세요.'; return; }
+  const allRemoved = hit.every(h => h.m.removed);
+  histCheckpoint('올가미 제거');
+  hit.forEach(h => setModuleRemoved(h.m, !allRemoved));
+  new Set(hit.map(h => h.ed)).forEach(ed => refreshLayoutLabel(ed));
+  if(st) st.textContent = `⭕ 올가미 안 모듈 ${hit.length}장을 ${allRemoved ? '복원' : '제외'}했습니다. 계속 그리거나 버튼을 눌러 끝내세요.`;
+}
 let delRectFirst = null, delRectPreview = null;
 function toggleRectDeleteMode(){
   if(mapMode === 'delrect'){ setMode('normal'); delRectFirst = null; if(delRectPreview){ delRectPreview.setMap(null); delRectPreview = null; } document.getElementById('roadviewStatus').textContent = ''; return; }
@@ -6657,9 +6720,9 @@ function generateSolarLayout(){
   const markVents = list => { const byT = {}; list.forEach(c => { (byT[c.table] = byT[c.table] || []).push(c); });
     Object.values(byT).forEach(lst => { const rows = lst[0].rowsN || arrRows; if(rows < 3) return; const cols = [...new Set(lst.map(c => c.cornersRot[0].x))].sort((a, b) => a - b); if(cols.length < 4) return; const vx = new Set([cols[Math.floor(cols.length / 4)], cols[Math.floor(cols.length * 3 / 4)]]); const midTier = Math.floor((rows - 1) / 2); lst.forEach(c => { if(c.tier === midTier && vx.has(c.cornersRot[0].x)) c.vent = true; }); });
     return list.filter(c => !c.vent).length; };
-  // 맞춤(단수 자동): 앞(남)→뒤(북)로 띠마다 2~5단 중 무엇을 놓을지 동적계획법으로 골라 장수 최대 — 띠 사이는 그 띠의 자기그늘 열간격, 마지막 띠 뒤는 비우지 않음
+  // 맞춤(단수 자동): 앞(남)→뒤(북)로 띠마다 2단·3단 중 무엇을 놓을지 동적계획법으로 골라 장수 최대 — 띠 사이는 그 띠의 자기그늘 열간격, 마지막 띠 뒤는 비우지 않음
   const dpBands = (ox) => {
-    const dy = 0.1, RS = [2, 3, 4, 5];
+    const dy = 0.1, RS = [2, 3]; // 토지 자동 배치는 2단·3단만(사용자 기준 2026-10-22) — 4단 이상은 ② 유형에서 직접 선택
     const y0 = ymin - setback, N = Math.max(0, Math.ceil((ymax - y0) / dy)) + 1;
     const gm = {}; RS.forEach(R => { gm[R] = geomFor(R); });
     const cache = new Map();
@@ -6680,9 +6743,9 @@ function generateSolarLayout(){
     return { cands: best, off }; };
   let autoNote = '';
   if(groundAutoRows){
-    // 맞춤: 띠마다 2~5단을 섞어 장수 최대(동적계획법) — 비교용으로 단수 고정(2~5단) 결과도 계산
+    // 맞춤: 띠마다 2단·3단을 섞어 장수 최대(동적계획법) — 비교용으로 단수 고정(2·3단) 결과도 계산
     const tries = [];
-    for(const R of [2, 3, 4, 5]){ arrRows = R; G = geomFor(R); arrDepth = G.arrDepth; arrHeight = G.arrHeight; shadowLen = G.shadowLen; pitch = G.pitch; rowGap = pitch - arrDepth; const r = searchBest(); tries.push({ R, n: r.cands.length, r }); }
+    for(const R of [2, 3]){ arrRows = R; G = geomFor(R); arrDepth = G.arrDepth; arrHeight = G.arrHeight; shadowLen = G.shadowLen; pitch = G.pitch; rowGap = pitch - arrDepth; const r = searchBest(); tries.push({ R, n: r.cands.length, r }); }
     let mix = null;
     for(let ix = 0; ix < 6; ix++){ const ox = setback + ix * stepX / 6; const d = dpBands(ox); const c = buildGroundCands(ox, 0, d.bands); if(!mix || c.length > mix.cands.length) mix = { cands: c, off: { ox, oy: 0 }, bands: d.bands }; }
     tries.forEach(t => { t.live = markVents(t.r.cands); }); if(mix) mix.live = markVents(mix.cands);
@@ -7840,7 +7903,7 @@ function autoLayoutAfterSearchInner(){
         applyLayoutPreset('groundauto'); forceGroundOnce = true;
         try{ onGenerateLayoutClick(); } finally { forceGroundOnce = false; }
         const ed = layoutRegistry[layoutRegistry.length - 1];
-        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 없는 토지 → 토지 노지 맞춤(단수 자동) · 필지 끝 3m 이격 자동 배치${ed ? ' ' + ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR') + '장' : ''}. 유형은 동별 카드에서 바꿀 수 있습니다.`; }
+        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 없는 토지 → 토지 노지 맞춤(2·3단 자동) · 필지 끝 3m 이격 자동 배치${ed ? ' ' + ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR') + '장' : ''}. 유형은 동별 카드에서 바꿀 수 있습니다.`; }
       }
     }catch(e){ console.warn('auto on enter', e); }
     return;
