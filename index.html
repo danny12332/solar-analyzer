@@ -127,6 +127,7 @@
   .rail #mountType{width:100%;}
   .rail #boundaryInfo, .rail #offsetInfo, .rail #stdNote{flex-basis:100%;white-space:normal;}
   .rail #sheetOpts input[type=text]{width:100% !important;max-width:200px;}
+  #pptDrop.over{background:#FFF3D6;border-color:#E8A000;}
   .rail .export-row{display:flex;flex-direction:column;gap:8px;}
   .rail .export-row button.run{width:100%;margin:0;}
   /* 배치도 탭: 합계 줄 · 유형 카드 · 동별 카드 */
@@ -824,6 +825,25 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="run" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
           <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
         </div>
+      </div>
+      <!-- ▣ 내 제안서 PPT에 배치도·측면도 끼워 넣기 -->
+      <div class="card" style="padding:16px 16px 14px;" id="pptCard">
+        <h2 style="margin-bottom:6px;">📎 내 제안서 PPT에 끼워 넣기</h2>
+        <p class="hint" style="margin:0 0 10px;">회사 제안서 PPT(.pptx)를 아래에 끌어다 놓거나 고르면, 여기서 만든 조감도·배치도·측면도·집계표·수익성 표를 그 PPT에 넣은 새 파일(…_배치도포함.pptx)을 내려받습니다. PPT 슬라이드에 <b>{{배치도}}</b>처럼 쓴 글상자가 있으면 그 글상자 자리·크기에 맞춰 들어가고, 태그가 없는 항목은 새 슬라이드로 추가됩니다. 쓸 수 있는 태그: {{조감도}} {{배치도}} {{측면도}} {{측면도2}} {{집계표}} {{수익성}} {{자가소비}}</p>
+        <div id="pptDrop" onclick="document.getElementById('pptFileInput').click()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:18px 12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 여기에 제안서 .pptx 파일을 끌어다 놓거나 클릭해서 선택<input id="pptFileInput" type="file" accept=".pptx" style="display:none;" onchange="pptLoadFile(this.files[0]); this.value='';"></div>
+        <div class="panel-bar" style="display:flex;gap:8px;margin-top:10px;">
+          <span>넣을 항목</span>
+          <label><input id="pptInc_cover" type="checkbox" checked style="vertical-align:middle;"> 조감도(표지)</label>
+          <label><input id="pptInc_sheet" type="checkbox" checked style="vertical-align:middle;"> 배치도</label>
+          <label><input id="pptInc_side" type="checkbox" checked style="vertical-align:middle;"> 측면도</label>
+          <label><input id="pptInc_table" type="checkbox" checked style="vertical-align:middle;"> 동별 집계표</label>
+          <label><input id="pptInc_profit" type="checkbox" checked style="vertical-align:middle;"> 수익성 표</label>
+          <label>태그 없는 항목은 <select id="pptAfter"><option value="end">맨 뒤</option></select>에 새 슬라이드로</label>
+        </div>
+        <div class="export-row" style="margin-top:8px;">
+          <button type="button" class="run" id="pptMakeBtn" style="background:#B7472A;color:#fff;font-size:14px;" onclick="pptMake()" disabled title="넣은 PPT에 그림을 끼워 넣은 새 .pptx를 내려받음">📎 PPT에 넣어서 저장</button>
+        </div>
+        <p id="pptStatus" class="hint" style="margin:6px 0 0;font-size:12px;"></p>
       </div>
       <!-- ▣ 견적 · 수익성: 그랜드썬 2026 견적서 엑셀 단가 체계 + 제안서 PPT 수익 모델 -->
       <div class="card" style="padding:16px 16px 14px;" id="quoteCard">
@@ -3547,7 +3567,24 @@ async function exportSideViews(fmt){
 // ===== 📑 제안서 PDF 자동 생성: 표지(조감도+음영) · 모듈 배치도 · 동별 집계표 =====
 async function exportProposalPdf(){
   const st = document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
-  if(!layoutRegistry.length){ st.textContent = '❌ 먼저 배치를 생성하세요.'; return; }
+  const B = await buildProposalPages(st);
+  if(!B) return;
+  const { cover, sheetCv, sidePages, tbl, profitPgs, totalKw, fmtKw } = B;
+  const pages = [cover, sheetCv, ...sidePages, tbl, ...profitPgs].filter(Boolean);
+  const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_제안서';
+  try{
+    const blob = canvasesToPdfA4(pages);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.pdf'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    st.textContent = `✅ ${base}.pdf 저장 — 표지(조감도·음영) + 모듈 배치도 + 측면도 ${sidePages.length}쪽 + 동별 집계표 + 수익성 ${profitPgs.length}쪽, 총 ${pages.length}쪽 · ${fmtKw(totalKw)}kW`;
+  }catch(e){ st.textContent = '❌ 제안서 PDF 저장 실패: ' + e.message; }
+  window.__lastProposalPages = pages;
+  return pages;
+}
+// 제안서 페이지(캔버스) 일괄 생성: 표지(조감도) · 배치도 · 측면도 · 집계표 · 수익성 — PDF와 PPT 끼워넣기가 같이 씀
+async function buildProposalPages(st){
+  st = st || document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
+  if(!layoutRegistry.length){ st.textContent = '❌ 먼저 배치를 생성하세요.'; return null; }
   await ensureBldrgstForSide(st);
   st.textContent = '제안서를 만드는 중… (1/3 조감도)';
   const W = 2480, H = 1754;
@@ -3639,16 +3676,154 @@ async function exportProposalPdf(){
   }
   let sidePages = []; try{ sidePages = sideViewPages(); }catch(e){ console.warn('side pages', e); }
   let profitPgs = []; try{ profitPgs = profitPages().pages; }catch(e){ console.warn('profit pages', e); }
-  const pages = [cover, sheetCv, ...sidePages, tbl, ...profitPgs].filter(Boolean);
-  const base = ((lastJibunAddress || 'solar').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_제안서';
+  return { cover, sheetCv, sidePages, tbl, profitPgs, shadeCv, totalKw, totalN, fmtKw, project };
+}
+// ===== 📎 내 제안서 PPT에 끼워 넣기 =====
+// PPTX(zip) 안의 슬라이드 XML을 직접 고쳐 {{배치도}} 같은 글상자 자리에 그림을 넣거나, 태그가 없으면 새 슬라이드를 뒤에 붙인다. 서버 없이 브라우저에서 처리.
+let pptFile = null; // { name, buf }
+let __jszipP = null;
+function loadJSZip(){
+  if(window.JSZip) return Promise.resolve();
+  if(__jszipP) return __jszipP;
+  __jszipP = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; sc.onload = () => res(); sc.onerror = () => { __jszipP = null; rej(new Error('압축 라이브러리(JSZip) 로드 실패 — 인터넷 연결 확인')); }; document.head.appendChild(sc); });
+  return __jszipP;
+}
+const PPT_TAGS = [
+  ['조감도', '표지 조감도(위성사진 위 배치 + 동지 음영)'], ['배치도', '모듈 배치도(도면)'], ['측면도', '측면도 1쪽'], ['측면도2', '측면도 2쪽'], ['측면도3', '측면도 3쪽'],
+  ['집계표', '동별 집계표'], ['수익성', '발전사업 수익 표'], ['자가소비', '자가소비 수익 표']];
+document.addEventListener('DOMContentLoaded', () => { try{ pptDropInit(); }catch(e){} });
+function pptDropInit(){
+  const z = document.getElementById('pptDrop'); if(!z || z.__init) return; z.__init = true;
+  ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.remove('over'); }));
+  z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) pptLoadFile(f); });
+}
+async function pptLoadFile(f){
+  const st = document.getElementById('pptStatus');
+  if(!f || !/\.pptx$/i.test(f.name)){ st.style.color = '#b3402a'; st.textContent = '❌ .pptx 파일만 넣을 수 있습니다(.ppt는 PowerPoint에서 .pptx로 다른 이름 저장).'; return; }
+  st.style.color = 'var(--ink-soft)'; st.textContent = `${f.name} 읽는 중…`;
   try{
-    const blob = canvasesToPdfA4(pages);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.pdf'; document.body.appendChild(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-    st.textContent = `✅ ${base}.pdf 저장 — 표지(조감도·음영) + 모듈 배치도 + 측면도 ${sidePages.length}쪽 + 동별 집계표 + 수익성 ${profitPgs.length}쪽, 총 ${pages.length}쪽 · ${fmtKw(totalKw)}kW`;
-  }catch(e){ st.textContent = '❌ 제안서 PDF 저장 실패: ' + e.message; }
-  window.__lastProposalPages = pages;
-  return pages;
+    await loadJSZip();
+    const buf = await f.arrayBuffer();
+    pptFile = { name: f.name, buf };
+    const info = await pptInspect(buf);
+    const tagList = Object.entries(info.tags).map(([t, n]) => `{{${t}}}×${n}`).join(' · ');
+    st.innerHTML = `✅ <b>${escLand(f.name)}</b> — 슬라이드 ${info.count}장${info.size ? ` (${(info.size.cx / 360000).toFixed(1)}×${(info.size.cy / 360000).toFixed(1)}cm)` : ''}. ` + (tagList ? `태그 발견: ${escLand(tagList)} → 그 자리에 그림이 들어갑니다. 태그 없는 항목은 ` : '태그 글상자가 없습니다 → 고른 항목을 ') + `새 슬라이드로 ${(document.getElementById('pptAfter') || {}).value || '맨 뒤'}에 추가합니다.`;
+    const sel = document.getElementById('pptAfter'); if(sel){ const cur = sel.value; sel.innerHTML = '<option value="end">맨 뒤</option>' + Array.from({ length: info.count }, (_, i) => `<option value="${i + 1}">${i + 1}번 슬라이드 뒤</option>`).join(''); if([...sel.options].some(o => o.value === cur)) sel.value = cur; }
+    document.getElementById('pptMakeBtn').disabled = false;
+  }catch(e){ console.warn('ppt load', e); pptFile = null; st.style.color = '#b3402a'; st.textContent = '❌ PPT를 읽지 못했습니다: ' + (e && e.message ? e.message : e); }
+}
+function pptSlideOrder(zip, presXml, presRels){
+  const relMap = {}; presRels.replace(/<Relationship\b[^>]*>/g, m => { const id = (m.match(/\bId="([^"]+)"/) || [])[1]; const tg = (m.match(/\bTarget="([^"]+)"/) || [])[1]; if(id && tg) relMap[id] = tg; return m; });
+  const order = [];
+  presXml.replace(/<p:sldId\b[^>]*>/g, m => { const rid = (m.match(/\br:id="([^"]+)"/) || [])[1]; const tg = relMap[rid]; if(tg) order.push('ppt/' + tg.replace(/^\/?ppt\//, '').replace(/^\.\.\//, '')); return m; });
+  return order;
+}
+function pptShapeTags(xml){
+  // <p:sp> 단위로 텍스트를 이어 붙여 {{태그}} 찾기(런이 나뉘어도 인식)
+  const out = [];
+  xml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, (sp, idx) => { const txt = (sp.match(/<a:t>([\s\S]*?)<\/a:t>|<a:t\s[^>]*>([\s\S]*?)<\/a:t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join(''); const m = txt.replace(/\s/g, '').match(/\{\{([^}]+)\}\}/); if(m) out.push({ tag: m[1], sp, idx }); return sp; });
+  return out;
+}
+async function pptInspect(buf){
+  const zip = await JSZip.loadAsync(buf);
+  const presXml = await zip.file('ppt/presentation.xml').async('string');
+  const presRels = await zip.file('ppt/_rels/presentation.xml.rels').async('string');
+  const order = pptSlideOrder(zip, presXml, presRels);
+  const sz = presXml.match(/<p:sldSz\b[^>]*cx="(\d+)"[^>]*cy="(\d+)"/);
+  const tags = {};
+  for(const path of order){ const f = zip.file(path); if(!f) continue; const xml = await f.async('string'); pptShapeTags(xml).forEach(t => { tags[t.tag] = (tags[t.tag] || 0) + 1; }); }
+  return { count: order.length, size: sz ? { cx: +sz[1], cy: +sz[2] } : null, tags, order };
+}
+function canvasToJpegBlob(cv){ return new Promise(res => cv.toBlob(b => res(b), 'image/jpeg', 0.88)); }
+function pptPicXml(id, name, rId, x, y, cx, cy){
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${escLand(name)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${Math.round(x)}" y="${Math.round(y)}"/><a:ext cx="${Math.round(cx)}" cy="${Math.round(cy)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+}
+function fitBox(bx, by, bw, bh, iw, ih){ const sc = Math.min(bw / iw, bh / ih); const w = iw * sc, h = ih * sc; return { x: bx + (bw - w) / 2, y: by + (bh - h) / 2, w, h }; }
+async function pptMake(){
+  const st = document.getElementById('pptStatus');
+  if(!pptFile){ st.style.color = '#b3402a'; st.textContent = '❌ 먼저 제안서 PPT(.pptx)를 넣어 주세요.'; return; }
+  const want = k => (document.getElementById('pptInc_' + k) || { checked: true }).checked;
+  st.style.color = 'var(--ink-soft)';
+  const B = await buildProposalPages(st); if(!B) return;
+  st.textContent = 'PPT에 끼워 넣는 중…';
+  try{
+    await loadJSZip();
+    const zip = await JSZip.loadAsync(pptFile.buf);
+    const presPath = 'ppt/presentation.xml', presRelPath = 'ppt/_rels/presentation.xml.rels', ctPath = '[Content_Types].xml';
+    let presXml = await zip.file(presPath).async('string');
+    let presRels = await zip.file(presRelPath).async('string');
+    let ct = await zip.file(ctPath).async('string');
+    const order = pptSlideOrder(zip, presXml, presRels);
+    const sz = presXml.match(/<p:sldSz\b[^>]*cx="(\d+)"[^>]*cy="(\d+)"/); const SW = sz ? +sz[1] : 12192000, SH = sz ? +sz[2] : 6858000;
+    // 넣을 그림 목록(태그 이름 → 캔버스)
+    const items = [];
+    if(want('cover') && B.cover) items.push({ tag: '조감도', cv: B.cover, label: '표지 조감도' });
+    if(want('sheet') && B.sheetCv) items.push({ tag: '배치도', cv: B.sheetCv, label: '모듈 배치도' });
+    if(want('side')) B.sidePages.forEach((cv, i) => items.push({ tag: i === 0 ? '측면도' : `측면도${i + 1}`, cv, label: `측면도 ${i + 1}` }));
+    if(want('table') && B.tbl) items.push({ tag: '집계표', cv: B.tbl, label: '동별 집계표' });
+    if(want('profit')) B.profitPgs.forEach(cv => items.push({ tag: cv.__kind === 'self' ? '자가소비' : '수익성', cv, label: cv.__kind === 'self' ? '자가소비 수익' : '발전사업 수익' }));
+    if(!items.length){ st.style.color = '#b3402a'; st.textContent = '❌ 넣을 항목이 없습니다(체크를 확인하세요).'; return; }
+    if(!/Extension="jpg"/i.test(ct)) ct = ct.replace('</Types>', '<Default Extension="jpg" ContentType="image/jpeg"/></Types>');
+    let mediaN = 0; const mediaName = () => { while(zip.file(`ppt/media/solar_${++mediaN}.jpg`)); return `solar_${mediaN}.jpg`; };
+    const addRel = (rels, type, target) => { let n = 0; rels.replace(/\bId="rId(\d+)"/g, (m, d) => { n = Math.max(n, +d); return m; }); const id = 'rId' + (n + 1); return { rels: rels.replace('</Relationships>', `<Relationship Id="${id}" Type="${type}" Target="${target}"/></Relationships>`), id }; };
+    const IMG = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+    const placed = [], added = [];
+    // 1) 태그 글상자 자리에 넣기
+    for(const path of order){
+      const f = zip.file(path); if(!f) continue;
+      let xml = await f.async('string');
+      const tags = pptShapeTags(xml); if(!tags.length) continue;
+      const relPath = path.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
+      let rels = zip.file(relPath) ? await zip.file(relPath).async('string') : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+      let maxId = 1; xml.replace(/<p:cNvPr\b[^>]*\bid="(\d+)"/g, (m, d) => { maxId = Math.max(maxId, +d); return m; });
+      let changed = false;
+      for(const t of tags){
+        const it = items.find(x => x.tag === t.tag && !x.used); if(!it) continue;
+        const xf = t.sp.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/); if(!xf) continue;
+        const box = fitBox(+xf[1], +xf[2], +xf[3], +xf[4], it.cv.width, it.cv.height);
+        const mn = mediaName(); zip.file('ppt/media/' + mn, await canvasToJpegBlob(it.cv));
+        const r = addRel(rels, IMG, '../media/' + mn); rels = r.rels;
+        xml = xml.replace(t.sp, pptPicXml(++maxId, it.label, r.id, box.x, box.y, box.w, box.h));
+        it.used = true; changed = true; placed.push(`${it.label} → ${order.indexOf(path) + 1}번 슬라이드 {{${t.tag}}}`);
+      }
+      if(changed){ zip.file(path, xml); zip.file(relPath, rels); }
+    }
+    // 2) 남은 항목은 새 슬라이드로
+    const rest = items.filter(x => !x.used);
+    if(rest.length){
+      const afterSel = (document.getElementById('pptAfter') || {}).value || 'end';
+      const refPath = order[Math.min(order.length, afterSel === 'end' ? order.length : +afterSel) - 1] || order[order.length - 1];
+      const refRels = refPath ? await (zip.file(refPath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels')) || { async: async () => '' }).async('string') : '';
+      const layoutTarget = (refRels.match(/<Relationship\b[^>]*Type="[^"]*\/slideLayout"[^>]*Target="([^"]+)"/) || refRels.match(/Target="([^"]*slideLayout[^"]*)"[^>]*Type="[^"]*\/slideLayout"/) || [])[1] || '../slideLayouts/slideLayout1.xml';
+      let slideN = 0; zip.file(/^ppt\/slides\/slide\d+\.xml$/).forEach(f => { slideN = Math.max(slideN, +(f.name.match(/slide(\d+)\.xml/) || [0, 0])[1]); });
+      let sldId = 255; presXml.replace(/<p:sldId\b[^>]*\bid="(\d+)"/g, (m, d) => { sldId = Math.max(sldId, +d); return m; });
+      const newIds = [];
+      const margin = Math.round(Math.min(SW, SH) * 0.03);
+      for(const it of rest){
+        slideN++; const sp = `ppt/slides/slide${slideN}.xml`, rp = `ppt/slides/_rels/slide${slideN}.xml.rels`;
+        const mn = mediaName(); zip.file('ppt/media/' + mn, await canvasToJpegBlob(it.cv));
+        const box = fitBox(margin, margin, SW - margin * 2, SH - margin * 2, it.cv.width, it.cv.height);
+        zip.file(sp, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${pptPicXml(2, it.label, 'rId2', box.x, box.y, box.w, box.h)}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
+        zip.file(rp, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="${layoutTarget}"/><Relationship Id="rId2" Type="${IMG}" Target="../media/${mn}"/></Relationships>`);
+        ct = ct.replace('</Types>', `<Override PartName="/ppt/slides/slide${slideN}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>`);
+        const r = addRel(presRels, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', `slides/slide${slideN}.xml`); presRels = r.rels;
+        newIds.push(`<p:sldId id="${++sldId}" r:id="${r.id}"/>`);
+        added.push(it.label);
+      }
+      // sldIdLst에 끼워 넣기(맨 뒤 또는 N번 뒤)
+      if(afterSel === 'end' || +afterSel >= order.length) presXml = presXml.replace('</p:sldIdLst>', newIds.join('') + '</p:sldIdLst>');
+      else { let k = 0; presXml = presXml.replace(/<p:sldId\b[^>]*\/>/g, m => { k++; return k === +afterSel ? m + newIds.join('') : m; }); }
+      zip.file(presPath, presXml); zip.file(presRelPath, presRels);
+    }
+    zip.file(ctPath, ct);
+    const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' });
+    const outName = pptFile.name.replace(/\.pptx$/i, '') + '_배치도포함.pptx';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = outName; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    st.style.color = 'var(--ink-soft)';
+    st.textContent = `✅ ${outName} 저장 — ${placed.length ? '태그 자리: ' + placed.join(', ') + (added.length ? ' · ' : '') : ''}${added.length ? `새 슬라이드 ${added.length}장 추가(${added.join(', ')})` : ''}. PowerPoint에서 열어 위치·크기를 다듬으세요.`;
+    return { placed, added, outName, blob };
+  }catch(e){ console.warn('ppt make', e); st.style.color = '#b3402a'; st.textContent = '❌ PPT 만들기 실패: ' + (e && e.message ? e.message : e); }
 }
 // ===== 🧾 견적 · 📈 수익성 =====
 // 단가 체계 출처: "2026년 견적서 ★★★복사해서 사용하세요_2026-09-28.xlsx"(INDEX·건물 시트), 샘플 "08-0606 견적서_리엔젠 평택공장.xlsx",
@@ -3999,7 +4174,7 @@ function profitPages(){
      `# 한전연계비(저압 공중 12만/kW · 저압 지중 14만/kW · 고압 공중 2.4만/kW · 고압 지중 5만/kW, vat 별도)는 표준시설부담금 기준 자리값이며, 설계조정부담금·단말통신공사(20kW/50kW 이상)·리클로저·에코개폐기 등은 별도`,
      `# 변전소·MTR·DL 여유용량(출력제어 조건)과 지중공사비(150kW 이상)는 별도 확인 · 정부정책에 따라 가중치 등은 변경될 수 있음`]
       .forEach((t, i) => g.fillText(t, 90, H - 120 + i * 30));
-    g.textAlign = 'right'; g.fillStyle = '#888'; g.fillText(site, W - 90, H - 40); pages.push(cv); }
+    g.textAlign = 'right'; g.fillStyle = '#888'; g.fillText(site, W - 90, H - 40); cv.__kind = 'rps'; pages.push(cv); }
   if(q.incSelf){ const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'); const S = P.self;
     header(g, '사업개요', '예상수익금액 ( 자가소비 )', '');
     // 우측 상단 요약
@@ -4020,7 +4195,7 @@ function profitPages(){
     [`# 단가 = 기후환경요금 ${PROFIT.selfClimate} + 전력량요금 ${q.selfEnergy}(계약종별 평균 — 경부하·중간부하·최대부하 평균 단가, 입력값) + 연료비조정요금 ${PROFIT.selfFuel} = ${S.unit.toFixed(1)}원/kWh · 월 생산량 = 용량 × 발전시간 × 월 일수 (제안서 양식 42쪽 모델)`,
      `# 전력배출계수 ${PROFIT.co2PerMWh} tCO2-eq/MWh 적용 · 상계거래·자가용 PPA·시간대별 사용 패턴(한전파워플래너) 분석은 별도`]
       .forEach((t, i) => g.fillText(t, 90, H - 90 + i * 30));
-    g.textAlign = 'right'; g.fillStyle = '#888'; g.fillText(site, W - 90, H - 30); pages.push(cv); }
+    g.textAlign = 'right'; g.fillStyle = '#888'; g.fillText(site, W - 90, H - 30); cv.__kind = 'self'; pages.push(cv); }
   return { pages, Q, P };
 }
 function exportProfitPdf(){
