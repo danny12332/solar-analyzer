@@ -128,6 +128,34 @@
   .rail #boundaryInfo, .rail #offsetInfo, .rail #stdNote{flex-basis:100%;white-space:normal;}
   .rail #sheetOpts input[type=text]{width:100% !important;max-width:200px;}
   #pptDrop.over{background:#FFF3D6;border-color:#E8A000;}
+  .ppt-board-wrap{display:grid;grid-template-columns:1fr 150px;gap:10px;margin-top:10px;}
+  #pptCard.wide{position:fixed;inset:16px;z-index:100000;overflow:auto;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35);padding:16px;}
+  #pptCard.wide .ppt-deck{max-height:calc(100vh - 330px);}
+  #pptCard.wide .ppt-board-wrap{grid-template-columns:1fr 190px;}
+  .ppt-deck{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));grid-auto-rows:max-content;gap:8px;max-height:560px;overflow:auto;padding:6px;border:1px solid var(--card-line);border-radius:8px;background:#F7F8FA;align-content:start;}
+  .ppt-card{background:#fff;border:1.5px solid var(--card-line);border-radius:6px;overflow:hidden;cursor:grab;font-size:11px;position:relative;}
+  .ppt-card.over{outline:2px solid #E8A000;outline-offset:-2px;}
+  .ppt-card.dragging{opacity:.4;}
+  .ppt-card.gen{border-color:#B7472A;}
+  .ppt-card.end{display:flex;align-items:center;justify-content:center;min-height:60px;color:var(--ink-soft);border-style:dashed;cursor:default;}
+  .ppt-thumb{position:relative;height:92px;background:#fff;border-bottom:1px solid var(--card-line);}
+  .ppt-thumb img{width:100%;height:100%;object-fit:contain;display:block;}
+  .ppt-gen-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#B7472A;font-weight:700;padding:6px;}
+  .ppt-badge{position:absolute;left:4px;bottom:4px;background:rgba(26,95,180,.9);color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;}
+  .ppt-badge.warn{left:auto;right:4px;background:rgba(179,64,42,.9);}
+  .ppt-badge.new{background:rgba(183,71,42,.9);}
+  .ppt-foot{display:flex;align-items:center;gap:3px;padding:3px 4px;}
+  .ppt-foot .ppt-no{font-weight:800;color:var(--ink-soft);min-width:16px;}
+  .ppt-foot .ppt-txt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ppt-foot select{font-size:10px;padding:0 1px;max-width:64px;}
+  .ppt-foot button{border:none;background:none;color:#b3402a;cursor:pointer;font-weight:800;padding:0 2px;}
+  .ppt-tray{font-size:11.5px;}
+  .ppt-tray-list{display:flex;flex-direction:column;gap:5px;margin-top:6px;}
+  .ppt-tray-item{border:1.5px dashed #B7472A;border-radius:6px;padding:4px;background:#fff;cursor:grab;text-align:center;}
+  .ppt-tray-item img{width:100%;display:block;border-radius:3px;margin-bottom:2px;}
+  .ppt-tray-item.used{opacity:.5;}
+  .ppt-removed{margin-top:8px;line-height:1.9;}
+  .ppt-removed button{font-size:10.5px;padding:0 5px;}
   .rail .export-row{display:flex;flex-direction:column;gap:8px;}
   .rail .export-row button.run{width:100%;margin:0;}
   /* 배치도 탭: 합계 줄 · 유형 카드 · 동별 카드 */
@@ -826,14 +854,14 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
         </div>
       </div>
-      <!-- ▣ 회사 제안서 PPT 편집: 양식 PPT에 배치도·측면도·수익성 넣고 슬라이드 삭제 -->
+      <!-- ▣ 제안서 보드: 양식 PPT를 카드로 펼쳐 끌어서 편집 → .pptx 저장 -->
       <div class="card" style="padding:16px 16px 14px;" id="pptCard">
-        <h2 style="margin-bottom:6px;">📑 회사 제안서 PPT 편집</h2>
-        <p class="hint" style="margin:0 0 10px;">회사 양식 제안서(.pptx)를 넣으면 슬라이드 목록이 뜹니다. 슬라이드마다 "넣을 항목"을 고르면 그 슬라이드의 가장 큰 그림이 여기서 만든 조감도·배치도·측면도·집계표·수익성 표로 바뀌고, "유지" 체크를 풀면 그 슬라이드는 지워집니다. 글 내용으로 배치도·측면도 슬라이드는 자동 배정되고 "(샘플)" 슬라이드는 삭제로 미리 표시되며, 바꾼 배정은 기억해 두었다가 다음 양식에서도 같은 제목의 슬라이드에 적용합니다. 양식이 바뀌면 새 파일을 다시 넣으면 됩니다. 슬라이드에 <b>{{배치도}}</b> 같은 글상자를 두면 그 자리에도 들어갑니다.</p>
-        <div id="pptDrop" onclick="document.getElementById('pptFileInput').click()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:18px 12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 여기에 회사 제안서 .pptx 파일을 끌어다 놓거나 클릭해서 선택<input id="pptFileInput" type="file" accept=".pptx" style="display:none;" onchange="pptLoadFile(this.files[0]); this.value='';"></div>
-        <div id="pptEditor"></div>
+        <h2 style="margin-bottom:6px;display:flex;align-items:center;gap:8px;">📑 제안서 보드 (회사 양식 PPT 편집) <button type="button" id="pptWideBtn" onclick="pptToggleWide()" style="font-size:11.5px;padding:2px 8px;" title="보드를 화면 전체로 크게 펼침 (Esc로 닫기)">⤢ 크게 보기</button></h2>
+        <p class="hint" style="margin:0 0 10px;">양식 .pptx를 한 번 넣으면 브라우저에 저장되어 다음에도 자동으로 열립니다. 슬라이드가 카드로 펼쳐지고(간이 미리보기 — 큰 그림과 제목만), 카드를 끌어 순서를 바꾸거나 ✕로 지우고, 오른쪽 "넣을 쪽"(조감도·배치도·측면도·집계표·수익성)을 카드 사이에 끌어다 놓으면 새 슬라이드, 카드 위에 놓으면 그 슬라이드의 큰 그림이 교체됩니다. 바꾼 순서·배정은 자동으로 기억되고, "제안서 저장"을 누르면 그때의 배치로 쪽을 만들어 .pptx로 저장합니다(Chrome·Edge는 폴더를 골라 바로 저장).</p>
+        <div id="pptDrop" onclick="pptPickFile()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:14px 12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 회사 제안서 .pptx 파일을 끌어다 놓거나 클릭해서 열기 (양식이 바뀌면 새 파일을 다시 넣기)<input id="pptFileInput" type="file" accept=".pptx" style="display:none;" onchange="pptLoadFile(this.files[0]); this.value='';"></div>
+        <div id="pptBoard"></div>
         <div class="export-row" style="margin-top:8px;">
-          <button type="button" class="run" id="pptMakeBtn" style="background:#B7472A;color:#fff;font-size:14px;" onclick="pptMake()" disabled title="배정대로 그림을 넣고 슬라이드를 지운 새 .pptx를 내려받음">📑 제안서 만들기 (.pptx 저장)</button>
+          <button type="button" class="run" id="pptMakeBtn" style="background:#B7472A;color:#fff;font-size:14px;" onclick="pptMake()" disabled title="카드 순서대로 그림을 넣고 슬라이드를 지운 .pptx 저장">💾 제안서 저장 (.pptx)</button>
         </div>
         <p id="pptStatus" class="hint" style="margin:6px 0 0;font-size:12px;"></p>
       </div>
@@ -3299,7 +3327,7 @@ function bldHeightFor(ed){
   if(!items.length) return null;
   const nm = String(ed.bldName || '').replace(/\s/g, '');
   let it = null;
-  if(nm) it = items.find(x => [x.dongNm, x.bldNm].some(v => v && (String(v).replace(/\s/g, '') === nm || nm.includes(String(v).replace(/\s/g, '')) || String(v).replace(/\s/g, '').includes(nm))));
+  if(nm) it = regItemFor(ed.bldName, ed.boundary && ed.boundary.length >= 3 ? shoelaceArea(ed.boundary) : 0); // 같은 건물명 여러 동이면 면적이 가장 가까운 동
   // 이름이 안 맞으면 건축면적이 경계 면적과 가장 가까운 동(차이 30% 이내)
   if(!it && ed.boundary && ed.boundary.length >= 3){
     const area = shoelaceArea(ed.boundary); let best = null, bd = Infinity;
@@ -3670,9 +3698,10 @@ async function buildProposalPages(st){
   let profitPgs = []; try{ profitPgs = profitPages().pages; }catch(e){ console.warn('profit pages', e); }
   return { cover, sheetCv, sidePages, tbl, profitPgs, shadeCv, totalKw, totalN, fmtKw, project };
 }
-// ===== 📑 제안서 편집(회사 양식 PPT): 슬라이드 목록 → 넣을 항목 배정 · 슬라이드 삭제 · 새 슬라이드 추가 → .pptx 저장 =====
-let pptFile = null;      // { name, buf }
-let pptInfo = null;      // pptInspect 결과
+// ===== 📑 제안서 보드: 양식 PPT를 슬라이드 카드로 펼쳐 놓고 끌어서 순서 바꾸기·삭제·배치도/측면도 끼워 넣기 → .pptx 저장(같은 파일 덮어쓰기 지원) =====
+let pptFile = null;      // { name, buf, handle }
+let pptInfo = null;      // pptInspect 결과(+ deck)
+let pptThumbs = {};      // slide no → dataURL
 let __jszipP = null;
 function loadJSZip(){
   if(window.JSZip) return Promise.resolve();
@@ -3680,15 +3709,55 @@ function loadJSZip(){
   __jszipP = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; sc.onload = () => res(); sc.onerror = () => { __jszipP = null; rej(new Error('압축 라이브러리(JSZip) 로드 실패 — 인터넷 연결 확인')); }; document.head.appendChild(sc); });
   return __jszipP;
 }
-// 넣을 수 있는 항목(키 → 표시 이름). 측면도는 쪽 수만큼(최대 4)
 const PPT_ITEMS = [['cover', '조감도(표지)'], ['sheet', '배치도'], ['side1', '측면도 1'], ['side2', '측면도 2'], ['side3', '측면도 3'], ['side4', '측면도 4'], ['table', '동별 집계표'], ['rps', '발전사업 수익'], ['self', '자가소비 수익']];
 const PPT_ITEM_NAME = Object.fromEntries(PPT_ITEMS);
-document.addEventListener('DOMContentLoaded', () => { try{ pptDropInit(); }catch(e){} });
+const PPT_TAG2ITEM = { '조감도': 'cover', '배치도': 'sheet', '측면도': 'side1', '측면도1': 'side1', '측면도2': 'side2', '측면도3': 'side3', '측면도4': 'side4', '집계표': 'table', '수익성': 'rps', '자가소비': 'self' };
+// ---- 브라우저 저장(IndexedDB): 양식 파일을 기억해 다음에 자동으로 열림 ----
+function pptDb(){ return new Promise((res, rej) => { const r = indexedDB.open('solarPpt', 1); r.onupgradeneeded = () => { r.result.createObjectStore('files'); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function pptStoreTemplate(name, buf){ try{ const db = await pptDb(); await new Promise((res, rej) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put({ name, buf, t: Date.now() }, 'template'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }catch(e){ console.warn('ppt store', e); } }
+async function pptLoadStored(){ try{ const db = await pptDb(); return await new Promise((res, rej) => { const tx = db.transaction('files', 'readonly'); const rq = tx.objectStore('files').get('template'); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); }); }catch(e){ return null; } }
+async function pptForgetTemplate(){ try{ const db = await pptDb(); await new Promise(res => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').delete('template'); tx.oncomplete = res; }); }catch(e){} pptFile = null; pptInfo = null; pptThumbs = {}; const b = document.getElementById('pptBoard'); if(b) b.innerHTML = ''; const st = document.getElementById('pptStatus'); if(st) st.textContent = '저장된 양식을 지웠습니다. 새 양식을 넣어 주세요.'; document.getElementById('pptMakeBtn').disabled = true; }
+document.addEventListener('DOMContentLoaded', () => { try{ pptDropInit(); }catch(e){} setTimeout(async () => { try{ const s = await pptLoadStored(); if(s && s.buf){ await loadJSZip(); await pptOpenBuffer(s.name, s.buf, null, true); } }catch(e){ console.warn('ppt restore', e); } }, 800); });
+// 크게 보기: 카드를 body로 옮겨 지도 위에 전체 화면으로(지도가 덮지 않게), 작게 하면 제자리로
+let __pptCardHome = null;
+function pptToggleWide(){
+  const c = document.getElementById('pptCard'); const b = document.getElementById('pptWideBtn'); if(!c) return;
+  if(c.classList.contains('wide')){ c.classList.remove('wide'); if(__pptCardHome && __pptCardHome.parent){ __pptCardHome.parent.insertBefore(c, __pptCardHome.next); } if(b) b.textContent = '⤢ 크게 보기'; }
+  else { __pptCardHome = { parent: c.parentNode, next: c.nextSibling }; document.body.appendChild(c); c.classList.add('wide'); if(b) b.textContent = '⤡ 작게'; }
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const c = document.getElementById('pptCard'); if(c && c.classList.contains('wide')) pptToggleWide(); } });
 function pptDropInit(){
   const z = document.getElementById('pptDrop'); if(!z || z.__init) return; z.__init = true;
   ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.remove('over'); }));
   z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) pptLoadFile(f); });
+}
+// 파일 선택: 가능한 브라우저(Chrome·Edge)는 파일 핸들을 받아 같은 파일에 덮어쓰기까지
+async function pptPickFile(){
+  if(window.showOpenFilePicker){
+    try{ const [h] = await window.showOpenFilePicker({ types: [{ description: 'PowerPoint', accept: { 'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'] } }], multiple: false }); const f = await h.getFile(); await pptLoadFile(f, h); return; }
+    catch(e){ if(e && e.name === 'AbortError') return; console.warn('picker', e); }
+  }
+  document.getElementById('pptFileInput').click();
+}
+async function pptLoadFile(f, handle){
+  const st = document.getElementById('pptStatus');
+  if(!f || !/\.pptx$/i.test(f.name)){ st.style.color = '#b3402a'; st.textContent = '❌ .pptx 파일만 넣을 수 있습니다(.ppt는 PowerPoint에서 .pptx로 다른 이름 저장).'; return; }
+  st.style.color = 'var(--ink-soft)'; st.textContent = `${f.name} 읽는 중…`;
+  try{ await loadJSZip(); const buf = await f.arrayBuffer(); await pptOpenBuffer(f.name, buf, handle || null, false); pptStoreTemplate(f.name, buf); }
+  catch(e){ console.warn('ppt load', e); pptFile = null; pptInfo = null; st.style.color = '#b3402a'; st.textContent = '❌ PPT를 읽지 못했습니다: ' + (e && e.message ? e.message : e); }
+}
+async function pptOpenBuffer(name, buf, handle, restored){
+  const st = document.getElementById('pptStatus');
+  pptFile = { name, buf, handle };
+  pptInfo = await pptInspect(buf);
+  pptAutoAssign(pptInfo);
+  pptLoadDeck();
+  st.style.color = 'var(--ink-soft)';
+  st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}${handle ? ' · 같은 파일에 덮어쓰기 가능' : ''}. 카드를 끌어 순서를 바꾸고, ✕로 지우고, 오른쪽 "넣을 쪽" 카드를 끌어다 놓으세요.`;
+  renderPptBoard();
+  document.getElementById('pptMakeBtn').disabled = false;
+  pptMakeThumbs().catch(e => console.warn('thumbs', e));
 }
 function pptSlideOrder(presXml, presRels){
   const relMap = {}; presRels.replace(/<Relationship\b[^>]*>/g, m => { const id = (m.match(/\bId="([^"]+)"/) || [])[1]; const tg = (m.match(/\bTarget="([^"]+)"/) || [])[1]; if(id && tg) relMap[id] = tg; return m; });
@@ -3702,14 +3771,13 @@ function pptShapeTags(xml){
   return out;
 }
 function pptSlideText(xml){
-  // 글상자 순서대로 텍스트(짧은 요약용)
   const parts = [];
   xml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, sp => { const t = (sp.match(/<a:t>([\s\S]*?)<\/a:t>|<a:t\s[^>]*>([\s\S]*?)<\/a:t>/g) || []).map(x => x.replace(/<[^>]+>/g, '')).join('').replace(/\s+/g, ' ').trim(); if(t && !/^\d{1,3}$/.test(t)) parts.push(t); return sp; });
   return parts;
 }
 function pptSlidePics(xml){
   const pics = [];
-  xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, pic => { const xf = pic.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/); if(xf){ pics.push({ xml: pic, x: +xf[1], y: +xf[2], cx: +xf[3], cy: +xf[4], area: (+xf[3]) * (+xf[4]) }); } return pic; });
+  xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, pic => { const xf = pic.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/); const rid = (pic.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1]; if(xf){ pics.push({ xml: pic, x: +xf[1], y: +xf[2], cx: +xf[3], cy: +xf[4], area: (+xf[3]) * (+xf[4]), rid }); } return pic; });
   return pics;
 }
 async function pptInspect(buf){
@@ -3723,96 +3791,168 @@ async function pptInspect(buf){
     const f = zip.file(order[i].path); if(!f) continue;
     const xml = await f.async('string');
     const texts = pptSlideText(xml), pics = pptSlidePics(xml), tags = pptShapeTags(xml).map(t => t.tag);
-    // 표시용 요약: 앞 2개 + 핵심어(배치도·측면도·조감도·수익·샘플·분석)가 든 짧은 글 / 기억용 키: 전체 글
     const keyTexts = texts.filter(t => t.length <= 30 && /배치도|측면도|조감도|수익|샘플|분석|집계|개요|소개/.test(t));
     const snippet = [...new Set(texts.slice(0, 2).concat(keyTexts))].join(' · ').slice(0, 80);
-    slides.push({ no: i + 1, path: order[i].path, rid: order[i].rid, texts, snippet, key: texts.join('|').slice(0, 400), pics: pics.length, bigPic: pics.length ? Math.max(...pics.map(p => p.area)) : 0, tags, hasSample: texts.some(t => /\(샘플\)|샘플/.test(t)) });
+    slides.push({ no: i + 1, path: order[i].path, rid: order[i].rid, texts, snippet, key: texts.join('|').slice(0, 400), pics: pics.length, picList: pics.map(p => ({ x: p.x, y: p.y, cx: p.cx, cy: p.cy, area: p.area, rid: p.rid })), tags, hasSample: texts.some(t => /\(샘플\)|샘플/.test(t)) });
   }
-  return { count: order.length, size: sz ? { cx: +sz[1], cy: +sz[2] } : null, slides };
+  return { count: order.length, size: sz ? { cx: +sz[1], cy: +sz[2] } : null, slides, zip };
 }
-// 자동 배정: 글 내용으로 어느 슬라이드에 무엇을 넣을지 추정(사용자가 바꾼 배정은 localStorage에 글 요약 기준으로 기억)
+// 간이 미리보기: 슬라이드마다 가장 큰 그림을 제자리에 그리고 글 몇 줄을 얹음(PowerPoint 렌더링이 아니라 대략적인 모습)
+async function pptMakeThumbs(){
+  if(!pptInfo || !pptInfo.zip) return;
+  const zip = pptInfo.zip, SW = pptInfo.size ? pptInfo.size.cx : 12192000, SH = pptInfo.size ? pptInfo.size.cy : 6858000;
+  const TW = 320, TH = Math.round(TW * SH / SW);
+  for(const s of pptInfo.slides){
+    if(pptThumbs[s.no]) continue;
+    const cv = document.createElement('canvas'); cv.width = TW; cv.height = TH; const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, TW, TH);
+    try{
+      const rp = s.path.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
+      const rels = zip.file(rp) ? await zip.file(rp).async('string') : '';
+      const relMap = {}; rels.replace(/<Relationship\b[^>]*>/g, m => { const id = (m.match(/\bId="([^"]+)"/) || [])[1]; const tg = (m.match(/\bTarget="([^"]+)"/) || [])[1]; if(id && tg) relMap[id] = tg; return m; });
+      const pics = s.picList.slice().sort((a, b) => b.area - a.area).slice(0, 3).reverse(); // 큰 것부터 3개(작은 것을 위에)
+      for(const p of pics){
+        const tg = relMap[p.rid]; if(!tg || !/\.(png|jpe?g|gif|bmp|webp)$/i.test(tg)) continue;
+        const mf = zip.file('ppt/' + tg.replace(/^\.\.\//, '')); if(!mf) continue;
+        const blob = await mf.async('blob');
+        const bmp = await createImageBitmap(blob, { resizeWidth: Math.max(8, Math.round(p.cx / SW * TW * 2)), resizeQuality: 'low' }).catch(() => null); if(!bmp) continue;
+        g.drawImage(bmp, p.x / SW * TW, p.y / SH * TH, p.cx / SW * TW, p.cy / SH * TH); bmp.close && bmp.close();
+      }
+    }catch(e){}
+    g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(0, 0, TW, 30);
+    g.fillStyle = '#1E2F6B'; g.font = 'bold 12px "Noto Sans KR", sans-serif'; g.textBaseline = 'top';
+    const t = s.texts.slice(0, 2).join(' · '); g.fillText(t.length > 40 ? t.slice(0, 40) + '…' : t, 6, 8);
+    pptThumbs[s.no] = cv.toDataURL('image/jpeg', 0.7);
+    const img = document.querySelector(`#pptBoard img[data-no="${s.no}"]`); if(img) img.src = pptThumbs[s.no];
+  }
+}
+// 자동 배정(글 내용) + 기억한 배정 적용
 function pptAutoAssign(info){
   const saved = (() => { try{ return JSON.parse(localStorage.getItem('pptAssign') || '{}'); }catch(e){ return {}; } })();
   const used = new Set();
-  const tagMap = { '조감도': 'cover', '배치도': 'sheet', '측면도': 'side1', '측면도1': 'side1', '측면도2': 'side2', '측면도3': 'side3', '측면도4': 'side4', '집계표': 'table', '수익성': 'rps', '자가소비': 'self' };
   info.slides.forEach(s => {
     s.keep = !s.hasSample; s.item = '';
-    const key = s.key;
-    if(saved[key] !== undefined){ s.item = saved[key].item || ''; s.keep = saved[key].keep !== false; if(s.item) used.add(s.item); return; }
-    for(const t of s.tags){ const k = tagMap[t]; if(k && !used.has(k)){ s.item = k; used.add(k); return; } }
+    const sv = saved[s.key];
+    if(sv !== undefined){ s.item = sv.item || ''; s.keep = sv.keep !== false; if(s.item) used.add(s.item); return; }
+    for(const t of s.tags){ const k = PPT_TAG2ITEM[t]; if(k && !used.has(k)){ s.item = k; used.add(k); return; } }
     const all = s.texts.join(' ');
     if(!s.hasSample && s.pics){
       if(/배치도/.test(all) && !used.has('sheet')){ s.item = 'sheet'; used.add('sheet'); }
       else if(/측면도/.test(all)){ for(const k of ['side1', 'side2', 'side3', 'side4']){ if(!used.has(k)){ s.item = k; used.add(k); break; } } }
     }
   });
-  // 슬라이드에 배정되지 않은 항목의 기본 위치(새 슬라이드): 집계표 → 배치도 뒤, 수익성 → '예상 이익율' 마지막 뒤, 자가소비 → '자가소비' 마지막 뒤, 나머지 → 넣지 않음
-  const find = re => { let no = 0; info.slides.forEach(s => { if(re.test(s.texts.join(' '))) no = s.no; }); return no; };
-  const sheetNo = (info.slides.find(s => s.item === 'sheet') || {}).no || find(/배치도/);
-  info.extra = {};
-  PPT_ITEMS.forEach(([k]) => { if(used.has(k)) return; let after = 0;
-    if(k === 'table') after = sheetNo; else if(k === 'rps') after = find(/예상\s*이익율/) || find(/발전사업/); else if(k === 'self') after = find(/수익금액\(자가소비|자가소비_/) || find(/자가소비/); else if(/^side[2-4]$/.test(k)){ const prev = info.slides.find(s => s.item === 'side' + (parseInt(k.slice(4)) - 1)); after = prev ? prev.no : 0; }
-    const sv = saved['__extra_' + k]; if(sv !== undefined) after = sv;
-    info.extra[k] = after; });
 }
-function pptSaveAssign(){
+// 덱(카드 순서): [{kind:'slide', no} | {kind:'gen', item}] — 기억해 두었다가 같은 양식이면 복원
+function pptDeckKey(){ return 'pptDeck:' + (pptFile ? pptFile.name : '') + ':' + (pptInfo ? pptInfo.count : 0); }
+function pptLoadDeck(){
+  let deck = null; try{ deck = JSON.parse(localStorage.getItem(pptDeckKey()) || 'null'); }catch(e){}
+  const valid = Array.isArray(deck) && deck.every(d => (d.kind === 'slide' && pptInfo.slides.some(s => s.no === d.no)) || (d.kind === 'gen' && PPT_ITEM_NAME[d.item]));
+  if(valid){ pptInfo.deck = deck; const keep = new Set(deck.filter(d => d.kind === 'slide').map(d => d.no)); pptInfo.slides.forEach(s => { s.keep = keep.has(s.no); }); return; }
+  // 기본 덱: 유지 슬라이드 순서대로 + 배정 안 된 항목(집계표 → 배치도 뒤, 수익 → 관련 슬라이드 뒤)
+  const deck0 = pptInfo.slides.filter(s => s.keep).map(s => ({ kind: 'slide', no: s.no }));
+  const used = new Set(pptInfo.slides.map(s => s.item).filter(Boolean));
+  const findNo = re => { let no = 0; pptInfo.slides.forEach(s => { if(s.keep && re.test(s.texts.join(' '))) no = s.no; }); return no; };
+  const insertAfter = (no, item) => { if(!no) return; const i = deck0.findIndex(d => d.kind === 'slide' && d.no === no); if(i >= 0) deck0.splice(i + 1, 0, { kind: 'gen', item }); };
+  const sheetNo = (pptInfo.slides.find(s => s.item === 'sheet') || {}).no || findNo(/배치도/);
+  if(!used.has('table')) insertAfter(sheetNo, 'table');
+  if(!used.has('rps')) insertAfter(findNo(/예상\s*이익율/) || findNo(/발전사업/), 'rps');
+  if(!used.has('self')) insertAfter(findNo(/수익금액\(자가소비|자가소비_/) || findNo(/자가소비/), 'self');
+  let sidePgs = 1; try{ if(layoutRegistry.length) sidePgs = Math.ceil(sideViewGroups().length / 2); }catch(e){}
+  if(sidePgs >= 2 && !used.has('side2')){ const p = pptInfo.slides.find(s => s.item === 'side1'); if(p) insertAfter(p.no, 'side2'); }
+  pptInfo.deck = deck0;
+}
+function pptSaveDeck(){
   if(!pptInfo) return;
+  try{ localStorage.setItem(pptDeckKey(), JSON.stringify(pptInfo.deck)); }catch(e){}
   let saved = {}; try{ saved = JSON.parse(localStorage.getItem('pptAssign') || '{}'); }catch(e){}
   pptInfo.slides.forEach(s => { saved[s.key] = { item: s.item, keep: s.keep }; });
-  Object.entries(pptInfo.extra).forEach(([k, v]) => { saved['__extra_' + k] = v; });
   try{ localStorage.setItem('pptAssign', JSON.stringify(saved)); }catch(e){}
 }
-async function pptLoadFile(f){
+// ---- 보드 그리기 ----
+function pptGenPreview(item){
+  const P = window.__pptPreview || {};
+  return P[item] || '';
+}
+function renderPptBoard(){
+  const box = document.getElementById('pptBoard'); if(!box || !pptInfo) return;
+  const deck = pptInfo.deck;
+  const used = new Set(deck.filter(d => d.kind === 'gen').map(d => d.item).concat(pptInfo.slides.filter(s => s.keep && s.item).map(s => s.item)));
+  const card = (d, idx) => {
+    if(d.kind === 'slide'){
+      const s = pptInfo.slides.find(x => x.no === d.no);
+      const thumb = pptThumbs[s.no] || '';
+      return `<div class="ppt-card" draggable="true" data-idx="${idx}" ondragstart="pptDragStart(event, ${idx})" ondragover="pptDragOver(event)" ondrop="pptDrop(event, ${idx})" ondragend="pptDragEnd(event)" title="${escLand(s.texts.join(' / ').slice(0, 300))}">
+        <div class="ppt-thumb"><img data-no="${s.no}" src="${thumb}" alt="">${s.item ? `<div class="ppt-badge">${PPT_ITEM_NAME[s.item]} ← 그림 교체</div>` : ''}${s.hasSample ? '<div class="ppt-badge warn">샘플</div>' : ''}</div>
+        <div class="ppt-foot"><span class="ppt-no">${s.no}</span><span class="ppt-txt">${escLand(s.snippet.slice(0, 34)) || '(글 없음)'}</span>
+          <select onchange="pptSetItem(${s.no}, this.value)" title="이 슬라이드의 가장 큰 그림을 바꿀 항목">${pptItemOptions(s.item)}</select>
+          <button type="button" onclick="pptRemoveAt(${idx})" title="이 슬라이드 삭제">✕</button></div></div>`;
+    }
+    return `<div class="ppt-card gen" draggable="true" data-idx="${idx}" ondragstart="pptDragStart(event, ${idx})" ondragover="pptDragOver(event)" ondrop="pptDrop(event, ${idx})" ondragend="pptDragEnd(event)">
+        <div class="ppt-thumb">${pptGenPreview(d.item) ? `<img src="${pptGenPreview(d.item)}" alt="">` : `<div class="ppt-gen-ph">${PPT_ITEM_NAME[d.item]}<br><small>저장할 때 현재 배치로 만들어 넣음</small></div>`}<div class="ppt-badge new">새 슬라이드 · ${PPT_ITEM_NAME[d.item]}</div></div>
+        <div class="ppt-foot"><span class="ppt-no">+</span><span class="ppt-txt">${PPT_ITEM_NAME[d.item]}</span><button type="button" onclick="pptRemoveAt(${idx})" title="빼기">✕</button></div></div>`;
+  };
+  const tray = PPT_ITEMS.map(([k, n]) => `<div class="ppt-tray-item${used.has(k) ? ' used' : ''}" draggable="true" ondragstart="pptTrayDragStart(event, '${k}')" ondragend="pptDragEnd(event)" title="덱의 원하는 자리에 끌어다 놓으면 새 슬라이드, 슬라이드 카드 위에 놓으면 그 카드의 그림 교체">${pptGenPreview(k) ? `<img src="${pptGenPreview(k)}" alt="">` : ''}<span>${n}${used.has(k) ? ' ✓' : ''}</span></div>`).join('');
+  const removed = pptInfo.slides.filter(s => !s.keep);
+  box.innerHTML = `<div class="ppt-board-wrap">
+    <div class="ppt-deck" ondragover="pptDragOver(event)" ondrop="pptDrop(event, ${deck.length})">${deck.map(card).join('')}<div class="ppt-card end" ondragover="pptDragOver(event)" ondrop="pptDrop(event, ${deck.length})">맨 뒤에 놓기</div></div>
+    <div class="ppt-tray"><b>넣을 쪽(현재 배치에서 만듦)</b><div class="ppt-tray-list">${tray}</div>
+      ${removed.length ? `<div class="ppt-removed"><b>지운 슬라이드</b> ${removed.map(s => `<button type="button" onclick="pptRestore(${s.no})" title="${escLand(s.snippet)}">${s.no} ↩</button>`).join(' ')}</div>` : ''}
+      <button type="button" onclick="pptPreviewGen()" style="margin-top:8px;font-size:11.5px;">🖼 넣을 쪽 미리보기 만들기</button>
+      <button type="button" onclick="pptResetDeck()" style="margin-top:4px;font-size:11.5px;">↺ 기본 배정으로</button>
+      <button type="button" onclick="pptForgetTemplate()" style="margin-top:4px;font-size:11.5px;color:#b3402a;">🗑 저장된 양식 지우기</button></div></div>`;
+}
+function pptItemOptions(sel){ return `<option value="">그대로</option>` + PPT_ITEMS.map(([k, n]) => `<option value="${k}"${sel === k ? ' selected' : ''}>${n}</option>`).join(''); }
+let pptDrag = null;
+function pptDragStart(ev, idx){ pptDrag = { from: idx }; ev.dataTransfer.effectAllowed = 'move'; try{ ev.dataTransfer.setData('text/plain', 'card:' + idx); }catch(e){} ev.currentTarget.classList.add('dragging'); }
+function pptTrayDragStart(ev, item){ pptDrag = { item }; ev.dataTransfer.effectAllowed = 'copy'; try{ ev.dataTransfer.setData('text/plain', 'gen:' + item); }catch(e){} }
+function pptDragOver(ev){ if(!pptDrag) return; ev.preventDefault(); ev.stopPropagation(); const c = ev.currentTarget; if(c.classList.contains('ppt-card')) c.classList.add('over'); }
+function pptDragEnd(ev){ document.querySelectorAll('.ppt-card.over, .ppt-card.dragging').forEach(el => el.classList.remove('over', 'dragging')); }
+function pptDrop(ev, idx){
+  ev.preventDefault(); ev.stopPropagation(); const D = pptDrag; pptDrag = null; pptDragEnd();
+  if(!D || !pptInfo) return;
+  const deck = pptInfo.deck;
+  if(D.item){
+    // 슬라이드 카드 위에 놓으면(카드 가운데) 그림 교체, 카드 사이/끝이면 새 슬라이드
+    const target = deck[idx];
+    const onCard = ev.currentTarget && ev.currentTarget.classList.contains('ppt-card') && !ev.currentTarget.classList.contains('end') && target && target.kind === 'slide';
+    if(onCard && !ev.shiftKey){ pptSetItem(target.no, D.item); return; }
+    const gi = deck.findIndex(d => d.kind === 'gen' && d.item === D.item); if(gi >= 0) deck.splice(gi, 1);
+    const at = Math.min(idx > gi && gi >= 0 ? idx - 1 : idx, deck.length);
+    deck.splice(at, 0, { kind: 'gen', item: D.item });
+    pptInfo.slides.forEach(s => { if(s.item === D.item) s.item = ''; });
+  } else if(D.from !== undefined){
+    if(D.from === idx) return;
+    const [m] = deck.splice(D.from, 1);
+    deck.splice(D.from < idx ? idx - 1 : idx, 0, m);
+  }
+  pptSaveDeck(); renderPptBoard();
+}
+function pptRemoveAt(idx){ const d = pptInfo.deck[idx]; if(!d) return; pptInfo.deck.splice(idx, 1); if(d.kind === 'slide'){ const s = pptInfo.slides.find(x => x.no === d.no); if(s) s.keep = false; } pptSaveDeck(); renderPptBoard(); }
+function pptRestore(no){ const s = pptInfo.slides.find(x => x.no === no); if(!s) return; s.keep = true; // 원래 순서상 바로 앞의 남은 슬라이드 뒤에
+  let at = 0; for(let i = 0; i < pptInfo.deck.length; i++){ const d = pptInfo.deck[i]; if(d.kind === 'slide' && d.no < no) at = i + 1; } pptInfo.deck.splice(at, 0, { kind: 'slide', no }); pptSaveDeck(); renderPptBoard(); }
+function pptSetItem(no, v){ const s = pptInfo.slides.find(x => x.no === no); if(!s) return; pptInfo.slides.forEach(x => { if(x !== s && v && x.item === v) x.item = ''; }); if(v){ const gi = pptInfo.deck.findIndex(d => d.kind === 'gen' && d.item === v); if(gi >= 0) pptInfo.deck.splice(gi, 1); } s.item = v; pptSaveDeck(); renderPptBoard(); }
+function pptResetDeck(){ try{ localStorage.removeItem(pptDeckKey()); const saved = JSON.parse(localStorage.getItem('pptAssign') || '{}'); pptInfo.slides.forEach(s => { delete saved[s.key]; }); localStorage.setItem('pptAssign', JSON.stringify(saved)); }catch(e){} pptAutoAssign(pptInfo); pptLoadDeck(); renderPptBoard(); }
+async function pptPreviewGen(){
   const st = document.getElementById('pptStatus');
-  if(!f || !/\.pptx$/i.test(f.name)){ st.style.color = '#b3402a'; st.textContent = '❌ .pptx 파일만 넣을 수 있습니다(.ppt는 PowerPoint에서 .pptx로 다른 이름 저장).'; return; }
-  st.style.color = 'var(--ink-soft)'; st.textContent = `${f.name} 읽는 중…`;
-  try{
-    await loadJSZip();
-    const buf = await f.arrayBuffer();
-    pptFile = { name: f.name, buf };
-    pptInfo = await pptInspect(buf);
-    pptAutoAssign(pptInfo);
-    st.textContent = `✅ ${f.name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}. 아래에서 넣을 항목·지울 슬라이드를 확인하고 "제안서 만들기"를 누르세요.`;
-    renderPptEditor();
-    document.getElementById('pptMakeBtn').disabled = false;
-  }catch(e){ console.warn('ppt load', e); pptFile = null; pptInfo = null; st.style.color = '#b3402a'; st.textContent = '❌ PPT를 읽지 못했습니다: ' + (e && e.message ? e.message : e); }
+  if(!layoutRegistry.length){ st.style.color = '#b3402a'; st.textContent = '❌ 배치가 없어 미리보기를 만들 수 없습니다. 배치도 탭에서 배치를 먼저 만드세요.'; return; }
+  const B = await buildProposalPages(st); if(!B) return;
+  const P = {}; const put = (k, cv) => { if(!cv) return; const c = document.createElement('canvas'); c.width = 320; c.height = Math.round(320 * cv.height / cv.width); c.getContext('2d').drawImage(cv, 0, 0, c.width, c.height); P[k] = c.toDataURL('image/jpeg', 0.7); };
+  put('cover', B.cover); put('sheet', B.sheetCv); put('table', B.tbl); B.sidePages.forEach((cv, i) => put('side' + (i + 1), cv)); B.profitPgs.forEach(cv => put(cv.__kind === 'self' ? 'self' : 'rps', cv));
+  window.__pptPreview = P; st.textContent = '🖼 넣을 쪽 미리보기를 만들었습니다(현재 배치 기준).'; renderPptBoard();
 }
-function pptItemOptions(sel){
-  return `<option value="">그대로</option>` + PPT_ITEMS.map(([k, n]) => `<option value="${k}"${sel === k ? ' selected' : ''}>${n}</option>`).join('');
-}
-function renderPptEditor(){
-  const box = document.getElementById('pptEditor'); if(!box || !pptInfo) return;
-  const rows = pptInfo.slides.map(s => `<tr${s.keep ? '' : ' style="opacity:.45;"'}>
-      <td style="text-align:center;"><input type="checkbox" ${s.keep ? 'checked' : ''} onchange="pptSetKeep(${s.no}, this.checked)" title="체크 해제 = 이 슬라이드 삭제"></td>
-      <td style="text-align:right;color:var(--ink-soft);">${s.no}</td>
-      <td title="${escLand(s.texts.join(' / ').slice(0, 300))}">${escLand(s.snippet) || '<span class="sum-muted">(글 없음)</span>'}${s.hasSample ? ' <span style="color:#b3402a;font-size:10.5px;">샘플</span>' : ''}${s.tags.length ? ` <span style="color:#1A5FB4;font-size:10.5px;">{{${escLand(s.tags.join('}} {{'))}}}</span>` : ''}</td>
-      <td style="text-align:center;color:var(--ink-soft);">${s.pics || ''}</td>
-      <td><select onchange="pptSetItem(${s.no}, this.value)" style="font-size:11px;padding:1px 2px;max-width:120px;">${pptItemOptions(s.item)}</select></td>
-    </tr>`).join('');
-  const extras = Object.entries(pptInfo.extra).map(([k, after]) => `<label style="display:inline-flex;align-items:center;gap:4px;">${PPT_ITEM_NAME[k]} <select onchange="pptSetExtra('${k}', this.value)" style="font-size:11px;padding:1px 2px;"><option value="0"${!after ? ' selected' : ''}>넣지 않음</option>${pptInfo.slides.map(s => `<option value="${s.no}"${after === s.no ? ' selected' : ''}>${s.no}번 뒤 새 슬라이드</option>`).join('')}</select></label>`).join('');
-  box.innerHTML = `<div style="max-height:320px;overflow:auto;border:1px solid var(--card-line);border-radius:6px;margin-top:8px;">
-    <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
-      <thead><tr style="background:var(--surface-2);position:sticky;top:0;"><th style="padding:4px;">유지</th><th>No</th><th style="text-align:left;">슬라이드 내용</th><th>그림</th><th style="text-align:left;">넣을 항목(가장 큰 그림을 교체)</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
-    <div style="margin-top:8px;font-size:11.5px;line-height:2;"><b>슬라이드에 배정되지 않은 항목</b> — 새 슬라이드로 추가할 위치: ${extras || '<span class="sum-muted">없음</span>'}</div>`;
-}
-function pptSetKeep(no, v){ const s = pptInfo.slides.find(x => x.no === no); if(s){ s.keep = v; pptSaveAssign(); renderPptEditor(); } }
-function pptSetItem(no, v){ const s = pptInfo.slides.find(x => x.no === no); if(!s) return; pptInfo.slides.forEach(x => { if(x !== s && v && x.item === v) x.item = ''; }); s.item = v;
-  // extra 목록 갱신: 배정된 항목은 빼고, 풀린 항목은 넣지 않음으로
-  const used = new Set(pptInfo.slides.map(x => x.item).filter(Boolean));
-  PPT_ITEMS.forEach(([k]) => { if(used.has(k)) delete pptInfo.extra[k]; else if(pptInfo.extra[k] === undefined) pptInfo.extra[k] = 0; });
-  pptSaveAssign(); renderPptEditor(); }
-function pptSetExtra(k, v){ pptInfo.extra[k] = +v || 0; pptSaveAssign(); }
 function canvasToJpegBlob(cv){ return new Promise(res => cv.toBlob(b => res(b), 'image/jpeg', 0.88)); }
 function pptPicXml(id, name, rId, x, y, cx, cy){
   return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${escLand(name)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${Math.round(x)}" y="${Math.round(y)}"/><a:ext cx="${Math.round(cx)}" cy="${Math.round(cy)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
 }
 function fitBox(bx, by, bw, bh, iw, ih){ const sc = Math.min(bw / iw, bh / ih); const w = iw * sc, h = ih * sc; return { x: bx + (bw - w) / 2, y: by + (bh - h) / 2, w, h }; }
+// ---- 저장: 덱 순서대로 슬라이드 재배열 · 삭제 · 그림 교체 · 새 슬라이드 ----
 async function pptMake(){
   const st = document.getElementById('pptStatus');
   if(!pptFile || !pptInfo){ st.style.color = '#b3402a'; st.textContent = '❌ 먼저 제안서 PPT(.pptx)를 넣어 주세요.'; return; }
   st.style.color = 'var(--ink-soft)';
-  const B = await buildProposalPages(st); if(!B) return;
+  const needGen = pptInfo.deck.some(d => d.kind === 'gen') || pptInfo.slides.some(s => s.keep && s.item);
+  let B = null;
+  if(needGen){ B = await buildProposalPages(st); if(!B) return; }
   st.textContent = 'PPT를 만드는 중…';
   try{
     await loadJSZip();
@@ -3823,45 +3963,42 @@ async function pptMake(){
     let ct = await zip.file(ctPath).async('string');
     const order = pptSlideOrder(presXml, presRels);
     const SW = pptInfo.size ? pptInfo.size.cx : 12192000, SH = pptInfo.size ? pptInfo.size.cy : 6858000;
-    // 항목 → 캔버스
-    const canv = { cover: B.cover, sheet: B.sheetCv, table: B.tbl };
-    B.sidePages.forEach((cv, i) => { canv['side' + (i + 1)] = cv; });
-    B.profitPgs.forEach(cv => { canv[cv.__kind === 'self' ? 'self' : 'rps'] = cv; });
+    const canv = {}; if(B){ canv.cover = B.cover; canv.sheet = B.sheetCv; canv.table = B.tbl; B.sidePages.forEach((cv, i) => { canv['side' + (i + 1)] = cv; }); B.profitPgs.forEach(cv => { canv[cv.__kind === 'self' ? 'self' : 'rps'] = cv; }); }
     if(!/Extension="jpg"/i.test(ct)) ct = ct.replace('</Types>', '<Default Extension="jpg" ContentType="image/jpeg"/></Types>');
     let mediaN = 0; const mediaName = () => { while(zip.file(`ppt/media/solar_${++mediaN}.jpg`)); return `solar_${mediaN}.jpg`; };
     const addRel = (rels, type, target) => { let n = 0; rels.replace(/\bId="rId(\d+)"/g, (m, d) => { n = Math.max(n, +d); return m; }); const id = 'rId' + (n + 1); return { rels: rels.replace('</Relationships>', `<Relationship Id="${id}" Type="${type}" Target="${target}"/></Relationships>`), id }; };
     const IMG = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
     const relPathOf = path => path.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
     const placed = [], added = [], removed = [], skipped = [];
-    // 1) 슬라이드별: 그림 교체 또는 삭제
+    // 1) 삭제
     for(const s of pptInfo.slides){
-      const o = order[s.no - 1]; if(!o) continue;
-      if(!s.keep){
-        // 삭제: sldId·rel·파일·노트·content type
-        presXml = presXml.replace(o.sldIdXml, '');
-        presRels = presRels.replace(new RegExp(`<Relationship\\b[^>]*\\bId="${o.rid}"[^>]*/>`), '');
-        const rp = relPathOf(o.path); const rels = zip.file(rp) ? await zip.file(rp).async('string') : '';
-        const notes = (rels.match(/Target="\.\.\/notesSlides\/(notesSlide\d+\.xml)"/) || [])[1];
-        if(notes){ zip.remove('ppt/notesSlides/' + notes); zip.remove('ppt/notesSlides/_rels/' + notes + '.rels'); ct = ct.replace(new RegExp(`<Override PartName="/ppt/notesSlides/${notes}"[^>]*/>`), ''); }
-        zip.remove(o.path); zip.remove(rp);
-        ct = ct.replace(new RegExp(`<Override PartName="/${o.path.replace(/\./g, '\\.')}"[^>]*/>`), '');
-        removed.push(s.no); continue;
-      }
-      if(!s.item) continue;
-      const cv = canv[s.item]; if(!cv){ skipped.push(`${s.no}번 ${PPT_ITEM_NAME[s.item]}(만들어진 쪽이 없음)`); continue; }
+      const o = order[s.no - 1]; if(!o || s.keep) continue;
+      presXml = presXml.replace(o.sldIdXml, '');
+      presRels = presRels.replace(new RegExp(`<Relationship\\b[^>]*\\bId="${o.rid}"[^>]*/>`), '');
+      const rp = relPathOf(o.path); const rels = zip.file(rp) ? await zip.file(rp).async('string') : '';
+      const notes = (rels.match(/Target="\.\.\/notesSlides\/(notesSlide\d+\.xml)"/) || [])[1];
+      if(notes){ zip.remove('ppt/notesSlides/' + notes); zip.remove('ppt/notesSlides/_rels/' + notes + '.rels'); ct = ct.replace(new RegExp(`<Override PartName="/ppt/notesSlides/${notes}"[^>]*/>`), ''); }
+      zip.remove(o.path); zip.remove(rp);
+      ct = ct.replace(new RegExp(`<Override PartName="/${o.path.replace(/\./g, '\\.')}"[^>]*/>`), '');
+      removed.push(s.no);
+    }
+    // 2) 그림 교체
+    for(const s of pptInfo.slides){
+      if(!s.keep || !s.item) continue;
+      const o = order[s.no - 1]; const cv = canv[s.item];
+      if(!cv){ skipped.push(`${s.no}번 ${PPT_ITEM_NAME[s.item]}(만들어진 쪽 없음)`); continue; }
       let xml = await zip.file(o.path).async('string');
       const rp = relPathOf(o.path);
       let rels = zip.file(rp) ? await zip.file(rp).async('string') : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
       const mn = mediaName(); zip.file('ppt/media/' + mn, await canvasToJpegBlob(cv));
       const r = addRel(rels, IMG, '../media/' + mn); rels = r.rels;
-      const tagSp = pptShapeTags(xml).find(t => ({ '조감도': 'cover', '배치도': 'sheet', '측면도': 'side1', '측면도1': 'side1', '측면도2': 'side2', '측면도3': 'side3', '측면도4': 'side4', '집계표': 'table', '수익성': 'rps', '자가소비': 'self' })[t.tag] === s.item);
+      const tagSp = pptShapeTags(xml).find(t => PPT_TAG2ITEM[t.tag] === s.item);
       const pics = pptSlidePics(xml);
       let maxId = 1; xml.replace(/<p:cNvPr\b[^>]*\bid="(\d+)"/g, (m, d) => { maxId = Math.max(maxId, +d); return m; });
       if(tagSp){ const xf = tagSp.sp.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/); const box = xf ? fitBox(+xf[1], +xf[2], +xf[3], +xf[4], cv.width, cv.height) : fitBox(0, 0, SW, SH, cv.width, cv.height); xml = xml.replace(tagSp.sp, pptPicXml(++maxId, PPT_ITEM_NAME[s.item], r.id, box.x, box.y, box.w, box.h)); }
       else if(pics.length){
         const big = pics.reduce((a, b) => b.area > a.area ? b : a, pics[0]);
         const box = fitBox(big.x, big.y, big.cx, big.cy, cv.width, cv.height);
-        // 기존 그림의 blip(자르기 포함)과 크기만 바꿈 — 이름·효과 등은 유지
         let np = big.xml.replace(/<p:blipFill>[\s\S]*?<\/p:blipFill>/, `<p:blipFill><a:blip r:embed="${r.id}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>`);
         np = np.replace(/<a:off x="-?\d+" y="-?\d+"\/><a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${Math.round(box.x)}" y="${Math.round(box.y)}"/><a:ext cx="${Math.round(box.w)}" cy="${Math.round(box.h)}"/>`);
         xml = xml.replace(big.xml, np);
@@ -3872,40 +4009,44 @@ async function pptMake(){
       zip.file(o.path, xml); zip.file(rp, rels);
       placed.push(`${PPT_ITEM_NAME[s.item]} → ${s.no}번`);
     }
-    // 2) 새 슬라이드 추가(N번 뒤) — 뒤에서부터 넣어 번호가 밀리지 않게
-    const extras = Object.entries(pptInfo.extra).filter(([k, after]) => after > 0 && canv[k]).sort((a, b) => b[1] - a[1]);
-    if(extras.length){
-      let slideN = 0; zip.file(/^ppt\/slides\/slide\d+\.xml$/).forEach(f => { slideN = Math.max(slideN, +(f.name.match(/slide(\d+)\.xml/) || [0, 0])[1]); });
-      let sldId = 255; presXml.replace(/<p:sldId\b[^>]*\bid="(\d+)"/g, (m, d) => { sldId = Math.max(sldId, +d); return m; });
-      const margin = Math.round(Math.min(SW, SH) * 0.03);
-      for(const [k, after] of extras){
-        const ref = order[after - 1]; const refRp = ref ? relPathOf(ref.path) : null;
-        const refRels = refRp && zip.file(refRp) ? await zip.file(refRp).async('string') : '';
-        const layoutTarget = (refRels.match(/<Relationship\b[^>]*Type="[^"]*\/slideLayout"[^>]*Target="([^"]+)"/) || refRels.match(/Target="([^"]*slideLayout[^"]*)"[^>]*Type="[^"]*\/slideLayout"/) || [])[1] || '../slideLayouts/slideLayout1.xml';
-        slideN++; const sp = `ppt/slides/slide${slideN}.xml`, rp = `ppt/slides/_rels/slide${slideN}.xml.rels`;
-        const cv = canv[k]; const mn = mediaName(); zip.file('ppt/media/' + mn, await canvasToJpegBlob(cv));
-        const box = fitBox(margin, margin, SW - margin * 2, SH - margin * 2, cv.width, cv.height);
-        zip.file(sp, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${pptPicXml(2, PPT_ITEM_NAME[k], 'rId2', box.x, box.y, box.w, box.h)}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
-        zip.file(rp, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="${layoutTarget}"/><Relationship Id="rId2" Type="${IMG}" Target="../media/${mn}"/></Relationships>`);
-        ct = ct.replace('</Types>', `<Override PartName="/ppt/slides/slide${slideN}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>`);
-        const r = addRel(presRels, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', `slides/slide${slideN}.xml`); presRels = r.rels;
-        const newId = `<p:sldId id="${++sldId}" r:id="${r.id}"/>`;
-        // 기준 슬라이드가 삭제됐으면 그 앞의 남은 슬라이드 뒤에
-        let anchor = null; for(let i = after - 1; i >= 0; i--){ if(pptInfo.slides[i].keep){ anchor = order[i].sldIdXml; break; } }
-        if(anchor && presXml.includes(anchor)) presXml = presXml.replace(anchor, anchor + newId); else presXml = presXml.replace('<p:sldIdLst>', '<p:sldIdLst>' + newId);
-        added.push(`${PPT_ITEM_NAME[k]}(${after}번 뒤)`);
-      }
+    // 3) 덱 순서대로 sldIdLst 재구성(새 슬라이드 포함)
+    let slideN = 0; zip.file(/^ppt\/slides\/slide\d+\.xml$/).forEach(f => { slideN = Math.max(slideN, +(f.name.match(/slide(\d+)\.xml/) || [0, 0])[1]); });
+    let sldId = 255; presXml.replace(/<p:sldId\b[^>]*\bid="(\d+)"/g, (m, d) => { sldId = Math.max(sldId, +d); return m; });
+    const margin = Math.round(Math.min(SW, SH) * 0.03);
+    const idXmls = [];
+    let lastSlide = null;
+    for(const d of pptInfo.deck){
+      if(d.kind === 'slide'){ const o = order[d.no - 1]; if(o && pptInfo.slides.find(s => s.no === d.no).keep){ idXmls.push(o.sldIdXml); lastSlide = o; } continue; }
+      const cv = canv[d.item]; if(!cv){ skipped.push(`새 슬라이드 ${PPT_ITEM_NAME[d.item]}(만들어진 쪽 없음)`); continue; }
+      const ref = lastSlide || order[0]; const refRp = ref ? relPathOf(ref.path) : null;
+      const refRels = refRp && zip.file(refRp) ? await zip.file(refRp).async('string') : '';
+      const layoutTarget = (refRels.match(/<Relationship\b[^>]*Type="[^"]*\/slideLayout"[^>]*Target="([^"]+)"/) || refRels.match(/Target="([^"]*slideLayout[^"]*)"[^>]*Type="[^"]*\/slideLayout"/) || [])[1] || '../slideLayouts/slideLayout1.xml';
+      slideN++; const sp = `ppt/slides/slide${slideN}.xml`, rp = `ppt/slides/_rels/slide${slideN}.xml.rels`;
+      const mn = mediaName(); zip.file('ppt/media/' + mn, await canvasToJpegBlob(cv));
+      const box = fitBox(margin, margin, SW - margin * 2, SH - margin * 2, cv.width, cv.height);
+      zip.file(sp, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${pptPicXml(2, PPT_ITEM_NAME[d.item], 'rId2', box.x, box.y, box.w, box.h)}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
+      zip.file(rp, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="${layoutTarget}"/><Relationship Id="rId2" Type="${IMG}" Target="../media/${mn}"/></Relationships>`);
+      ct = ct.replace('</Types>', `<Override PartName="/ppt/slides/slide${slideN}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>`);
+      const r = addRel(presRels, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', `slides/slide${slideN}.xml`); presRels = r.rels;
+      idXmls.push(`<p:sldId id="${++sldId}" r:id="${r.id}"/>`);
+      added.push(PPT_ITEM_NAME[d.item]);
     }
+    presXml = presXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, '<p:sldIdLst>' + idXmls.join('') + '</p:sldIdLst>');
     zip.file(presPath, presXml); zip.file(presRelPath, presRels); zip.file(ctPath, ct);
-    // XML만 압축, 그림(이미 압축된 jpg/png 등)은 그대로 저장 → 큰 양식(100MB 이상)도 빠르게
     zip.forEach((rel, f) => { if(!f.dir) f.options.compression = /\.(xml|rels)$/i.test(rel) ? 'DEFLATE' : 'STORE'; });
     const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' }, meta => { if(st && meta.percent % 10 < 1) st.textContent = `PPT 파일을 쓰는 중… ${Math.round(meta.percent)}%`; });
     const site = ((lastJibunAddress || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_'));
     const outName = pptFile.name.replace(/\.pptx$/i, '') + (site ? '_' + site : '') + '_완성.pptx';
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = outName; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    let how = '';
+    if(pptFile.handle && window.showSaveFilePicker){
+      // 열었던 파일과 같은 폴더에 새 이름으로 저장(덮어쓸지 물음) — 원본 양식은 그대로 두는 것이 기본
+      try{ const h = await window.showSaveFilePicker({ suggestedName: outName, types: [{ description: 'PowerPoint', accept: { 'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'] } }] }); const w = await h.createWritable(); await w.write(blob); await w.close(); how = `💾 ${h.name || outName} 저장`; }
+      catch(e){ if(e && e.name === 'AbortError'){ st.textContent = '저장을 취소했습니다.'; return; } console.warn('save picker', e); }
+    }
+    if(!how){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = outName; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); how = `✅ ${outName} 내려받음`; }
     st.style.color = 'var(--ink-soft)';
-    st.textContent = `✅ ${outName} 저장 — ${placed.length ? '그림 교체: ' + placed.join(', ') : '그림 교체 없음'}${added.length ? ' · 새 슬라이드: ' + added.join(', ') : ''}${removed.length ? ' · 삭제: ' + removed.join(', ') + '번' : ''}${skipped.length ? ' · 건너뜀: ' + skipped.join(', ') : ''}. PowerPoint에서 열어 마무리하세요.`;
-    return { placed, added, removed, skipped, outName, blob };
+    st.textContent = `${how} — 슬라이드 ${idXmls.length}장${placed.length ? ' · 그림 교체: ' + placed.join(', ') : ''}${added.length ? ' · 새 슬라이드: ' + added.join(', ') : ''}${removed.length ? ' · 삭제: ' + removed.join(', ') + '번' : ''}${skipped.length ? ' · 건너뜀: ' + skipped.join(', ') : ''}.`;
+    return { placed, added, removed, skipped, outName, blob, count: idXmls.length };
   }catch(e){ console.warn('ppt make', e); st.style.color = '#b3402a'; st.textContent = '❌ PPT 만들기 실패: ' + (e && e.message ? e.message : e); }
 }
 // ===== 🧾 견적 · 📈 수익성 =====
@@ -6564,13 +6705,9 @@ function endShrinkOutline(keep){
   const st = document.getElementById('roadviewStatus'); if(st && keep) st.textContent = `⇲ 경계 줄이기 완료. 다시 바꾸려면 테두리 라벨의 "⇲ 줄이기".`;
 }
 function areaXY(xy){ let a = 0; for(let i = 0; i < xy.length; i++){ const p = xy[i], q = xy[(i + 1) % xy.length]; a += p.x * q.y - q.x * p.y; } return Math.abs(a) / 2; }
-function regArchAreaFor(name){
-  const items = (lastBldrgst && Array.isArray(lastBldrgst.items)) ? lastBldrgst.items.filter(it => parseFloat(it.archArea) > 0) : [];
-  if(!items.length) return null;
-  const nm = String(name || '').replace(/\s/g, '');
-  let it = nm ? items.find(x => [x.dongNm, x.bldNm].some(v => v && (String(v).replace(/\s/g, '') === nm || nm.includes(String(v).replace(/\s/g, '')) || String(v).replace(/\s/g, '').includes(nm)))) : null;
-  if(!it && items.length === 1) it = items[0];
-  return it ? { area: parseFloat(it.archArea), name: it.dongNm || it.bldNm || '' } : null;
+function regArchAreaFor(name, area){
+  const it = regItemFor(name, area);
+  return it && parseFloat(it.archArea) > 0 ? { area: parseFloat(it.archArea), name: it.dongNm || it.bldNm || '' } : null;
 }
 let lastArchFix = null, lastArchOrig = null; // 최근 보정 내역(상태줄 표시용) · 보정 전 원래 경계
 function fitBoundaryToRegister(){
@@ -6583,8 +6720,9 @@ function fitBoundaryToRegister(){
   const xy = lastAreaPolygonPath.map(q => solarToXY(q, lat0));
   const c = { x: xy.reduce((a, q) => a + q.x, 0) / xy.length, y: xy.reduce((a, q) => a + q.y, 0) / xy.length };
   if(!pointInPolygonXY(c, lastParcelPath.map(q => solarToXY(q, lat0)))) return;
-  const reg = regArchAreaFor(currentBoundaryName); if(!reg) return;
-  const A0 = areaXY(xy); if(!(A0 > reg.area * 1.25)) return;
+  const A0 = areaXY(xy);
+  const reg = regArchAreaFor(currentBoundaryName, A0); if(!reg) return;
+  if(!(A0 > reg.area * 1.25)) return;
   let lo = 0, hi = Math.sqrt(A0) / 2, best = null;
   for(let k = 0; k < 40; k++){ const mid = (lo + hi) / 2; const ins = insetPathXY(xy, mid); const a = areaXY(ins); if(a > reg.area){ lo = mid; best = ins; } else hi = mid; }
   const d = (lo + hi) / 2, ins = insetPathXY(xy, d);
@@ -8340,18 +8478,28 @@ function clickLayoutBuilding(){
 }
 // ===== 🧭 배치 추천: 선택한 경계의 종류(건물/토지)·면적·건축물대장 지붕·용마루 방향을 보여주고, 근거와 함께 유형을 추천 — 배치는 사용자가 버튼으로 =====
 let recoState = null; // { kind, path, name }
-function regItemFor(name){
+// 건물 도형 이름(대개 건물명)에 맞는 건축물대장 동: 같은 건물명 아래 주1·부1·부2… 여러 동이 있으면 도형 면적(area)에 건축면적이 가장 가까운 동
+//   (예전: 이름이 맞는 첫 동 → 24㎡ 부속동(콘크리트 지붕)이 잡혀 큰 공장 지붕을 평슬라브로 배치하던 오류, 2026-10-28)
+function regItemFor(name, area){
   const items = (lastBldrgst && Array.isArray(lastBldrgst.items)) ? lastBldrgst.items : [];
   if(!items.length) return null;
   const nm = String(name || '').replace(/\s/g, '');
-  let it = nm ? items.find(x => [x.dongNm, x.bldNm].some(v => v && (String(v).replace(/\s/g, '') === nm || nm.includes(String(v).replace(/\s/g, '')) || String(v).replace(/\s/g, '').includes(nm)))) : null;
-  if(!it && items.length === 1) it = items[0];
-  return it || null;
+  const norm = v => String(v || '').replace(/\s/g, '');
+  const matchDong = nm ? items.filter(x => x.dongNm && (norm(x.dongNm) === nm || nm.includes(norm(x.dongNm)))) : [];
+  const matchBld = nm ? items.filter(x => x.bldNm && (norm(x.bldNm) === nm || nm.includes(norm(x.bldNm)) || norm(x.bldNm).includes(nm))) : [];
+  let cands = matchDong.length ? matchDong : matchBld;
+  if(!cands.length) cands = items.length === 1 ? items : (area > 0 ? items : []);
+  if(!cands.length) return null;
+  if(cands.length === 1) return cands[0];
+  if(area > 0){ const withA = cands.filter(x => parseFloat(x.archArea) > 0); if(withA.length) return withA.reduce((a, b) => Math.abs(parseFloat(b.archArea) - area) < Math.abs(parseFloat(a.archArea) - area) ? b : a); }
+  // 면적을 모르면 주건축물(주1 등) 우선, 없으면 건축면적 최대
+  const main = cands.find(x => /^주/.test(norm(x.dongNm))); if(main) return main;
+  return cands.reduce((a, b) => (parseFloat(b.archArea) || 0) > (parseFloat(a.archArea) || 0) ? b : a);
 }
 // 추천 규칙(근거 문구 포함): 토지 → 노지 3단 / 대장 지붕 콘크리트·슬래브 → 평슬라브 / 그 외 → 용마루 방향(남북·동서)별 "최대 배치 규칙" 설정값
 function computeReco(kind, path, name, inSearched){
   const area = shoelaceArea(path);
-  const reg = (kind === 'building' && inSearched) ? regItemFor(name) : null;
+  const reg = (kind === 'building' && inSearched) ? regItemFor(name, area) : null;
   const ori = roofOrientation(path);
   const roofTxt = reg ? String(reg.roofCdNm || '') : '';
   let rec, why;
@@ -8623,7 +8771,8 @@ function showKakaoMap(address){
         goParcel(parseFloat(p0.y), parseFloat(p0.x), p0.address_name || '', p0.road_address_name || '',
           `🏢 상호·장소 "${p0.place_name}"(${p0.address_name || p0.road_address_name})로 찾았습니다${more}.`);
       } else {
-        if(statusEl) statusEl.textContent = `❌ "${address}"을(를) 주소·상호 어느 쪽으로도 찾지 못했습니다. 지번 주소(예: OO군 OO면 OO리 123-4)나 정확한 상호를 입력해 주세요.`;
+        const amb = window.__addrAmbiguous; window.__addrAmbiguous = null;
+        if(statusEl) statusEl.textContent = amb && amb.length ? `❌ "${address}"에 맞는 법정동이 여러 곳입니다: ${amb.join(' / ')} — 시·군 이름을 넣어 다시 입력해 주세요.` : `❌ "${address}"을(를) 주소·상호 어느 쪽으로도 찾지 못했습니다. 지번 주소(예: OO군 OO면 OO리 123-4)나 정확한 상호를 입력해 주세요.`;
         console.warn('주소·장소 검색 실패 →', address, st);
       }
     }, { size: 5 });
@@ -8700,6 +8849,53 @@ function addrCandidates(raw){
 // 시도 이름 줄임: 경상남도 → 경남 등 (입력에 흔히 쓰는 형태)
 const SIDO_SHORT = { '서울특별시': '서울', '부산광역시': '부산', '대구광역시': '대구', '인천광역시': '인천', '광주광역시': '광주', '대전광역시': '대전', '울산광역시': '울산', '세종특별자치시': '세종', '경기도': '경기', '강원특별자치도': '강원', '강원도': '강원', '충청북도': '충북', '충청남도': '충남', '전북특별자치도': '전북', '전라북도': '전북', '전라남도': '전남', '전남광주통합특별시': '전남', '경상북도': '경북', '경상남도': '경남', '제주특별자치도': '제주' };
 // 법정동 사전(bjdong.txt)으로 붙여 쓴 주소·오타·누락을 보정: "경남양산시산막동563-13" / "양산시 산먁동 563-13" → "경상남도 양산시 산막동 563-13"
+// 토큰 단위 보정(띄어쓴 입력): "전남 무안 삼양읍 지산리" → 전라남도 무안군 삼향읍 지산리
+//   토큰마다 법정동 이름의 한 마디와 순서대로 맞춤: 같음 / 앞글자 일치(무안→무안군) / 접미사(시·군·구·읍·면·리·동) 뺀 같음 / 글자 1개 오타(삼양읍→삼향읍, 3글자 이상)
+//   마지막 토큰(동·리)은 반드시 맞아야 하고, 후보가 여럿이면 맞춘 토큰 수·오타 수로 고르되 서로 다른 동이 같은 점수면 보정하지 않음(엉뚱한 곳으로 가지 않게)
+function addrFuzzyTokens(head){
+  const toks = head.split(/\s+/).filter(Boolean);
+  if(!toks.length) return null;
+  const lev1 = (a, b) => { if(Math.abs(a.length - b.length) > 1) return 2; let m = a.length, n = b.length, prev = []; for(let j = 0; j <= n; j++) prev[j] = j; for(let i = 1; i <= m; i++){ const cur = [i]; for(let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; } return prev[n]; };
+  const SUF = /(특별자치도|특별자치시|광역시|특별시|통합특별시|도|시|군|구|읍|면|리|동|가)$/;
+  const strip = v => v.replace(SUF, '');
+  // 시도 별칭: 전남·전라남도·전남광주통합특별시 등
+  const sidoAlias = v => { const m = Object.entries(SIDO_SHORT).find(([full, sh]) => full === v || sh === v || strip(full) === strip(v)); return m ? m[1] : null; };
+  const matchTok = (tok, part, isSido) => { // 0 = 정확, 1 = 약한 일치, 2 = 오타 1개, -1 = 불일치
+    if(tok === part) return 0;
+    if(isSido){ const a = sidoAlias(tok), b = sidoAlias(part); if(a && b && a === b) return 0; if(a && b && lev1(a, b) <= 1) return 2; }
+    const sp = strip(part), st = strip(tok);
+    if(sp && (sp === st || sp === tok || st === part)) return 1;
+    if(tok.length >= 2 && part.startsWith(tok) && (part.length - tok.length <= 1 || /^\d가$/.test(part.slice(tok.length)))) return 1; // 무안 → 무안군, 송천동 → 송천동1가
+    if(tok.length >= 3 && lev1(tok, part) <= 1) return 2;
+    if(st.length >= 2 && sp.length >= 2 && lev1(st, sp) <= 1 && (st.length >= 3 || sp.length >= 3)) return 2;
+    return -1;
+  };
+  const scored = [];
+  for(const e of BJDONG_LIST){
+    const parts = e.name.split(' ');
+    if(parts.length < 3) continue;
+    // 마지막 토큰 ↔ 마지막 마디(동·리)
+    const last = matchTok(toks[toks.length - 1], parts[parts.length - 1], false);
+    if(last < 0 || last === 1 && strip(toks[toks.length - 1]).length < 2) continue;
+    // 나머지 토큰을 순서대로 앞 마디들에 맞춤(부분 수열)
+    let pi = 0, ok = true, typo = last === 2 ? 1 : 0, weak = last === 1 ? 1 : 0, exact = last === 0 ? 1 : 0;
+    for(let ti = 0; ti < toks.length - 1; ti++){
+      let found = -1;
+      for(let k = pi; k < parts.length - 1; k++){ const r = matchTok(toks[ti], parts[k], k === 0); if(r >= 0){ found = k; if(r === 0) exact++; else if(r === 1) weak++; else typo++; break; } }
+      if(found < 0){ ok = false; break; }
+      pi = found + 1;
+    }
+    if(!ok) continue;
+    scored.push({ e, exact, weak, typo, n: toks.length });
+  }
+  if(!scored.length) return null;
+  scored.sort((a, b) => (b.exact - a.exact) || (a.typo - b.typo) || (b.weak - a.weak));
+  const top = scored[0];
+  if(top.typo > 1) return null; // 오타 2개 이상이면 보정하지 않음
+  const ties = scored.filter(x => x.exact === top.exact && x.typo === top.typo && x.weak === top.weak && x.e.name !== top.e.name);
+  if(ties.length) return { ambiguous: scored.slice(0, 5).map(x => x.e.name) };
+  return { name: top.e.name, typo: top.typo };
+}
 async function addrFuzzyByBjdong(raw){
   const s = addrCandidates(raw)[1] || raw;
   const jb = (s.match(/(산\s*)?\d+(?:-\d+)?\s*$/) || [''])[0].trim();
@@ -8708,6 +8904,10 @@ async function addrFuzzyByBjdong(raw){
   if(!/[가-힣]{3,}/.test(q)) return null;
   try{ await loadBjdong(); }catch(e){ return null; }
   if(!Array.isArray(BJDONG_LIST) || !BJDONG_LIST.length) return null;
+  // 1) 띄어쓴 입력은 토큰 단위로 먼저
+  try{ const t = addrFuzzyTokens(head); if(t && t.name) return (t.name + (jb ? ' ' + jb : '')).trim(); if(t && t.ambiguous){ window.__addrAmbiguous = t.ambiguous; return null; } }catch(e){ console.warn('addr tokens', e); }
+  if(/\s/.test(head)) return null; // 띄어쓴 입력은 토큰 보정으로 끝(전체 글자열 비교는 다른 동으로 바꿀 위험)
+  // 2) 붙여 쓴 입력: 전체 글자열 비교(오타 1개까지)
   const lev = (a, b, cap) => { const m = a.length, n = b.length; if(Math.abs(m - n) > cap) return cap + 1; let prev = []; for(let j = 0; j <= n; j++) prev[j] = j; for(let i = 1; i <= m; i++){ const cur = [i]; let rowMin = i; for(let j = 1; j <= n; j++){ cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1)); if(cur[j] < rowMin) rowMin = cur[j]; } if(rowMin > cap) return cap + 1; prev = cur; } return prev[n]; };
   const cap = 1; // 글자 1개 오타·누락까지만 보정 (그 이상은 다른 동·리로 잘못 바꿀 수 있어 보정하지 않음)
   let best = null, bestD = cap + 1, bestLen = 0;
