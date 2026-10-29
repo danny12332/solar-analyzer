@@ -151,6 +151,13 @@
   .ppt-chip{display:inline-flex;align-items:center;gap:3px;border:1.5px dashed #B7472A;border-radius:5px;background:#fff;padding:2px 5px;cursor:pointer;font-size:11px;}
   .ppt-chip img{width:34px;height:20px;object-fit:cover;border-radius:2px;}
   .ppt-chip.nop{opacity:.5;}
+  .ppt-cards{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;}
+  .ppt-card-item{width:96px;border:2px solid var(--card-line);border-radius:5px;padding:3px;cursor:pointer;background:#fff;font-size:10.5px;}
+  .ppt-card-item img{width:100%;display:block;border-radius:3px;}
+  .ppt-card-item div{display:flex;align-items:center;gap:2px;margin-top:2px;}
+  .ppt-card-item div span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ppt-card-item div button{border:none;background:none;padding:0 2px;cursor:pointer;font-size:10px;color:var(--ink-soft);}
+  .ppt-card-item.sel{border-color:#0B5A2A;background:#EAF6EE;}
   .ppt-chip.snap{border-style:solid;border-color:#0B5A2A;background:#EAF6EE;}
   .ppt-pic-row{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-top:3px;}
   .ppt-pic-row select{font-size:11px;max-width:130px;}
@@ -3779,10 +3786,12 @@ async function pptOpenBuffer(name, buf, handle, restored){
   pptFile = { name, buf, handle }; pptThumbs = {}; pptMedia = {};
   pptInfo = await pptInspect(buf);
   try{ await pptSnapLoad(); }catch(e){}
+  try{ await pptCardsLoad(); if(!pptCards.length) await pptCardsFromTemplate(); }catch(e){ console.warn('cards', e); }
   // 편집 내용 복원
   const saved = await pptDbGet(pptStateKey());
   if(saved && saved.ops){ pptOps = saved.ops || {}; pptNewSlides = saved.news || []; pptOrder = saved.order || []; }
   else { pptOps = {}; pptNewSlides = []; pptOrder = []; pptAutoAssign(); }
+  try{ pptCardAutoSlot(); }catch(e){}
   const valid = new Set(pptInfo.slides.map(s => 's:' + s.no).concat(pptNewSlides.map(n => 'n:' + n.id)));
   pptOrder = pptOrder.filter(k => valid.has(k)); pptInfo.slides.forEach(s => { if(!pptOrder.includes('s:' + s.no)) pptOrder.push('s:' + s.no); }); pptNewSlides.forEach(n => { if(!pptOrder.includes('n:' + n.id)) pptOrder.push('n:' + n.id); });
   pptCur = pptOrder[0] || null;
@@ -3883,7 +3892,8 @@ async function pptRenderSlide(s, W, withOps){
   const k = W / SW;
   const op = withOps ? pptOpFor(s.no) : null;
   const drawImg = (src, x, y, w, h) => new Promise(res => { if(!src){ res(); return; } const im = new Image(); im.onload = () => { g.drawImage(im, x, y, w, h); res(); }; im.onerror = () => res(); im.src = src; });
-  for(let i = 0; i < s.picList.length; i++){ const p = s.picList[i]; let src = await pptMediaUrl(s, p); let x = p.x * k, y = p.y * k, w = p.cx * k, h = p.cy * k;
+  const hide = new Set(); if(op){ const stacks = pptStackGroups(s); Object.entries(op.replace).forEach(([i, v]) => { if(v === 'card:'){ const g = stacks.find(g => g.includes(+i)) || []; g.forEach(j => { if(j !== +i) hide.add(j); }); } }); }
+  for(let i = 0; i < s.picList.length; i++){ if(hide.has(i)) continue; const p = s.picList[i]; let src = await pptMediaUrl(s, p); let x = p.x * k, y = p.y * k, w = p.cx * k, h = p.cy * k;
     if(op && op.replace[i]){ const rs = pptSrcUrl(op.replace[i]); if(rs){ const im = await pptImgSize(rs); if(im){ const b = fitBox(x, y, w, h, im.w, im.h); x = b.x; y = b.y; w = b.w; h = b.h; } src = rs; g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.strokeRect(p.x * k, p.y * k, p.cx * k, p.cy * k); } }
     await drawImg(src, x, y, w, h); }
   g.fillStyle = '#222'; g.textBaseline = 'top';
@@ -3895,7 +3905,44 @@ async function pptRenderSlide(s, W, withOps){
   if(op){ for(const ov of op.overlays){ const src = pptSrcUrl(ov.src); await drawImg(src, ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.strokeStyle = '#B7472A'; g.lineWidth = 2; g.setLineDash([6, 3]); g.strokeRect(ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.setLineDash([]); } }
   return cv;
 }
-function pptSrcUrl(src){ if(!src) return ''; if(src.startsWith('gen:')){ const P = window.__pptPreview || {}; return P[src.slice(4)] || ''; } return src; }
+function pptSrcUrl(src){ if(!src) return ''; if(src.startsWith('gen:')){ const P = window.__pptPreview || {}; return P[src.slice(4)] || ''; } if(src === 'card:'){ const c = pptCardCur(); return c ? c.url : ''; } return src; }
+// ---- 명함: 여러 명함을 보관해 두고 하나를 골라 제안서(표지의 명함 자리)에 넣음 ----
+let pptCards = [], pptCardSel = null, pptCardsLoaded = false; // [{ id, name, url }]
+async function pptCardsLoad(){ if(pptCardsLoaded) return; const v = await pptDbGet('cards'); if(v){ pptCards = v.cards || []; pptCardSel = v.sel || null; } pptCardsLoaded = true; }
+function pptCardsSave(){ pptDbPut('cards', { cards: pptCards, sel: pptCardSel }); }
+function pptCardCur(){ return pptCards.find(c => c.id === pptCardSel) || null; }
+// 한 슬라이드에서 같은 자리에 겹쳐 놓인 그림 묶음(명함 여러 장을 겹쳐 둔 양식) → 인덱스 배열
+function pptStackGroups(s){
+  const SW = pptInfo.size ? pptInfo.size.cx : 12192000; const tol = SW * 0.02; const groups = []; const used = new Set();
+  s.picList.forEach((p, i) => { if(used.has(i)) return; const g = [i]; s.picList.forEach((q, j) => { if(j === i || used.has(j)) return; if(Math.abs(p.x - q.x) < tol && Math.abs(p.y - q.y) < tol && Math.abs(p.cx - q.cx) < tol && Math.abs(p.cy - q.cy) < tol) g.push(j); }); if(g.length >= 2){ g.forEach(k => used.add(k)); groups.push(g); } });
+  return groups;
+}
+// 양식에서 명함 가져오기: 1번 슬라이드(표지)에 겹쳐 둔 그림들을 명함 목록으로
+async function pptCardsFromTemplate(){
+  if(!pptInfo) return 0; const s = pptInfo.slides[0]; if(!s) return 0;
+  const groups = pptStackGroups(s); if(!groups.length) return 0;
+  let n = 0;
+  for(const i of groups[0]){ const p = s.picList[i]; const url = await pptMediaUrl(s, p); if(!url) continue; if(pptCards.some(c => c.url === url)) continue; pptCards.push({ id: 'c' + Date.now() + '_' + i, name: `명함 ${pptCards.length + 1}`, url }); n++; }
+  if(!pptCardSel && pptCards.length) pptCardSel = pptCards[0].id;
+  pptCardsSave(); return n;
+}
+async function pptCardAdd(f){
+  if(!f) return; const url = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+  const im = await pptImgSize(url); let out = url;
+  if(im && Math.max(im.w, im.h) > 1200){ const sc = 1200 / Math.max(im.w, im.h); const cv = document.createElement('canvas'); cv.width = Math.round(im.w * sc); cv.height = Math.round(im.h * sc); await new Promise(res => { const i2 = new Image(); i2.onload = () => { cv.getContext('2d').drawImage(i2, 0, 0, cv.width, cv.height); res(); }; i2.src = url; }); out = cv.toDataURL('image/jpeg', 0.9); }
+  const name = (f.name || '명함').replace(/\.[^.]+$/, ''); const id = 'c' + Date.now(); pptCards.push({ id, name, url: out }); pptCardSel = id; pptCardsSave(); pptCardAutoSlot(); renderPptEditor();
+}
+function pptCardPick(id){ pptCardSel = id; pptCardsSave(); pptCardAutoSlot(); renderPptEditor(); }
+function pptCardRename(id){ const c = pptCards.find(x => x.id === id); if(!c) return; const v = prompt('명함 이름(담당자)', c.name); if(v === null) return; c.name = v.trim() || c.name; pptCardsSave(); renderPptEditor(); }
+function pptCardDel(id){ pptCards = pptCards.filter(x => x.id !== id); if(pptCardSel === id) pptCardSel = pptCards.length ? pptCards[0].id : null; pptCardsSave(); renderPptEditor(); }
+// 명함 자리: 1번 슬라이드의 겹친 그림 묶음(맨 위 그림)을 'card:'로 교체 표시 — 저장 때 나머지 겹친 그림은 지움
+function pptCardAutoSlot(){
+  if(!pptInfo || !pptCardSel) return; const s = pptInfo.slides[0]; if(!s) return;
+  const groups = pptStackGroups(s); if(!groups.length) return;
+  const op = pptOpFor(s.no); const top = Math.max(...groups[0]);
+  if(!Object.values(op.replace).includes('card:')) op.replace[top] = 'card:';
+  pptSaveState();
+}
 // ---- 저장본: 배치도 탭 ⑥ 저장에서 "배치도 저장/측면도 저장"을 누른 그 그림을 그대로 제안서에 씀(다시 만들지 않음) ----
 let pptSnap = {}, pptSnapLoaded = false; // item → { url(dataURL 원본 크기), t }
 async function pptSnapLoad(){ pptSnap = (await pptDbGet('snap')) || {}; pptSnapLoaded = true; await pptSnapPreviews(); }
@@ -3912,7 +3959,7 @@ function pptSnapNote(item){ const v = pptSnap[item]; if(!v) return ''; const d =
 function pptWhereIs(item){
   if(!pptInfo) return '';
   const spots = [];
-  pptInfo.slides.forEach(s => { const o = pptOps[s.no]; if(!o || o.del) return; if(Object.values(o.replace || {}).includes('gen:' + item)) spots.push(`${s.no}번 장 그림`); if((o.overlays || []).some(v => v.src === 'gen:' + item)) spots.push(`${s.no}번 장 넣은 그림`); });
+  pptInfo.slides.forEach(s => { const o = pptOps[s.no]; if(!o || o.del) return; if(item === '__card'){ if(Object.values(o.replace || {}).includes('card:')) spots.push(`${s.no}번 장 그림`); return; } if(Object.values(o.replace || {}).includes('gen:' + item)) spots.push(`${s.no}번 장 그림`); if((o.overlays || []).some(v => v.src === 'gen:' + item)) spots.push(`${s.no}번 장 넣은 그림`); });
   pptNewSlides.forEach((n, i) => { if(n.overlays.some(v => v.src === 'gen:' + item)) spots.push(`새 슬라이드`); });
   return spots.join(', ');
 }
@@ -3934,7 +3981,8 @@ function renderPptEditor(){
   let body = '';
   if(it && it.kind === 's'){
     const s = it.s, op = pptOpFor(s.no);
-    const picRows = s.picList.map((p, i) => `<label class="ppt-pic-row"><span>그림 ${i + 1} <small>(${(p.cx / 360000).toFixed(1)}×${(p.cy / 360000).toFixed(1)}cm)</small></span><select onchange="pptSetReplace(${s.no}, ${i}, this.value)"><option value="">그대로</option>${PPT_ITEMS.map(([k, n]) => `<option value="gen:${k}"${op.replace[i] === 'gen:' + k ? ' selected' : ''}>${n}로 바꾸기</option>`).join('')}<option value="__file"${(op.replace[i] || '').startsWith('data:') ? ' selected' : ''}>내 사진으로 바꾸기…</option></select></label>`).join('');
+    const picRows = s.picList.map((p, i) => `<label class="ppt-pic-row"><span>그림 ${i + 1} <small>(${(p.cx / 360000).toFixed(1)}×${(p.cy / 360000).toFixed(1)}cm)</small></span><select onchange="pptSetReplace(${s.no}, ${i}, this.value)"><option value="">그대로</option>${PPT_ITEMS.map(([k, n]) => `<option value="gen:${k}"${op.replace[i] === 'gen:' + k ? ' selected' : ''}>${n}로 바꾸기</option>`).join('')}<option value="card:"${op.replace[i] === 'card:' ? ' selected' : ''}>선택한 명함으로 바꾸기</option><option value="__file"${(op.replace[i] || '').startsWith('data:') ? ' selected' : ''}>내 사진으로 바꾸기…</option></select></label>`).join('');
+    const cardRows = `<div class="ppt-sec"><b>명함</b> <small>(고른 명함이 표지의 명함 자리에 들어감${(() => { const where = pptWhereIs('__card'); return where ? ' — ' + where : ''; })()})</small><div class="ppt-cards">${pptCards.map(c => `<div class="ppt-card-item${c.id === pptCardSel ? ' sel' : ''}" onclick="pptCardPick('${c.id}')" title="누르면 이 명함을 씀"><img src="${c.url}" alt=""><div><span>${escLand(c.name)}</span><button type="button" onclick="event.stopPropagation();pptCardRename('${c.id}')" title="이름 바꾸기">✎</button><button type="button" onclick="event.stopPropagation();pptCardDel('${c.id}')" title="목록에서 빼기">✕</button></div></div>`).join('')}</div><button type="button" onclick="document.getElementById('pptCardInput').click()" style="font-size:11px;margin-top:4px;">➕ 명함 사진 추가</button> <button type="button" onclick="pptCardsFromTemplate().then(n => { renderPptEditor(); })" style="font-size:11px;margin-top:4px;" title="양식 표지에 겹쳐 둔 명함 그림을 목록으로 가져옴">양식에서 가져오기</button></div>`;
     const txtRows = s.shapes.map(sh => `<div class="ppt-txt-row"><textarea rows="${Math.min(4, Math.max(1, sh.text.split('\n').length))}" onchange="pptSetText(${s.no}, ${sh.idx}, this.value)" title="글 고치기(비우면 원래 글)">${escLand(op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text)}</textarea>${op.texts[sh.idx] !== undefined ? `<button type="button" onclick="pptSetText(${s.no}, ${sh.idx}, null)" title="원래 글로">↩</button>` : ''}</div>`).join('');
     body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div>
       <div class="ppt-side">
@@ -3942,6 +3990,7 @@ function renderPptEditor(){
           <button type="button" onclick="pptToggleDel(${s.no})" style="color:${op.del ? '#0B5A2A' : '#b3402a'};">${op.del ? '↩ 이 장 되살리기' : '🗑 이 장 지우기'}</button>
           <button type="button" onclick="pptAddBlank()" title="이 장 뒤에 빈 슬라이드 추가">➕ 뒤에 빈 장</button></div>
         <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
+        ${cardRows}
         ${picRows ? `<div class="ppt-sec"><b>이 장의 그림 바꾸기</b>${picRows}</div>` : ''}
         ${txtRows ? `<div class="ppt-sec"><b>글 고치기</b>${txtRows}</div>` : ''}
         ${op.overlays.length ? `<div class="ppt-sec"><b>넣은 그림</b> ${op.overlays.map((o, i) => `<span class="ppt-ov-tag">${o.src.startsWith('gen:') ? PPT_ITEM_NAME[o.src.slice(4)] : '사진'} <button type="button" onclick="pptDelOverlay(${s.no}, ${i})">✕</button></span>`).join(' ')}</div>` : ''}
@@ -3959,7 +4008,7 @@ function renderPptEditor(){
   box.innerHTML = `<div class="ppt-strip" id="pptStrip">${strip}</div>
     <div class="ppt-head">슬라이드 ${pos + 1} / ${pptOrder.length}${it && it.kind === 's' ? ` (원본 ${it.s.no}번) · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''}
       <span style="float:right;"><button type="button" onclick="pptResetAll()" style="font-size:11px;">↺ 편집 모두 되돌리기</button> <button type="button" onclick="pptForgetTemplate()" style="font-size:11px;color:#b3402a;">🗑 저장된 양식 지우기</button></span></div>
-    ${body}<input id="pptPhotoInput" type="file" accept="image/*" style="display:none;" onchange="pptPhotoChosen(this.files[0]); this.value='';">`;
+    ${body}<input id="pptPhotoInput" type="file" accept="image/*" style="display:none;" onchange="pptPhotoChosen(this.files[0]); this.value='';"><input id="pptCardInput" type="file" accept="image/*" style="display:none;" onchange="pptCardAdd(this.files[0]); this.value='';">`;
   pptDrawStage();
 }
 function pptGo(key){ pptCur = key; renderPptEditor(); }
@@ -4098,7 +4147,12 @@ async function pptMake(){
       let maxId = 1; xml.replace(/<p:cNvPr\b[^>]*\bid="(\d+)"/g, (m, d) => { maxId = Math.max(maxId, +d); return m; });
       // 그림 교체
       const pics = pptSlidePics(xml);
-      for(const [iStr, src] of Object.entries(op.replace || {})){ const i = +iStr; const p = pics[i]; if(!p) continue; const m = await putMedia(src); if(!m){ skipped.push(`${s.no}번 그림${i + 1}`); continue; }
+      const stacks = pptStackGroups(s);
+      for(const [iStr, src0] of Object.entries(op.replace || {})){ const i = +iStr; const p = pics[i]; if(!p) continue; let src = src0;
+        if(src === 'card:'){ const c = pptCardCur(); if(!c){ skipped.push(`${s.no}번 명함(고른 명함 없음)`); continue; } src = c.url;
+          // 같은 자리에 겹친 다른 명함 그림은 지움
+          const grp = stacks.find(g => g.includes(i)) || []; for(const j of grp){ if(j !== i && pics[j]) xml = xml.replace(pics[j].xml, ''); } }
+        const m = await putMedia(src); if(!m){ skipped.push(`${s.no}번 그림${i + 1}`); continue; }
         const r = addRel(rels, IMG, '../media/' + m.mn); rels = r.rels; const box = fitBox(p.x, p.y, p.cx, p.cy, m.w, m.h);
         let np = p.xml.replace(/<p:blipFill>[\s\S]*?<\/p:blipFill>/, `<p:blipFill><a:blip r:embed="${r.id}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>`);
         np = np.replace(/<a:off x="-?\d+" y="-?\d+"\/><a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${Math.round(box.x)}" y="${Math.round(box.y)}"/><a:ext cx="${Math.round(box.w)}" cy="${Math.round(box.h)}"/>`);
