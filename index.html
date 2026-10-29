@@ -151,6 +151,7 @@
   .ppt-chip{display:inline-flex;align-items:center;gap:3px;border:1.5px dashed #B7472A;border-radius:5px;background:#fff;padding:2px 5px;cursor:pointer;font-size:11px;}
   .ppt-chip img{width:34px;height:20px;object-fit:cover;border-radius:2px;}
   .ppt-chip.nop{opacity:.5;}
+  .ppt-chip.snap{border-style:solid;border-color:#0B5A2A;background:#EAF6EE;}
   .ppt-pic-row{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-top:3px;}
   .ppt-pic-row select{font-size:11px;max-width:130px;}
   .ppt-txt-row{display:flex;gap:3px;margin-top:4px;}
@@ -2941,7 +2942,17 @@ async function layoutSave(kind, fmt){
   try{
     if(!layoutRegistry.length){ if(out){ out.style.color = '#b3402a'; out.textContent = '❌ 저장할 배치가 없습니다. 먼저 배치를 만드세요.'; } return; }
     if(kind === 'sheet') await exportLayoutSheet(fmt); else await exportSideViews(fmt);
-    if(out && src){ out.style.color = src.style.color || 'var(--ink-soft)'; out.textContent = src.textContent || '✅ 저장했습니다.'; }
+    let doneTxt = (src && src.textContent) || ''; if(!doneTxt || /중…\s*$/.test(doneTxt)) doneTxt = kind === 'sheet' ? '✅ 배치도를 저장했습니다.' : '✅ 측면도를 저장했습니다.';
+    if(out && src){ out.style.color = src.style.color || 'var(--ink-soft)'; out.textContent = doneTxt; }
+    // 저장한 그림을 제안서 저장본으로(제안서 편집기에서 그대로 사용)
+    try{
+      const items = {};
+      if(kind === 'sheet'){ const cv = await exportLayoutSheet('canvas', {}); if(cv) items.sheet = cv; }
+      else { const pages = sideViewPages(); pages.forEach((cv, i) => { items['side' + (i + 1)] = cv; }); Object.keys(pptSnap).filter(k => /^side\d$/.test(k) && !items[k]).forEach(k => { delete pptSnap[k]; }); }
+      await pptSnapSet(items);
+      const where = Object.keys(items).map(k => { const w = pptWhereIs(k); return `${PPT_ITEM_NAME[k]}${w ? ' → ' + w : ''}`; }).join(', ');
+      if(out) out.textContent = doneTxt + ` · 📑 제안서에 넣어 두었습니다(${where}${pptInfo ? '' : ' — 제안서 탭에서 양식을 열면 그 자리에 들어감'}).`;
+    }catch(e){ console.warn('snap', e); }
   }catch(e){ console.warn('layoutSave', e); if(out){ out.style.color = '#b3402a'; out.textContent = '❌ 저장 실패: ' + (e && e.message ? e.message : e); } }
 }
 async function exportLayoutSheet(fmt, opts){
@@ -3765,6 +3776,7 @@ async function pptOpenBuffer(name, buf, handle, restored){
   const st = document.getElementById('pptStatus');
   pptFile = { name, buf, handle }; pptThumbs = {}; pptMedia = {};
   pptInfo = await pptInspect(buf);
+  try{ await pptSnapLoad(); }catch(e){}
   // 편집 내용 복원
   const saved = await pptDbGet(pptStateKey());
   if(saved && saved.ops){ pptOps = saved.ops || {}; pptNewSlides = saved.news || []; pptOrder = saved.order || []; }
@@ -3882,6 +3894,26 @@ async function pptRenderSlide(s, W, withOps){
   return cv;
 }
 function pptSrcUrl(src){ if(!src) return ''; if(src.startsWith('gen:')){ const P = window.__pptPreview || {}; return P[src.slice(4)] || ''; } return src; }
+// ---- 저장본: 배치도 탭 ⑥ 저장에서 "배치도 저장/측면도 저장"을 누른 그 그림을 그대로 제안서에 씀(다시 만들지 않음) ----
+let pptSnap = {}, pptSnapLoaded = false; // item → { url(dataURL 원본 크기), t }
+async function pptSnapLoad(){ pptSnap = (await pptDbGet('snap')) || {}; pptSnapLoaded = true; await pptSnapPreviews(); }
+async function pptSnapPreviews(){ const P = window.__pptPreview || {}; for(const [k, v] of Object.entries(pptSnap)){ if(!v || !v.url) continue; const im = await pptImgSize(v.url); if(!im) continue; const c = document.createElement('canvas'); c.width = 480; c.height = Math.round(480 * im.h / im.w); await new Promise(res => { const i2 = new Image(); i2.onload = () => { c.getContext('2d').drawImage(i2, 0, 0, c.width, c.height); res(); }; i2.onerror = res; i2.src = v.url; }); P[k] = c.toDataURL('image/jpeg', 0.7); } window.__pptPreview = P; }
+async function pptSnapSet(items){ // items: { sheet: canvas, side1: canvas, ... }
+  if(!pptSnapLoaded){ try{ pptSnap = (await pptDbGet('snap')) || {}; }catch(e){} pptSnapLoaded = true; }
+  for(const [k, cv] of Object.entries(items)){ if(!cv) continue; pptSnap[k] = { url: cv.toDataURL('image/jpeg', 0.9), t: Date.now() }; }
+  await pptDbPut('snap', pptSnap); await pptSnapPreviews();
+  try{ if(pptInfo) renderPptEditor(); }catch(e){}
+}
+async function pptSnapClear(){ pptSnap = {}; await pptDbDel('snap'); window.__pptPreview = {}; try{ if(pptInfo) renderPptEditor(); }catch(e){} const st = document.getElementById('pptStatus'); if(st) st.textContent = '저장본을 지웠습니다. 이제 제안서 저장 때 현재 배치로 다시 만들어 넣습니다.'; }
+function pptSnapNote(item){ const v = pptSnap[item]; if(!v) return ''; const d = new Date(v.t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 저장본`; }
+// 제안서에서 이 항목이 들어갈 자리(원본 슬라이드 번호·새 장) 설명
+function pptWhereIs(item){
+  if(!pptInfo) return '';
+  const spots = [];
+  pptInfo.slides.forEach(s => { const o = pptOps[s.no]; if(!o || o.del) return; if(Object.values(o.replace || {}).includes('gen:' + item)) spots.push(`${s.no}번 장 그림`); if((o.overlays || []).some(v => v.src === 'gen:' + item)) spots.push(`${s.no}번 장 넣은 그림`); });
+  pptNewSlides.forEach((n, i) => { if(n.overlays.some(v => v.src === 'gen:' + item)) spots.push(`새 슬라이드`); });
+  return spots.join(', ');
+}
 const __imgSizeCache = {};
 function pptImgSize(src){ if(__imgSizeCache[src]) return Promise.resolve(__imgSizeCache[src]); return new Promise(res => { const im = new Image(); im.onload = () => { __imgSizeCache[src] = { w: im.naturalWidth, h: im.naturalHeight }; res(__imgSizeCache[src]); }; im.onerror = () => res(null); im.src = src; }); }
 function fitBox(bx, by, bw, bh, iw, ih){ const sc = Math.min(bw / iw, bh / ih); const w = iw * sc, h = ih * sc; return { x: bx + (bw - w) / 2, y: by + (bh - h) / 2, w, h }; }
@@ -3895,7 +3927,8 @@ function renderPptEditor(){
   const it = pptItemOf(pptCur);
   const pos = pptOrder.indexOf(pptCur);
   const P = window.__pptPreview || {};
-  const chips = PPT_ITEMS.map(([k, n]) => `<button type="button" class="ppt-chip${P[k] ? '' : ' nop'}" onclick="pptAddOverlay('gen:${k}')" title="${P[k] ? '현재 슬라이드에 넣기(끌어서 위치·크기 조절)' : '아직 만들지 않음 — 아래 🖼 미리보기 만들기 먼저'}">${P[k] ? `<img src="${P[k]}" alt="">` : ''}${n}</button>`).join('');
+  const chips = PPT_ITEMS.map(([k, n]) => `<button type="button" class="ppt-chip${P[k] ? '' : ' nop'}${pptSnap[k] ? ' snap' : ''}" onclick="pptAddOverlay('gen:${k}')" title="${pptSnap[k] ? pptSnapNote(k) + ' — 배치도 탭에서 저장한 그림을 그대로 씀' : (P[k] ? '현재 슬라이드에 넣기(끌어서 위치·크기 조절)' : '아직 만들지 않음 — 아래 🖼 미리보기 만들기 먼저')}">${P[k] ? `<img src="${P[k]}" alt="">` : ''}${n}${pptSnap[k] ? ' 💾' : ''}</button>`).join('');
+  const snapNote = Object.keys(pptSnap).length ? `<div style="font-size:11px;color:#0B5A2A;margin-top:4px;">💾 표시는 배치도 탭에서 저장한 그림(저장본)이며 제안서에 그대로 들어갑니다. <button type="button" onclick="pptSnapClear()" style="font-size:10.5px;">저장본 지우고 다시 만들기</button></div>` : '';
   let body = '';
   if(it && it.kind === 's'){
     const s = it.s, op = pptOpFor(s.no);
@@ -3906,7 +3939,7 @@ function renderPptEditor(){
         <div class="ppt-tools"><button type="button" onclick="pptMove(-1)" title="앞으로">◀ 앞으로</button><button type="button" onclick="pptMove(1)" title="뒤로">뒤로 ▶</button>
           <button type="button" onclick="pptToggleDel(${s.no})" style="color:${op.del ? '#0B5A2A' : '#b3402a'};">${op.del ? '↩ 이 장 되살리기' : '🗑 이 장 지우기'}</button>
           <button type="button" onclick="pptAddBlank()" title="이 장 뒤에 빈 슬라이드 추가">➕ 뒤에 빈 장</button></div>
-        <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button></div>
+        <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${picRows ? `<div class="ppt-sec"><b>이 장의 그림 바꾸기</b>${picRows}</div>` : ''}
         ${txtRows ? `<div class="ppt-sec"><b>글 고치기</b>${txtRows}</div>` : ''}
         ${op.overlays.length ? `<div class="ppt-sec"><b>넣은 그림</b> ${op.overlays.map((o, i) => `<span class="ppt-ov-tag">${o.src.startsWith('gen:') ? PPT_ITEM_NAME[o.src.slice(4)] : '사진'} <button type="button" onclick="pptDelOverlay(${s.no}, ${i})">✕</button></span>`).join(' ')}</div>` : ''}
@@ -3916,7 +3949,7 @@ function renderPptEditor(){
     body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div>
       <div class="ppt-side">
         <div class="ppt-tools"><button type="button" onclick="pptMove(-1)">◀ 앞으로</button><button type="button" onclick="pptMove(1)">뒤로 ▶</button><button type="button" onclick="pptDelBlank(${n.id})" style="color:#b3402a;">🗑 이 장 지우기</button><button type="button" onclick="pptAddBlank()">➕ 뒤에 빈 장</button></div>
-        <div class="ppt-sec"><b>넣기</b><div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button></div>
+        <div class="ppt-sec"><b>넣기</b><div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${n.overlays.length ? `<div class="ppt-sec"><b>넣은 그림</b> ${n.overlays.map((o, i) => `<span class="ppt-ov-tag">${o.src.startsWith('gen:') ? PPT_ITEM_NAME[o.src.slice(4)] : '사진'} <button type="button" onclick="pptDelOverlayN(${n.id}, ${i})">✕</button></span>`).join(' ')}</div>` : ''}
       </div></div>`;
   }
@@ -3960,7 +3993,7 @@ async function pptPreviewGen(){
   const B = await buildProposalPages(st); if(!B) return;
   const P = {}; const put = (k, cv) => { if(!cv) return; const c = document.createElement('canvas'); c.width = 480; c.height = Math.round(480 * cv.height / cv.width); c.getContext('2d').drawImage(cv, 0, 0, c.width, c.height); P[k] = c.toDataURL('image/jpeg', 0.7); };
   put('cover', B.cover); put('sheet', B.sheetCv); put('table', B.tbl); B.sidePages.forEach((cv, i) => put('side' + (i + 1), cv)); B.profitPgs.forEach(cv => put(cv.__kind === 'self' ? 'self' : 'rps', cv));
-  window.__pptPreview = P; st.style.color = 'var(--ink-soft)'; st.textContent = '🖼 미리보기를 만들었습니다(현재 배치 기준). 저장할 때는 원본 크기로 다시 만들어 넣습니다.'; renderPptEditor();
+  Object.keys(pptSnap).forEach(k => { delete P[k]; }); window.__pptPreview = Object.assign({}, window.__pptPreview || {}, P); st.style.color = 'var(--ink-soft)'; st.textContent = '🖼 미리보기를 만들었습니다(현재 배치 기준). 💾 저장본이 있는 항목은 저장본을 그대로 씁니다.'; renderPptEditor();
 }
 function pptResetAll(){ if(!confirm('이 양식의 편집(삭제·그림·글·순서)을 모두 되돌릴까요?')) return; pptOps = {}; pptNewSlides = []; pptOrder = pptInfo.slides.map(s => 's:' + s.no); pptAutoAssign(); pptCur = pptOrder[0]; pptSaveState(); renderPptEditor(); }
 // 큰 미리보기 + 넣은 그림 끌기/크기
@@ -4014,7 +4047,9 @@ async function pptMake(){
   const st = document.getElementById('pptStatus');
   if(!pptFile || !pptInfo){ st.style.color = '#b3402a'; st.textContent = '❌ 먼저 제안서 PPT(.pptx)를 넣어 주세요.'; return; }
   st.style.color = 'var(--ink-soft)';
-  const usesGen = Object.values(pptOps).some(o => Object.values(o.replace || {}).some(v => String(v).startsWith('gen:')) || (o.overlays || []).some(v => v.src.startsWith('gen:'))) || pptNewSlides.some(n => n.overlays.some(v => v.src.startsWith('gen:')));
+  const genItems = new Set(); const noteGen = v => { if(String(v).startsWith('gen:') && !(pptSnap[v.slice(4)] && pptSnap[v.slice(4)].url)) genItems.add(v.slice(4)); };
+  Object.values(pptOps).forEach(o => { if(o.del) return; Object.values(o.replace || {}).forEach(noteGen); (o.overlays || []).forEach(v => noteGen(v.src)); }); pptNewSlides.forEach(n => n.overlays.forEach(v => noteGen(v.src)));
+  const usesGen = genItems.size > 0; // 저장본이 없는 항목만 현재 배치로 새로 만듦
   let canv = {};
   if(usesGen){ const B = await buildProposalPages(st); if(!B) return; canv = { cover: B.cover, sheet: B.sheetCv, table: B.tbl }; B.sidePages.forEach((cv, i) => { canv['side' + (i + 1)] = cv; }); B.profitPgs.forEach(cv => { canv[cv.__kind === 'self' ? 'self' : 'rps'] = cv; }); }
   st.textContent = 'PPT를 만드는 중…';
@@ -4036,7 +4071,7 @@ async function pptMake(){
     // 그림 소스 → media 파일 추가, {name, w, h}
     const srcSizes = {};
     const putMedia = async src => {
-      if(src.startsWith('gen:')){ const cv = canv[src.slice(4)]; if(!cv) return null; const mn = mediaName('jpg'); zip.file('ppt/media/' + mn, await canvasToJpegBlob(cv)); return { mn, w: cv.width, h: cv.height }; }
+      if(src.startsWith('gen:')){ const item = src.slice(4); const sn = pptSnap[item]; if(sn && sn.url) src = sn.url; else { const cv = canv[item]; if(!cv) return null; const mn = mediaName('jpg'); zip.file('ppt/media/' + mn, await canvasToJpegBlob(cv)); return { mn, w: cv.width, h: cv.height }; } }
       const blob = dataUrlToBlob(src); const ext = /png/.test(blob.type) ? 'png' : 'jpg'; const mn = mediaName(ext); zip.file('ppt/media/' + mn, blob);
       if(!srcSizes[src]) srcSizes[src] = await pptImgSize(src); const sz = srcSizes[src] || { w: 16, h: 9 }; return { mn, w: sz.w, h: sz.h };
     };
