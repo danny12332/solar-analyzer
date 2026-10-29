@@ -636,7 +636,12 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
       <!-- ▣ 배치도: 경계 → 배치 유형 → 배치 생성 → 편집 -->
       <div class="rail-pane" id="railPaneLayout">
       <div class="card" style="padding:16px 16px 14px;">
-        <h2 style="margin-bottom:12px;">모듈 배치도</h2>
+        <h2 style="margin-bottom:8px;">모듈 배치도</h2>
+        <div style="display:flex;gap:6px;align-items:center;margin:0 0 10px;">
+          <span style="font-size:13px;font-weight:700;white-space:nowrap;">🔍 주소</span>
+          <input type="text" id="layAddress" placeholder="지번·도로명 주소 또는 상호 — Enter" autocomplete="off" style="flex:1;min-width:0;font-size:13px;padding:6px 8px;" onkeydown="if(event.key==='Enter'){ layoutSearch(); }">
+          <button type="button" class="run sun" style="margin:0;padding:6px 10px;font-size:12.5px;white-space:nowrap;" onclick="layoutSearch()" title="컨설팅 탭과 같은 주소 검색 — 위치 확인 후 이 탭에서 바로 자동 배치">위치 확인</button>
+        </div>
         <div class="lay-sum" id="laySum"><b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span></div>
         <div id="recoCard" style="display:none;margin:0 0 10px;"></div>
         <div class="auto-lay-box" style="display:grid;grid-template-columns:minmax(0,1fr);gap:4px;font-size:12px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:6px;padding:7px 9px;margin:0 0 10px;">
@@ -671,11 +676,6 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           </div>
         </div>
         <p class="hint" style="margin:0 0 10px;">주소를 검색하고 이 탭에 들어오면 건물/토지를 인식해 자동 배치합니다. 지도 클릭으로는 배치하지 않고, 건물(하늘색 점선)을 클릭하면 🧭 배치 추천만 뜹니다. 직접 하려면 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
-        <div class="panel-bar" style="gap:6px;align-items:center;">
-          <span>🔍 주소</span>
-          <input type="text" id="layAddress" placeholder="지번·도로명 주소 또는 상호 — Enter" autocomplete="off" style="flex:1;min-width:180px;font-size:12.5px;padding:4px 6px;" onkeydown="if(event.key==='Enter'){ layoutSearch(); }">
-          <button type="button" class="preset-btn" onclick="layoutSearch()" title="컨설팅 탭과 같은 주소 검색 — 위치 확인 후 이 탭에서 바로 자동 배치">위치 확인</button>
-        </div>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
           <button type="button" class="preset-btn" id="addSpaceBtn2" onclick="toggleAddSpaceMode()" style="background:#E3F3E8;border-color:#0B5A2A;color:#0B5A2A;font-weight:700;" title="② 배치 유형을 먼저 고른 뒤, 모듈을 더 넣을 공간의 모서리를 지도에서 차례로 클릭해 그리면 그 공간 안에 그 유형으로 바로 배치됩니다(기존 배치 유지, 별도 동)">➕ 추가 공간 배치</button>
