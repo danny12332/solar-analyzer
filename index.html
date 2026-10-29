@@ -2327,10 +2327,11 @@ function renderAddressLabel(pos, jibun, road){
   lastLatLng = pos;
   try{ localStorage.setItem('solarLastSite', JSON.stringify({ lat: pos.getLat(), lng: pos.getLng(), addr: jibun || road || '', t: Date.now() })); }catch(e){}
   const esc = s => (s || '').replace(/'/g, "\\'");
-  const content = `<div onmousedown="addrDragStart(event)" title="끌어서 옮길 수 있습니다" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 16px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;cursor:grab;">
+  const content = `<div onmousedown="addrDragStart(event)" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 30px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;">
+    <div class="addr-grip" title="여기를 끌어서 팻말을 옮깁니다" style="position:absolute;left:6px;top:8px;bottom:8px;width:18px;border-radius:6px;background:#EEF1F5;color:#8A94A3;display:flex;align-items:center;justify-content:center;cursor:grab;font-size:14px;user-select:none;-webkit-user-select:none;">✥</div>
     <div style="position:absolute;top:10px;right:10px;">${closeBtnHtml('closeAddressOverlay()')}</div>
-    <div style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.4;white-space:nowrap;">${road || jibun || '주소 정보 없음'}</div>
-    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;">${road ? `(지번) ${jibun || '지번 정보 없음'}` : '(이 위치엔 도로명주소 없음 — 위 주소는 지번)'}</div>
+    <div class="addr-text" title="글자를 끌어 선택해서 복사할 수 있습니다" style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.4;white-space:nowrap;cursor:text;">${road || jibun || '주소 정보 없음'}</div>
+    <div class="addr-text" style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;cursor:text;">${road ? `(지번) ${jibun || '지번 정보 없음'}` : '(이 위치엔 도로명주소 없음 — 위 주소는 지번)'}</div>
     <div style="display:flex;gap:6px;margin-top:9px;">
       ${road ? `<button onclick="copyAddressText('${esc(road)}', this)" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--ink-soft);">도로명 복사</button>` : ''}
       ${jibun ? `<button onclick="copyAddressText('${esc(jibun)}', this)" style="border:1px solid var(--card-line);background:var(--surface-2);border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--ink-soft);">지번 복사</button>` : ''}
@@ -2348,9 +2349,10 @@ function renderAddressLabel(pos, jibun, road){
 // 주소 팻말 드래그(버튼·✕ 위에서는 동작 안 함)
 let addrDrag = null;
 function addrDragStart(ev){
-  try{ kakao.maps.event.preventMap(); }catch(e){}
+  try{ kakao.maps.event.preventMap(); }catch(e){} // 팻말 위에서는 지도가 끌리지 않게(글자 선택·복사 가능)
   if(ev.button !== 0 || !addressOverlay) return;
-  if(ev.target && ev.target.closest && ev.target.closest('button')) return;
+  if(ev.target && ev.target.closest && (ev.target.closest('button') || ev.target.closest('.addr-text'))) return; // 글자·버튼 위: 드래그 안 함(선택 가능)
+  if(!(ev.target && ev.target.closest && ev.target.closest('.addr-grip'))) return; // ✥ 손잡이로만 옮김
   const proj = ensureKakaoMap().getProjection();
   const pt = proj.containerPointFromCoords(addressOverlay.getPosition());
   addrDrag = { sx: ev.clientX, sy: ev.clientY, px: pt.x, py: pt.y, moved: false };
