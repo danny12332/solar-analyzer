@@ -138,9 +138,15 @@
   .ppt-head{font-size:12px;margin:6px 0;color:var(--ink);}
   .ppt-stage-wrap{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:10px;}
   #pptCard.wide .ppt-stage-wrap{grid-template-columns:minmax(0,1fr) 300px;}
-  .ppt-stage{position:relative;border:1px solid var(--card-line);background:#eee;min-height:120px;}
-  .ppt-stage canvas{display:block;width:100%;height:auto;}
+  .ppt-stage{position:relative;border:1px solid var(--card-line);background:#dfe2e6;min-height:120px;overflow:auto;max-height:calc(100vh - 40px);}
+  .ppt-stage-in{position:relative;}
+  .ppt-stage canvas{display:block;}
   #pptOvLayer{position:absolute;left:0;top:0;}
+  .ppt-edit-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;margin-top:8px;padding:6px 8px;border:1px solid var(--card-line);border-radius:8px;background:#FFF8E1;}
+  .ppt-edit-bar button,.ppt-edit-bar select{font-size:11px;}
+  .ppt-s.star{background:#FFF8E1;}
+  .ppt-s.star span{color:#8a5a00;}
+  .ppt-el.fixed{cursor:default;}
   .ppt-ov{position:absolute;border:2px solid #B7472A;cursor:move;box-sizing:border-box;}
   .ppt-el{position:absolute;box-sizing:border-box;border:1px dashed transparent;cursor:move;}
   .ppt-el:hover{border-color:rgba(26,95,180,.7);}
@@ -3750,6 +3756,9 @@ let pptOps = {};         // slide no → { del, texts:{idx:text}, overlays:[{src
 let pptNewSlides = [];   // 새 빈 슬라이드: [{ id, after:no, overlays:[...] }]
 let pptOrder = [];       // 표시 순서: ['s:3', 'n:1', ...]
 let pptCur = null;       // 현재 보는 항목 키
+// 편집 장: 제안서에서 내용을 고치는 장(기본 1, 18, 37, 38, 42~51). 나머지 장은 보기에서 숨기고 한 번에 지울 수 있음
+const PPT_EDIT_DEFAULT = [1, 18, 37, 38, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51];
+let pptEdit = new Set(PPT_EDIT_DEFAULT), pptOnlyEdit = true;
 let __jszipP = null;
 function loadJSZip(){
   if(window.JSZip) return Promise.resolve();
@@ -3766,11 +3775,11 @@ async function pptDbGet(key){ try{ const db = await pptDb(); return await new Pr
 async function pptDbDel(key){ try{ const db = await pptDb(); await new Promise(res => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').delete(key); tx.oncomplete = res; }); }catch(e){} }
 function pptStateKey(){ return 'ops:' + (pptFile ? pptFile.name : '') + ':' + (pptInfo ? pptInfo.count : 0); }
 let __pptSaveT = null;
-function pptSaveState(){ clearTimeout(__pptSaveT); __pptSaveT = setTimeout(() => { if(pptFile && pptInfo) pptDbPut(pptStateKey(), { ops: pptOps, news: pptNewSlides, order: pptOrder, t: Date.now() }); }, 300); }
+function pptSaveState(){ clearTimeout(__pptSaveT); __pptSaveT = setTimeout(() => { if(pptFile && pptInfo) pptDbPut(pptStateKey(), { ops: pptOps, news: pptNewSlides, order: pptOrder, edit: Array.from(pptEdit), onlyEdit: pptOnlyEdit, t: Date.now() }); }, 300); }
 async function pptForgetTemplate(){
   if(!confirm('저장된 양식과 편집 내용을 모두 지울까요?')) return;
   await pptDbDel('template'); if(pptFile && pptInfo) await pptDbDel(pptStateKey());
-  pptFile = null; pptInfo = null; pptThumbs = {}; pptMedia = {}; pptOps = {}; pptNewSlides = []; pptOrder = []; pptCur = null;
+  pptFile = null; pptInfo = null; pptThumbs = {}; pptMedia = {}; pptOps = {}; pptNewSlides = []; pptOrder = []; pptCur = null; pptRenderReset();
   const b = document.getElementById('pptBoard'); if(b) b.innerHTML = '';
   const st = document.getElementById('pptStatus'); if(st) st.textContent = '저장된 양식을 지웠습니다. 새 양식을 넣어 주세요.';
   document.getElementById('pptMakeBtn').disabled = true;
@@ -3781,6 +3790,7 @@ function pptToggleWide(){
   const c = document.getElementById('pptCard'); const b = document.getElementById('pptWideBtn'); if(!c) return;
   if(c.classList.contains('wide')){ c.classList.remove('wide'); if(__pptCardHome && __pptCardHome.parent){ __pptCardHome.parent.insertBefore(c, __pptCardHome.next); } if(b) b.textContent = '⤢ 크게 보기'; }
   else { __pptCardHome = { parent: c.parentNode, next: c.nextSibling }; document.body.appendChild(c); c.classList.add('wide'); if(b) b.textContent = '⤡ 작게'; }
+  const b2 = document.getElementById('pptWideBtn2'); if(b2) b2.textContent = c.classList.contains('wide') ? '⤡ 작게' : '⤢ 크게 보기';
   setTimeout(() => { try{ pptDrawStage(); }catch(e){} }, 50);
 }
 document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const c = document.getElementById('pptCard'); if(c && c.classList.contains('wide')) pptToggleWide(); } });
@@ -3806,20 +3816,23 @@ async function pptLoadFile(f, handle){
 }
 async function pptOpenBuffer(name, buf, handle, restored){
   const st = document.getElementById('pptStatus');
-  pptFile = { name, buf, handle }; pptThumbs = {}; pptMedia = {};
+  pptFile = { name, buf, handle }; pptThumbs = {}; pptMedia = {}; pptRenderReset(); pptSel = null;
   pptInfo = await pptInspect(buf);
   try{ await pptSnapLoad(); }catch(e){}
   try{ await pptCardsLoad(); if(!pptCards.length) await pptCardsFromTemplate(); }catch(e){ console.warn('cards', e); }
   // 편집 내용 복원
   const saved = await pptDbGet(pptStateKey());
-  if(saved && saved.ops){ pptOps = saved.ops || {}; pptNewSlides = saved.news || []; pptOrder = saved.order || []; }
-  else { pptOps = {}; pptNewSlides = []; pptOrder = []; pptAutoAssign(); }
+  if(saved && saved.ops){ pptOps = saved.ops || {}; pptNewSlides = saved.news || []; pptOrder = saved.order || []; pptEdit = new Set(saved.edit || PPT_EDIT_DEFAULT); pptOnlyEdit = saved.onlyEdit !== undefined ? !!saved.onlyEdit : true; }
+  else { pptOps = {}; pptNewSlides = []; pptOrder = []; pptEdit = new Set(PPT_EDIT_DEFAULT); pptOnlyEdit = true; pptAutoAssign(); }
+  // 기본 편집 장이 거의 없는(다른 구성의) 양식이면 전체 보기로
+  if(pptInfo.slides.filter(s => pptEdit.has(s.no)).length < 2) pptOnlyEdit = false;
   try{ pptCardAutoSlot(); }catch(e){}
   const valid = new Set(pptInfo.slides.map(s => 's:' + s.no).concat(pptNewSlides.map(n => 'n:' + n.id)));
   pptOrder = pptOrder.filter(k => valid.has(k)); pptInfo.slides.forEach(s => { if(!pptOrder.includes('s:' + s.no)) pptOrder.push('s:' + s.no); }); pptNewSlides.forEach(n => { if(!pptOrder.includes('n:' + n.id)) pptOrder.push('n:' + n.id); });
-  pptCur = pptOrder[0] || null;
+  pptCur = pptVisibleOrder()[0] || pptOrder[0] || null;
   st.style.color = 'var(--ink-soft)';
-  st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}. 아래 띠에서 슬라이드를 고르고 한 장씩 편집하세요.`;
+  const nEdit = pptInfo.slides.filter(s => pptEdit.has(s.no)).length;
+  st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}.${pptOnlyEdit ? ` 편집 장 ★ ${nEdit}장만 보이는 중(전체 보기로 바꿀 수 있음).` : ''} 띠에서 장을 고르고 그 자리에서 편집하세요.`;
   renderPptEditor();
   document.getElementById('pptMakeBtn').disabled = false;
   pptMakeThumbs().catch(e => console.warn('thumbs', e));
@@ -3859,11 +3872,15 @@ function pptSlidePics(xml){
 }
 // 제자리 편집용 위치: 옮긴 값(op.spBox/op.picBox)이 있으면 그것, 없으면 원본. 위치 정보가 없는 자리표시자는 왼쪽 위에 차례로
 function pptShapeBoxes(s, op){
-  const SW = pptInfo.size ? pptInfo.size.cx : 12192000, SH = pptInfo.size ? pptInfo.size.cy : 6858000; let phY = SH * 0.04; const out = {};
-  s.shapes.forEach(sh => { const ov = op && op.spBox && op.spBox[sh.idx]; if(ov){ out[sh.idx] = Object.assign({ ph: false }, ov); return; } if(sh.x === null){ out[sh.idx] = { x: SW * 0.03, y: phY, cx: SW * 0.45, cy: SH * 0.07, ph: true }; phY += SH * 0.07; } else out[sh.idx] = { x: sh.x, y: sh.y, cx: sh.cx, cy: sh.cy, ph: false }; });
+  const SW = pptInfo.size ? pptInfo.size.cx : 12192000, SH = pptInfo.size ? pptInfo.size.cy : 6858000; let phY = SH * 0.04; const out = {}; const R = s.__boxes ? s.__boxes.sp : {};
+  s.shapes.forEach(sh => { const ov = op && op.spBox && op.spBox[sh.idx]; if(ov && !sh.inGroup){ out[sh.idx] = Object.assign({ ph: false }, ov); return; } const rb = R[sh.idx]; if(rb){ out[sh.idx] = { x: rb.x, y: rb.y, cx: rb.cx, cy: rb.cy, ph: !!rb.inherited }; return; } if(sh.x === null){ out[sh.idx] = { x: SW * 0.03, y: phY, cx: SW * 0.45, cy: SH * 0.07, ph: true }; phY += SH * 0.07; } else out[sh.idx] = { x: sh.x, y: sh.y, cx: sh.cx, cy: sh.cy, ph: false }; });
   return out;
 }
-function pptPicBox(s, i, op){ const p = s.picList[i]; const ov = op && op.picBox && op.picBox[i]; return ov ? { x: ov.x, y: ov.y, cx: ov.cx, cy: ov.cy } : { x: p.x, y: p.y, cx: p.cx, cy: p.cy }; }
+function pptPicBox(s, i, op){ const p = s.picList[i]; const ov = op && op.picBox && op.picBox[i]; if(ov && !p.inGroup) return { x: ov.x, y: ov.y, cx: ov.cx, cy: ov.cy }; const rb = s.__boxes && s.__boxes.pic[i]; return rb ? { x: rb.x, y: rb.y, cx: rb.cx, cy: rb.cy } : { x: p.x, y: p.y, cx: p.cx, cy: p.cy }; }
+// 미리보기 배율: 'fit'(칸에 맞춤) 또는 1 = 100%(PowerPoint 100%와 같은 실제 크기, 96dpi 기준)
+let pptZoom = (() => { try{ const v = localStorage.getItem('pptZoom'); return v && v !== 'fit' ? +v : 'fit'; }catch(e){ return 'fit'; } })();
+function pptZoomSet(v){ pptZoom = v === 'fit' ? 'fit' : +v; try{ localStorage.setItem('pptZoom', String(pptZoom)); }catch(e){} const c = document.getElementById('pptCard'); if(pptZoom !== 'fit' && pptZoom >= 1 && c && !c.classList.contains('wide')) pptToggleWide(); renderPptEditor(); }
+function pptStageK(){ const cv = document.getElementById('pptStageCv'); const W = cv ? (cv.__cssW || cv.clientWidth || 600) : 600; return W / (pptInfo && pptInfo.size ? pptInfo.size.cx : 12192000); }
 async function pptInspect(buf){
   const zip = await JSZip.loadAsync(buf);
   const presXml = await zip.file('ppt/presentation.xml').async('string');
@@ -3912,33 +3929,460 @@ async function pptMediaUrl(s, p){
   return pptMedia[key];
 }
 // 간이 미리보기(작은 썸네일)
+let __pptThumbRun = 0;
 async function pptMakeThumbs(){
-  if(!pptInfo) return;
-  for(const s of pptInfo.slides){ if(pptThumbs[s.no]) continue; const cv = await pptRenderSlide(s, 240); pptThumbs[s.no] = cv.toDataURL('image/jpeg', 0.7); const img = document.querySelector(`#pptStrip img[data-k="s:${s.no}"]`); if(img) img.src = pptThumbs[s.no]; }
+  if(!pptInfo) return; const run = ++__pptThumbRun; const info = pptInfo;
+  // 보고 있는 장 주변·편집 장부터
+  const cur = pptCur && pptCur.startsWith('s:') ? +pptCur.slice(2) : 1;
+  const list = info.slides.slice().sort((a, b) => (pptEdit.has(a.no) ? 0 : 1) - (pptEdit.has(b.no) ? 0 : 1) || Math.abs(a.no - cur) - Math.abs(b.no - cur));
+  for(const s of list){ if(run !== __pptThumbRun || pptInfo !== info) return; if(pptThumbs[s.no]) continue; const cv = await pptRenderSlide(s, 256, false, 'thumb'); pptThumbs[s.no] = cv.toDataURL('image/jpeg', 0.75); const img = document.querySelector(`#pptStrip img[data-k="s:${s.no}"]`); if(img) img.src = pptThumbs[s.no]; await new Promise(r => setTimeout(r, 0)); }
 }
-// 슬라이드를 캔버스에 그림(원본 그림 제자리 + 글상자 글 + 교체/추가 그림) — PowerPoint 렌더링이 아닌 근사
-async function pptRenderSlide(s, W, withOps){
-  const SW = pptInfo.size ? pptInfo.size.cx : 12192000, SH = pptInfo.size ? pptInfo.size.cy : 6858000;
+// ===== 🖼 슬라이드 렌더러: 마스터·레이아웃·슬라이드의 도형을 PowerPoint 순서대로 캔버스에 그림(배경·그룹·도형 채우기/선/글·그림·표·표 스타일·테마 색·글꼴) → 원본과 같은 비율의 미리보기 =====
+// PowerPoint 자체 렌더링은 아니므로 글꼴이 없거나 EMF/WMF 그림·차트·스마트아트는 똑같이 보이지 않음
+const PPT_NS = { a: 'http://schemas.openxmlformats.org/drawingml/2006/main', p: 'http://schemas.openxmlformats.org/presentationml/2006/main', r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships' };
+function xChild(el, name){ if(!el) return null; for(const c of el.children){ if(c.localName === name) return c; } return null; }
+function xChildren(el, name){ const out = []; if(!el) return out; for(const c of el.children){ if(!name || c.localName === name) out.push(c); } return out; }
+function xFind(el, path){ let cur = el; for(const n of path.split('/')){ cur = xChild(cur, n); if(!cur) return null; } return cur; }
+function xAttr(el, name, def){ if(!el) return def; const v = el.getAttribute(name); return v === null ? def : v; }
+function xDoc(xml){ return new DOMParser().parseFromString(xml, 'application/xml'); }
+let pptPartCache = {}; // path → { path, doc, rels, resolve, xml }
+let pptImgFull = new Map(); // media path → 그림(최대 1800px, 최근 사용 순)
+let pptImgThumb = {};        // media path → 작은 그림(썸네일용)
+const PPT_IMG_FULL_MAX = 40;
+function pptRenderReset(){ pptPartCache = {}; for(const v of pptImgFull.values()){ if(v && v.close) try{ v.close(); }catch(e){} } pptImgFull = new Map(); pptImgThumb = {}; }
+async function pptPart(zip, path){
+  if(pptPartCache[path]) return pptPartCache[path];
+  const f = zip.file(path); if(!f) return null;
+  const xml = await f.async('string'); const doc = xDoc(xml);
+  const rp = path.replace(/([^/]+)$/, '_rels/$1.rels'); const rels = {}; const rf = zip.file(rp);
+  if(rf){ const rx = await rf.async('string'); rx.replace(/<Relationship\b[^>]*>/g, m => { const id = (m.match(/\bId="([^"]+)"/) || [])[1]; const tg = (m.match(/\bTarget="([^"]+)"/) || [])[1]; const ty = (m.match(/\bType="([^"]+)"/) || [])[1]; if(id && tg) rels[id] = { target: tg, type: ty || '' }; return m; }); }
+  const dir = path.replace(/[^/]+$/, '');
+  const resolve = tg => { if(!tg) return ''; if(tg.startsWith('/')) return tg.slice(1); const d = dir.split('/').filter(Boolean); for(const q of tg.split('/')){ if(q === '..') d.pop(); else if(q !== '.') d.push(q); } return d.join('/'); };
+  pptPartCache[path] = { path, doc, rels, resolve, xml };
+  return pptPartCache[path];
+}
+function pptRelTarget(part, type){ for(const r of Object.values(part.rels)){ if(r.type.endsWith('/' + type)) return part.resolve(r.target); } return ''; }
+// ---- 테마(색·글꼴) ----
+async function pptTheme(zip, masterPart){
+  const tp = pptRelTarget(masterPart, 'theme'); if(!tp) return { colors: {}, fonts: {} };
+  if(pptPartCache['theme:' + tp]) return pptPartCache['theme:' + tp];
+  const part = await pptPart(zip, tp); const colors = {}, fonts = {};
+  const te = part ? xFind(part.doc.documentElement, 'themeElements') : null;
+  const cs = xChild(te, 'clrScheme');
+  if(cs) xChildren(cs).forEach(c => { const s = xChild(c, 'srgbClr'), sy = xChild(c, 'sysClr'); colors[c.localName] = s ? xAttr(s, 'val', '000000') : (sy ? xAttr(sy, 'lastClr', '000000') : '000000'); });
+  const fs = xChild(te, 'fontScheme');
+  if(fs){ const mj = xChild(fs, 'majorFont'), mn = xChild(fs, 'minorFont'); fonts['+mj-lt'] = xAttr(xChild(mj, 'latin'), 'typeface', ''); fonts['+mj-ea'] = xAttr(xChild(mj, 'ea'), 'typeface', ''); fonts['+mn-lt'] = xAttr(xChild(mn, 'latin'), 'typeface', ''); fonts['+mn-ea'] = xAttr(xChild(mn, 'ea'), 'typeface', ''); }
+  const th = { colors, fonts }; pptPartCache['theme:' + tp] = th; return th;
+}
+function hexToRgb(h){ h = String(h).replace('#', ''); if(h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h.slice(0, 6), 16); return isNaN(n) ? [0, 0, 0] : [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function rgbToHsl(r, g, b){ r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0, s = 0; const l = (mx + mn) / 2; if(mx !== mn){ const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); if(mx === r) h = (g - b) / d + (g < b ? 6 : 0); else if(mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h /= 6; } return [h, s, l]; }
+function hslToRgb(h, s, l){ const f = (p, q, t) => { if(t < 0) t += 1; if(t > 1) t -= 1; if(t < 1 / 6) return p + (q - p) * 6 * t; if(t < 1 / 2) return q; if(t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; }; if(s === 0){ const v = Math.round(l * 255); return [v, v, v]; } const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q; return [Math.round(f(p, q, h + 1 / 3) * 255), Math.round(f(p, q, h) * 255), Math.round(f(p, q, h - 1 / 3) * 255)]; }
+// 색 요소(srgbClr/schemeClr/sysClr/prstClr + lumMod·lumOff·alpha·shade·tint·satMod) → css 색. ctx.clrMap·ctx.theme 사용
+function pptColorOf(clrEl, ctx){
+  if(!clrEl) return null;
+  let hex = null, alpha = 1;
+  const nm = clrEl.localName;
+  if(nm === 'srgbClr') hex = xAttr(clrEl, 'val', '000000');
+  else if(nm === 'sysClr') hex = xAttr(clrEl, 'lastClr', '000000');
+  else if(nm === 'schemeClr'){ let v = xAttr(clrEl, 'val', 'tx1'); if(v === 'phClr') hex = ctx.phClr || '000000'; else { v = (ctx.clrMap && ctx.clrMap[v]) || v; hex = (ctx.theme && ctx.theme.colors && ctx.theme.colors[v]) || null; if(!hex) hex = /^(lt|bg)/.test(v) ? 'FFFFFF' : '000000'; } }
+  else if(nm === 'prstClr'){ const v = xAttr(clrEl, 'val', 'black'); const map = { black: '000000', white: 'FFFFFF', red: 'FF0000', blue: '0000FF', green: '008000', gray: '808080', yellow: 'FFFF00', orange: 'FFA500', purple: '800080', navy: '000080', silver: 'C0C0C0', lime: '00FF00', teal: '008080', maroon: '800000', aqua: '00FFFF', fuchsia: 'FF00FF' }; hex = map[v] || '000000'; }
+  else return null;
+  let [r, g, b] = hexToRgb(hex); let [h, s, l] = rgbToHsl(r, g, b);
+  for(const m of xChildren(clrEl)){ const v = parseInt(xAttr(m, 'val', '0'), 10) / 100000; const n = m.localName;
+    if(n === 'lumMod') l = Math.min(1, l * v); else if(n === 'lumOff') l = Math.max(0, Math.min(1, l + v)); else if(n === 'alpha') alpha = v;
+    else if(n === 'shade'){ [r, g, b] = hslToRgb(h, s, l); r *= v; g *= v; b *= v; [h, s, l] = rgbToHsl(r, g, b); }
+    else if(n === 'tint'){ [r, g, b] = hslToRgb(h, s, l); r = 255 - (255 - r) * v; g = 255 - (255 - g) * v; b = 255 - (255 - b) * v; [h, s, l] = rgbToHsl(r, g, b); }
+    else if(n === 'satMod') s = Math.min(1, s * v); else if(n === 'satOff') s = Math.max(0, Math.min(1, s + v)); }
+  [r, g, b] = hslToRgb(h, s, l);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+// 채우기(solidFill/gradFill/noFill/pattFill)의 색: null = 채우기 없음, undefined = 지정 없음. g·box를 주면 그라데이션도 만듦
+function pptFillOf(parent, ctx, g, box){
+  if(!parent) return undefined;
+  for(const c of xChildren(parent)){
+    const n = c.localName;
+    if(n === 'noFill') return null;
+    if(n === 'solidFill') return pptColorOf(c.firstElementChild, ctx);
+    if(n === 'gradFill'){ const gs = xChild(c, 'gsLst'); const stops = gs ? xChildren(gs, 'gs').map(s => ({ pos: +xAttr(s, 'pos', 0) / 100000, col: pptColorOf(s.firstElementChild, ctx) })).filter(s => s.col) : []; if(!stops.length) return null; if(!g || !box || stops.length === 1) return stops[0].col;
+      stops.sort((a, b) => a.pos - b.pos); const lin = xChild(c, 'lin'); let grad;
+      if(lin || !xChild(c, 'path')){ const ang = lin ? +xAttr(lin, 'ang', 0) / 60000 : 0; const r = ang * Math.PI / 180; const cx = box.x + box.w / 2, cy = box.y + box.h / 2; const L = (Math.abs(Math.cos(r)) * box.w + Math.abs(Math.sin(r)) * box.h) / 2; grad = g.createLinearGradient(cx - Math.cos(r) * L, cy - Math.sin(r) * L, cx + Math.cos(r) * L, cy + Math.sin(r) * L); }
+      else grad = g.createRadialGradient(box.x + box.w / 2, box.y + box.h / 2, 0, box.x + box.w / 2, box.y + box.h / 2, Math.max(box.w, box.h) / 2);
+      stops.forEach(s => { try{ grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.col); }catch(e){} }); return grad; }
+    if(n === 'pattFill'){ const fg = xChild(c, 'fgClr'); return fg ? pptColorOf(fg.firstElementChild, ctx) : null; }
+  }
+  return undefined;
+}
+function pptFillColor(parent, ctx){ return pptFillOf(parent, ctx); }
+// ---- 그림(두 단계 캐시: 썸네일용 작은 그림 / 큰 그림은 최근 40개만) ----
+async function pptDecode(zip, path){
+  if(/\.(emf|wmf|wdp|tiff?)$/i.test(path)) return null;
+  const f = zip.file(path); if(!f) return null; const blob = await f.async('blob');
+  if(/\.svg$/i.test(path)){ const url = URL.createObjectURL(new Blob([blob], { type: 'image/svg+xml' })); const im = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = url; }); if(im && !(im.naturalWidth > 0)) return null; return im; }
+  return await createImageBitmap(blob).catch(() => null);
+}
+function pptImgW(img){ return img.naturalWidth || img.width || 0; }
+function pptImgH(img){ return img.naturalHeight || img.height || 0; }
+function pptShrink(img, maxW){ const w = pptImgW(img), h = pptImgH(img); if(!(w > maxW) || !h) return img; const cv = document.createElement('canvas'); cv.width = maxW; cv.height = Math.max(1, Math.round(h * maxW / w)); try{ cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); }catch(e){ return img; } return cv; }
+async function pptImage(zip, path, tier){
+  if(!path) return null;
+  if(tier === 'thumb'){
+    if(pptImgThumb[path] !== undefined) return pptImgThumb[path];
+    const full = pptImgFull.get(path); if(full){ pptImgThumb[path] = pptShrink(full, 400); return pptImgThumb[path]; }
+    pptImgThumb[path] = null; const img = await pptDecode(zip, path); if(!img) return null; const t = pptShrink(img, 400); if(t !== img && img.close) img.close(); pptImgThumb[path] = t; return t;
+  }
+  if(pptImgFull.has(path)){ const v = pptImgFull.get(path); pptImgFull.delete(path); pptImgFull.set(path, v); return v; }
+  let img = await pptDecode(zip, path); if(img){ const s = pptShrink(img, 1800); if(s !== img && img.close) img.close(); img = s; }
+  pptImgFull.set(path, img);
+  while(pptImgFull.size > PPT_IMG_FULL_MAX){ const k0 = pptImgFull.keys().next().value; const v = pptImgFull.get(k0); pptImgFull.delete(k0); if(v && v.close) try{ v.close(); }catch(e){} }
+  if(img && pptImgThumb[path] === undefined) pptImgThumb[path] = pptShrink(img, 400);
+  return img;
+}
+// ---- 변환(그룹 좌표) ----
+function pptXfrm(el){ const xf = el ? xChild(el, 'xfrm') : null; if(!xf) return null; const off = xChild(xf, 'off'), ext = xChild(xf, 'ext'); if(!off || !ext) return null; const r = { x: +xAttr(off, 'x', 0), y: +xAttr(off, 'y', 0), cx: +xAttr(ext, 'cx', 0), cy: +xAttr(ext, 'cy', 0), rot: +xAttr(xf, 'rot', 0) / 60000, flipH: xAttr(xf, 'flipH', '0') === '1', flipV: xAttr(xf, 'flipV', '0') === '1' }; const co = xChild(xf, 'chOff'), ce = xChild(xf, 'chExt'); if(co && ce){ r.chx = +xAttr(co, 'x', 0); r.chy = +xAttr(co, 'y', 0); r.chcx = +xAttr(ce, 'cx', 0); r.chcy = +xAttr(ce, 'cy', 0); } return r; }
+const T_ID = { ox: 0, oy: 0, sx: 1, sy: 1 };
+function tApply(T, x, y){ return { x: T.ox + x * T.sx, y: T.oy + y * T.sy }; }
+function tBox(T, b){ const p = tApply(T, b.x, b.y); return { x: p.x, y: p.y, cx: b.cx * T.sx, cy: b.cy * T.sy }; }
+function tGroup(T, gx){ if(!gx || !gx.chcx || !gx.chcy) return T; const sx = gx.cx / gx.chcx, sy = gx.cy / gx.chcy; const o = tApply(T, gx.x, gx.y); return { ox: o.x - gx.chx * sx * T.sx, oy: o.y - gx.chy * sy * T.sy, sx: T.sx * sx, sy: T.sy * sy }; }
+// ---- 글 속성 ----
+function pptFontOf(rPr, ctx){ const ea = xAttr(xChild(rPr, 'ea'), 'typeface', null), la = xAttr(xChild(rPr, 'latin'), 'typeface', null); if(!ea && !la) return null; const F = (ctx.theme && ctx.theme.fonts) || {}; const res = v => v && v.startsWith('+') ? (F[v] || '') : (v || ''); return [res(ea), res(la)].filter(Boolean); }
+function pptRunProps(rPr, ctx, inherit){
+  const o = Object.assign({}, inherit || {});
+  if(!rPr) return o;
+  const sz = xAttr(rPr, 'sz', null); if(sz) o.sz = +sz / 100;
+  const b = xAttr(rPr, 'b', null); if(b !== null) o.b = b === '1' || b === 'true'; const i = xAttr(rPr, 'i', null); if(i !== null) o.i = i === '1' || i === 'true';
+  const u = xAttr(rPr, 'u', null); if(u !== null) o.u = u !== 'none';
+  const fill = pptFillColor(rPr, ctx); if(fill) o.color = fill;
+  const fo = pptFontOf(rPr, ctx); if(fo) o.fonts = fo;
+  return o;
+}
+function pptParaProps(pPr, inherit){ const o = Object.assign({}, inherit || {}); if(!pPr) return o;
+  const al = xAttr(pPr, 'algn', null); if(al) o.algn = al; const lvl = xAttr(pPr, 'lvl', null); if(lvl) o.lvl = +lvl;
+  if(xChild(pPr, 'buNone')) o.bullet = ''; const bc = xChild(pPr, 'buChar'); if(bc) o.bullet = xAttr(bc, 'char', '•'); if(xChild(pPr, 'buAutoNum')) o.bullet = '#';
+  const ml = xAttr(pPr, 'marL', null); if(ml !== null) o.marL = +ml; const ind = xAttr(pPr, 'indent', null); if(ind !== null) o.indent = +ind;
+  const ls = xFind(pPr, 'lnSpc/spcPct'); if(ls) o.lnPct = +xAttr(ls, 'val', 100000) / 100000; const lp = xFind(pPr, 'lnSpc/spcPts'); if(lp) o.lnPts = +xAttr(lp, 'val', 0) / 100;
+  const sb = xFind(pPr, 'spcBef/spcPts'); if(sb) o.spcBef = +xAttr(sb, 'val', 0) / 100; const sa = xFind(pPr, 'spcAft/spcPts'); if(sa) o.spcAft = +xAttr(sa, 'val', 0) / 100;
+  return o; }
+// lstStyle·txStyles의 수준별(lvl1pPr…) 기본값 → { 0:{…}, 1:{…} }
+function pptLstLevels(lst, ctx){ const L = {}; if(!lst) return L; for(let i = 1; i <= 9; i++){ const lp = xChild(lst, 'lvl' + i + 'pPr'); if(!lp) continue; const pp = pptParaProps(lp); const d = xChild(lp, 'defRPr'); const rp = d ? pptRunProps(d, ctx) : {}; L[i - 1] = Object.assign({}, pp, rp); } return L; }
+function pptMergeLevels(){ const out = {}; for(const L of arguments){ if(!L) continue; for(const [lv, v] of Object.entries(L)) out[lv] = Object.assign(out[lv] || {}, v); } return out; }
+function pptFontCss(fonts, sz, b, i){ const fam = (fonts || []).concat(['Malgun Gothic', '맑은 고딕', 'Noto Sans KR', 'Noto Sans CJK KR', 'Apple SD Gothic Neo', 'sans-serif']).filter((v, j, a) => v && a.indexOf(v) === j).map(f => /^[a-z-]+$/i.test(f) && f === 'sans-serif' ? f : `"${f}"`).join(', '); return `${i ? 'italic ' : ''}${b ? 'bold ' : ''}${sz}px ${fam}`; }
+function pptWrapLine(g, text, maxW){
+  const out = []; let cur = '';
+  const words = text.split(/(\s+)/);
+  for(const w of words){ if(!w) continue; const test = cur + w; if(g.measureText(test).width <= maxW || (!cur && w.length <= 1)) cur = test;
+    else { if(g.measureText(w).width > maxW){ if(cur.trim()){ out.push(cur.replace(/\s+$/, '')); cur = ''; } for(const ch of w){ if(g.measureText(cur + ch).width <= maxW || !cur) cur += ch; else { out.push(cur); cur = ch; } } }
+      else { out.push(cur.replace(/\s+$/, '')); cur = w.replace(/^\s+/, ''); } } }
+  if(cur.trim() !== '' || !out.length) out.push(cur.replace(/\s+$/, ''));
+  return out;
+}
+// 글 그리기: box(px) 안에 txBody — def: { levels, base:{sz,color,b,algn,bullet,fonts}, anchor, ins }. overrideText가 있으면 그 글(줄=문단)로 대신 그림. measureOnly면 그리지 않고 필요한 높이(px)만 돌려줌
+const __pptFm = {};
+function pptFontMetrics(g, font){ let r = __pptFm[font]; if(r) return r; g.font = font; const m = g.measureText('가Ag'); const px = parseFloat((font.match(/(\d+(?:\.\d+)?)px/) || [0, 16])[1]); r = { asc: m.fontBoundingBoxAscent || px * 0.88, desc: m.fontBoundingBoxDescent || px * 0.24 }; if(Object.keys(__pptFm).length > 3000) for(const k0 in __pptFm) delete __pptFm[k0]; __pptFm[font] = r; return r; }
+const PPT_TOK = /\s+|[ᄀ-ᇿ㄰-㆏가-힯　-〿一-鿿＀-￯⺀-⿿぀-ヿㇰ-ㇿ]|[^\sᄀ-ᇿ㄰-㆏가-힯　-〿一-鿿＀-￯⺀-⿿぀-ヿㇰ-ㇿ]+/g;
+function pptDrawTextBody(g, txBody, box, ctx, def, overrideText, measureOnly){
+  const bp = txBody ? xChild(txBody, 'bodyPr') : null; const k = ctx.k; def = def || {};
+  const ins = def.ins || { l: +xAttr(bp, 'lIns', 91440) * k, t: +xAttr(bp, 'tIns', 45720) * k, r: +xAttr(bp, 'rIns', 91440) * k, b: +xAttr(bp, 'bIns', 45720) * k };
+  const anchor = xAttr(bp, 'anchor', null) || def.anchor || 't'; const wrap = xAttr(bp, 'wrap', 'square') !== 'none';
+  const vert = xAttr(bp, 'vert', 'horz');
+  let scale = 1, lnRed = 0; const na = bp && xChild(bp, 'normAutofit'); if(na){ const fs = xAttr(na, 'fontScale', null); if(fs) scale = +fs / 100000; const lr = xAttr(na, 'lnSpcReduction', null); if(lr) lnRed = +lr / 100000; }
+  g.save();
+  if(vert === 'vert' || vert === 'eaVert' || vert === 'vert270'){ const cx = box.x + box.w / 2, cy = box.y + box.h / 2; g.translate(cx, cy); g.rotate((vert === 'vert270' ? -90 : 90) * Math.PI / 180); g.translate(-cx, -cy); box = { x: cx - box.h / 2, y: cy - box.w / 2, w: box.h, h: box.w }; }
+  const levels = pptMergeLevels(def.levels, txBody ? pptLstLevels(xChild(txBody, 'lstStyle'), ctx) : null);
+  const base0 = Object.assign({ sz: 18, color: ctx.defaultText || '#000', algn: 'l', bullet: '', b: false, fonts: null }, def.base || {});
+  const maxW = Math.max(4, box.w - ins.l - ins.r);
+  const paras = txBody ? xChildren(txBody, 'p') : [];
+  const lines = []; // { toks:[{text,w,st}], w, h, asc, desc, algn, x0, bullet, bulletX, bulletSt, before, after }
+  const srcParas = overrideText !== undefined ? overrideText.split('\n').map((t, i) => ({ text: t, src: paras[Math.min(i, paras.length - 1)] || null })) : paras;
+  srcParas.forEach((p, pi) => {
+    const pEl = p.text === undefined ? p : p.src; const pPr = pEl ? xChild(pEl, 'pPr') : null;
+    const lv = pPr ? +xAttr(pPr, 'lvl', 0) : 0; const lvDef = Object.assign({}, levels[0] || {}, lv ? (levels[lv] || {}) : {});
+    const base = Object.assign({}, base0, lvDef);
+    const pp = pptParaProps(pPr, { algn: base.algn, bullet: base.bullet, marL: base.marL, indent: base.indent, lnPct: base.lnPct, lnPts: base.lnPts, spcBef: base.spcBef, spcAft: base.spcAft });
+    const inh = { sz: base.sz, color: base.color, b: base.b, i: base.i, fonts: base.fonts };
+    const mkStyle = rp => { const px = Math.max(1, (rp.sz || inh.sz) * scale * 12700 * k); const font = pptFontCss(rp.fonts, px, rp.b, rp.i); const fm = pptFontMetrics(g, font); return { font, px, color: rp.color || base.color, u: !!rp.u, asc: fm.asc, desc: fm.desc }; };
+    const toks = []; // { text, w, st } | { br:true, st } | { empty:true, st }
+    if(p.text !== undefined){ const rr = pEl ? (xChild(pEl, 'r') || xChild(pEl, 'fld')) : null; const st = mkStyle(pptRunProps(rr ? xChild(rr, 'rPr') : (pEl ? xChild(pEl, 'endParaRPr') : null), ctx, inh)); (p.text.match(PPT_TOK) || []).forEach(t => toks.push({ text: t, st })); if(!toks.length) toks.push({ empty: true, st }); }
+    else { for(const c of xChildren(pEl)){ if(c.localName === 'r' || c.localName === 'fld'){ const t = xChild(c, 't'); const txt = t ? t.textContent : ''; const st = mkStyle(pptRunProps(xChild(c, 'rPr'), ctx, inh)); (txt.match(PPT_TOK) || []).forEach(tt => toks.push({ text: tt, st })); } else if(c.localName === 'br'){ toks.push({ br: true, st: mkStyle(pptRunProps(xChild(c, 'rPr'), ctx, inh)) }); } }
+      if(!toks.length) toks.push({ empty: true, st: mkStyle(pptRunProps(xChild(pEl, 'endParaRPr'), ctx, inh)) }); }
+    toks.forEach(t => { if(t.text !== undefined){ g.font = t.st.font; t.w = g.measureText(t.text).width; } });
+    const marL = (pp.marL || 0) * k, indent = (pp.indent || 0) * k;
+    const bulletCh = pp.bullet === '#' ? `${pi + 1}.` : (pp.bullet || '');
+    const textX0 = first => bulletCh ? marL : Math.max(0, marL + (first ? indent : 0));
+    const avail = first => Math.max(4, maxW - textX0(first));
+    const st0 = toks[0].st;
+    const pushLine = (arr, first) => { while(arr.length && /^\s+$/.test(arr[arr.length - 1].text || '')) arr.pop();
+      const w = arr.reduce((a, t) => a + t.w, 0); let asc = 0, desc = 0; arr.forEach(t => { asc = Math.max(asc, t.st.asc); desc = Math.max(desc, t.st.desc); }); if(!arr.length){ asc = st0.asc; desc = st0.desc; }
+      let h = asc + desc; if(pp.lnPts) h = pp.lnPts * 12700 * k; else if(pp.lnPct) h *= pp.lnPct; h *= (1 - lnRed);
+      lines.push({ toks: arr, w, h, asc, desc, algn: pp.algn || 'l', x0: textX0(first), bullet: first ? bulletCh : '', bulletX: marL + indent, bulletSt: (arr[0] || toks[0]).st, before: first ? (pp.spcBef || 0) * 12700 * k : 0, after: 0 }); };
+    let cur = [], curW = 0, first = true;
+    for(const t of toks){
+      if(t.br){ pushLine(cur, first); first = false; cur = []; curW = 0; continue; }
+      if(t.empty) continue;
+      const ws = /^\s+$/.test(t.text); const av = avail(first);
+      if(ws){ if(!cur.length) continue; if(wrap && curW + t.w > av){ pushLine(cur, first); first = false; cur = []; curW = 0; continue; } cur.push(t); curW += t.w; continue; }
+      if(!wrap || curW + t.w <= av || (!cur.length && t.w <= av)){ cur.push(t); curW += t.w; continue; }
+      if(cur.length){ pushLine(cur, first); first = false; cur = []; curW = 0; }
+      if(t.w <= avail(first)){ cur.push(t); curW = t.w; continue; }
+      let piece = '', pw = 0; g.font = t.st.font;
+      for(const ch of t.text){ const cw = g.measureText(ch).width; if(piece && pw + cw > avail(first)){ cur.push({ text: piece, st: t.st, w: pw }); pushLine(cur, first); first = false; cur = []; curW = 0; piece = ''; pw = 0; } piece += ch; pw += cw; }
+      if(piece){ cur.push({ text: piece, st: t.st, w: pw }); curW = pw; }
+    }
+    pushLine(cur, first);
+    lines[lines.length - 1].after = (pp.spcAft || 0) * 12700 * k;
+  });
+  const totalH = lines.reduce((a, l) => a + l.h + l.before + l.after, 0);
+  if(measureOnly){ g.restore(); return totalH + ins.t + ins.b; }
+  let y = box.y + ins.t; if(anchor === 'ctr') y = box.y + (box.h - totalH) / 2; else if(anchor === 'b') y = box.y + box.h - ins.b - totalH;
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  for(const ln of lines){ y += ln.before;
+    const baseline = y + ln.asc + Math.max(0, (ln.h - (ln.asc + ln.desc)) / 2);
+    let x = box.x + ins.l + ln.x0; if(ln.algn === 'ctr') x = box.x + ins.l + ln.x0 + (maxW - ln.x0 - ln.w) / 2; else if(ln.algn === 'r') x = box.x + box.w - ins.r - ln.w;
+    if(ln.bullet && ln.toks.length){ g.font = ln.bulletSt.font; g.fillStyle = ln.bulletSt.color; g.fillText(ln.bullet, box.x + ins.l + Math.max(0, ln.bulletX), baseline); }
+    for(const t of ln.toks){ g.font = t.st.font; g.fillStyle = t.st.color; g.fillText(t.text, x, baseline); if(t.st.u) g.fillRect(x, baseline + t.st.px * 0.08, t.w, Math.max(1, t.st.px * 0.05)); x += t.w; }
+    y += ln.h + ln.after; }
+  g.restore();
+  return totalH + ins.t + ins.b;
+}
+// ---- 도형 기하 ----
+function pptPrstPath(g, b, prst, adj){
+  const r = Math.min(b.w, b.h) * (adj !== null && adj !== undefined ? adj : 0.16667);
+  g.beginPath();
+  if(prst === 'ellipse' || prst === 'teardrop'){ g.ellipse(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, b.h / 2, 0, 0, Math.PI * 2); }
+  else if(prst === 'roundRect' || prst === 'round1Rect' || prst === 'snipRoundRect'){ const rr = Math.min(r, b.w / 2, b.h / 2); g.moveTo(b.x + rr, b.y); g.arcTo(b.x + b.w, b.y, b.x + b.w, b.y + b.h, rr); g.arcTo(b.x + b.w, b.y + b.h, b.x, b.y + b.h, rr); g.arcTo(b.x, b.y + b.h, b.x, b.y, rr); g.arcTo(b.x, b.y, b.x + b.w, b.y, rr); g.closePath(); }
+  else if(prst === 'round2SameRect'){ const rr = Math.min(r, b.w / 2, b.h / 2); g.moveTo(b.x + rr, b.y); g.arcTo(b.x + b.w, b.y, b.x + b.w, b.y + b.h, rr); g.lineTo(b.x + b.w, b.y + b.h); g.lineTo(b.x, b.y + b.h); g.lineTo(b.x, b.y + rr); g.arcTo(b.x, b.y, b.x + b.w, b.y, rr); g.closePath(); }
+  else if(prst === 'round2DiagRect'){ const rr = Math.min(r, b.w / 2, b.h / 2); g.moveTo(b.x + rr, b.y); g.lineTo(b.x + b.w, b.y); g.lineTo(b.x + b.w, b.y + b.h - rr); g.arcTo(b.x + b.w, b.y + b.h, b.x, b.y + b.h, rr); g.lineTo(b.x, b.y + b.h); g.lineTo(b.x, b.y + rr); g.arcTo(b.x, b.y, b.x + b.w, b.y, rr); g.closePath(); }
+  else if(prst === 'rtTriangle'){ g.moveTo(b.x, b.y); g.lineTo(b.x, b.y + b.h); g.lineTo(b.x + b.w, b.y + b.h); g.closePath(); }
+  else if(prst === 'triangle'){ g.moveTo(b.x + b.w / 2, b.y); g.lineTo(b.x + b.w, b.y + b.h); g.lineTo(b.x, b.y + b.h); g.closePath(); }
+  else if(prst === 'diamond'){ g.moveTo(b.x + b.w / 2, b.y); g.lineTo(b.x + b.w, b.y + b.h / 2); g.lineTo(b.x + b.w / 2, b.y + b.h); g.lineTo(b.x, b.y + b.h / 2); g.closePath(); }
+  else if(prst === 'pentagon'){ for(let i = 0; i < 5; i++){ const a = -Math.PI / 2 + i * 2 * Math.PI / 5; const x = b.x + b.w / 2 + Math.cos(a) * b.w / 2, y = b.y + b.h / 2 + Math.sin(a) * b.h / 2; if(i) g.lineTo(x, y); else g.moveTo(x, y); } g.closePath(); }
+  else if(prst === 'hexagon'){ const d = Math.min(b.w * 0.25, b.h * 0.5); g.moveTo(b.x + d, b.y); g.lineTo(b.x + b.w - d, b.y); g.lineTo(b.x + b.w, b.y + b.h / 2); g.lineTo(b.x + b.w - d, b.y + b.h); g.lineTo(b.x + d, b.y + b.h); g.lineTo(b.x, b.y + b.h / 2); g.closePath(); }
+  else if(prst === 'homePlate'){ const d = Math.min(b.h * 0.5, b.w); g.moveTo(b.x, b.y); g.lineTo(b.x + b.w - d, b.y); g.lineTo(b.x + b.w, b.y + b.h / 2); g.lineTo(b.x + b.w - d, b.y + b.h); g.lineTo(b.x, b.y + b.h); g.closePath(); }
+  else if(prst === 'chevron'){ const d = Math.min(b.h * 0.5, b.w / 2); g.moveTo(b.x, b.y); g.lineTo(b.x + b.w - d, b.y); g.lineTo(b.x + b.w, b.y + b.h / 2); g.lineTo(b.x + b.w - d, b.y + b.h); g.lineTo(b.x, b.y + b.h); g.lineTo(b.x + d, b.y + b.h / 2); g.closePath(); }
+  else if(prst === 'rightArrow'){ const hw = b.h * 0.25, hl = Math.min(b.w * 0.5, b.h); g.moveTo(b.x, b.y + hw); g.lineTo(b.x + b.w - hl, b.y + hw); g.lineTo(b.x + b.w - hl, b.y); g.lineTo(b.x + b.w, b.y + b.h / 2); g.lineTo(b.x + b.w - hl, b.y + b.h); g.lineTo(b.x + b.w - hl, b.y + b.h - hw); g.lineTo(b.x, b.y + b.h - hw); g.closePath(); }
+  else if(prst === 'leftArrow'){ const hw = b.h * 0.25, hl = Math.min(b.w * 0.5, b.h); g.moveTo(b.x + b.w, b.y + hw); g.lineTo(b.x + hl, b.y + hw); g.lineTo(b.x + hl, b.y); g.lineTo(b.x, b.y + b.h / 2); g.lineTo(b.x + hl, b.y + b.h); g.lineTo(b.x + hl, b.y + b.h - hw); g.lineTo(b.x + b.w, b.y + b.h - hw); g.closePath(); }
+  else if(prst === 'downArrow'){ const hw = b.w * 0.25, hl = Math.min(b.h * 0.5, b.w); g.moveTo(b.x + hw, b.y); g.lineTo(b.x + hw, b.y + b.h - hl); g.lineTo(b.x, b.y + b.h - hl); g.lineTo(b.x + b.w / 2, b.y + b.h); g.lineTo(b.x + b.w, b.y + b.h - hl); g.lineTo(b.x + b.w - hw, b.y + b.h - hl); g.lineTo(b.x + b.w - hw, b.y); g.closePath(); }
+  else if(prst === 'upArrow'){ const hw = b.w * 0.25, hl = Math.min(b.h * 0.5, b.w); g.moveTo(b.x + hw, b.y + b.h); g.lineTo(b.x + hw, b.y + hl); g.lineTo(b.x, b.y + hl); g.lineTo(b.x + b.w / 2, b.y); g.lineTo(b.x + b.w, b.y + hl); g.lineTo(b.x + b.w - hw, b.y + hl); g.lineTo(b.x + b.w - hw, b.y + b.h); g.closePath(); }
+  else { g.rect(b.x, b.y, b.w, b.h); }
+}
+// custGeom: pathLst의 moveTo/lnTo/cubicBezTo/quadBezTo/close (arcTo는 직선으로)
+function pptCustPath(g, box, cust){
+  const pl = xChild(cust, 'pathLst'); if(!pl) return false; g.beginPath(); let any = false;
+  for(const p of xChildren(pl, 'path')){ const pw = +xAttr(p, 'w', 0) || box.w, ph = +xAttr(p, 'h', 0) || box.h; const sx = box.w / pw, sy = box.h / ph;
+    const P = pt => { const x = parseFloat(xAttr(pt, 'x', '0')), y = parseFloat(xAttr(pt, 'y', '0')); return { x: box.x + (isNaN(x) ? 0 : x) * sx, y: box.y + (isNaN(y) ? 0 : y) * sy }; };
+    let last = null;
+    for(const c of xChildren(p)){ const n = c.localName; const pts = xChildren(c, 'pt').map(P);
+      if(n === 'moveTo' && pts[0]){ g.moveTo(pts[0].x, pts[0].y); last = pts[0]; } else if(n === 'lnTo' && pts[0]){ g.lineTo(pts[0].x, pts[0].y); last = pts[0]; }
+      else if(n === 'cubicBezTo' && pts.length >= 3){ g.bezierCurveTo(pts[0].x, pts[0].y, pts[1].x, pts[1].y, pts[2].x, pts[2].y); last = pts[2]; }
+      else if(n === 'quadBezTo' && pts.length >= 2){ g.quadraticCurveTo(pts[0].x, pts[0].y, pts[1].x, pts[1].y); last = pts[1]; }
+      else if(n === 'arcTo' && last){ const wr = parseFloat(xAttr(c, 'wR', '0')) * sx, hr = parseFloat(xAttr(c, 'hR', '0')) * sy; const st = parseFloat(xAttr(c, 'stAng', '0')) / 60000 * Math.PI / 180, sw = parseFloat(xAttr(c, 'swAng', '0')) / 60000 * Math.PI / 180; if(wr > 0 && hr > 0){ const cx = last.x - wr * Math.cos(st), cy = last.y - hr * Math.sin(st); try{ g.ellipse(cx, cy, wr, hr, 0, st, st + sw, sw < 0); }catch(e){} last = { x: cx + wr * Math.cos(st + sw), y: cy + hr * Math.sin(st + sw) }; } }
+      else if(n === 'close') g.closePath(); any = true; } }
+  return any;
+}
+function pptShapePath(g, box, spPr){ const pg = xChild(spPr, 'prstGeom'); if(pg){ const prst = xAttr(pg, 'prst', 'rect'); const gd = xFind(pg, 'avLst/gd'); const f = gd ? xAttr(gd, 'fmla', '') : ''; const adj = /^val \d+/.test(f) ? +f.slice(4) / 100000 : null; pptPrstPath(g, box, prst, prst === 'roundRect' ? adj : null); return prst; } const cg = xChild(spPr, 'custGeom'); if(cg && pptCustPath(g, box, cg)) return 'custom'; g.beginPath(); g.rect(box.x, box.y, box.w, box.h); return 'rect'; }
+// 선 끝 화살촉(headEnd/tailEnd): (x1,y1)→(x2,y2) 방향으로 (x2,y2)에 그림
+function pptArrow(g, ln, which, x1, y1, x2, y2, lw){ const e = ln && xChild(ln, which); const type = e ? xAttr(e, 'type', 'none') : 'none'; if(!e || type === 'none') return; const sz = { sm: 2, med: 3, lg: 5 }; const L = Math.max(4, lw * (sz[xAttr(e, 'len', 'med')] || 3)), Wd = Math.max(3, lw * (sz[xAttr(e, 'w', 'med')] || 3)); const a = Math.atan2(y2 - y1, x2 - x1); g.save(); g.translate(x2, y2); g.rotate(a); g.fillStyle = g.strokeStyle; g.beginPath();
+  if(type === 'oval'){ g.ellipse(-L / 2, 0, L / 2, Wd / 2, 0, 0, Math.PI * 2); g.fill(); }
+  else if(type === 'diamond'){ g.moveTo(0, 0); g.lineTo(-L / 2, -Wd / 2); g.lineTo(-L, 0); g.lineTo(-L / 2, Wd / 2); g.closePath(); g.fill(); }
+  else if(type === 'arrow'){ g.lineWidth = lw; g.moveTo(-L, -Wd / 2); g.lineTo(0, 0); g.lineTo(-L, Wd / 2); g.stroke(); }
+  else { g.moveTo(0, 0); g.lineTo(-L, -Wd / 2); if(type === 'stealth') g.lineTo(-L * 0.7, 0); g.lineTo(-L, Wd / 2); g.closePath(); g.fill(); }
+  g.restore(); }
+function pptDash(ln){ const d = ln && xChild(ln, 'prstDash'); if(!d) return null; const v = xAttr(d, 'val', 'solid'); if(v === 'solid') return null; if(/dot/i.test(v)) return [1, 2]; if(/lgDash/.test(v)) return [8, 3]; if(/dashDot/.test(v)) return [4, 2, 1, 2]; return [4, 3]; }
+// ---- 자리표시자 상속(레이아웃→마스터) ----
+function pptPhMap(doc){ const m = { byIdx: {}, byType: {} }; const tree = xFind(doc.documentElement, 'cSld/spTree'); if(!tree) return m;
+  const walk = t => { for(const sp of xChildren(t)){ if(sp.localName === 'grpSp'){ walk(sp); continue; } const ph = xFind(sp, sp.localName === 'pic' ? 'nvPicPr/nvPr/ph' : 'nvSpPr/nvPr/ph'); if(!ph) continue; const idx = xAttr(ph, 'idx', null), type = xAttr(ph, 'type', 'body'); if(idx !== null && !m.byIdx[idx]) m.byIdx[idx] = sp; if(!m.byType[type]) m.byType[type] = sp; } }; walk(tree); return m; }
+function pptPhLookup(ph, maps){ const idx = xAttr(ph, 'idx', null); const type = xAttr(ph, 'type', null) || 'body'; const alt = { ctrTitle: 'title', title: 'ctrTitle', subTitle: 'body', obj: 'body', body: 'obj', pic: 'body', tbl: 'body', chart: 'body', dgm: 'body' };
+  for(const m of maps){ if(!m) continue; if(idx !== null && m.byIdx[idx]) return m.byIdx[idx]; if(m.byType[type]) return m.byType[type]; if(alt[type] && m.byType[alt[type]]) return m.byType[alt[type]]; } return null; }
+// ---- 트리 그리기 ----
+async function pptDrawTree(ctx, tree, T, level, part){
+  if(!tree) return;
+  for(const el of xChildren(tree)){
+    const nm = el.localName;
+    if(nm === 'grpSp'){ const gx = pptXfrm(xChild(el, 'grpSpPr')); await pptDrawTree(ctx, el, tGroup(T, gx), level, part); continue; }
+    if(nm === 'sp'){ await pptDrawSp(ctx, el, T, level, part); continue; }
+    if(nm === 'pic'){ await pptDrawPic(ctx, el, T, level, part); continue; }
+    if(nm === 'cxnSp'){ pptDrawCxn(ctx, el, T); continue; }
+    if(nm === 'graphicFrame'){ await pptDrawFrame(ctx, el, T, level, part); continue; }
+    if(nm === 'AlternateContent'){ const ch = xChild(el, 'Choice'), fb = xChild(el, 'Fallback'); if(ch) await pptDrawTree(ctx, ch, T, level, part); if(fb){ // 정규식 번호와 맞추려고 Fallback 안의 도형 수만큼 번호를 건너뜀
+        if(level === 'slide'){ ctx.spIdx += fb.getElementsByTagNameNS(PPT_NS.p, 'sp').length; ctx.picIdx += fb.getElementsByTagNameNS(PPT_NS.p, 'pic').length; ctx.frameIdx += fb.getElementsByTagNameNS(PPT_NS.p, 'graphicFrame').length; } } continue; }
+  }
+}
+function pptRotate(g, xf, box){ if(xf.rot && Math.abs(xf.rot) > 0.01){ g.translate(box.x + box.w / 2, box.y + box.h / 2); g.rotate(xf.rot * Math.PI / 180); g.translate(-(box.x + box.w / 2), -(box.y + box.h / 2)); } if(xf.flipH || xf.flipV){ g.translate(box.x + box.w / 2, box.y + box.h / 2); g.scale(xf.flipH ? -1 : 1, xf.flipV ? -1 : 1); g.translate(-(box.x + box.w / 2), -(box.y + box.h / 2)); } }
+async function pptDrawSp(ctx, sp, T, level, part){
+  const g = ctx.g, k = ctx.k;
+  const ph = xFind(sp, 'nvSpPr/nvPr/ph');
+  if(level !== 'slide' && ph) return; // 마스터·레이아웃의 자리표시자는 슬라이드에 그리지 않음
+  let idx = -1; if(level === 'slide'){ ctx.spIdx++; idx = ctx.spIdx; }
+  if(xAttr(xFind(sp, 'nvSpPr/cNvPr'), 'hidden', '0') === '1') return;
+  const spPr = xChild(sp, 'spPr'); let xf = pptXfrm(spPr); let inherited = null;
+  const phL = ph ? pptPhLookup(ph, [ctx.layoutPh]) : null, phM = ph ? pptPhLookup(ph, [ctx.masterPh]) : null; const phSrc = phL || phM;
+  if(!xf && ph){ if(phL) xf = pptXfrm(xChild(phL, 'spPr')); if(xf) inherited = phL; else if(phM){ xf = pptXfrm(xChild(phM, 'spPr')); if(xf) inherited = phM; } }
+  const op = ctx.op; const over = op && op.spBox && level === 'slide' ? op.spBox[idx] : null;
+  if(over && T === ctx.T0) xf = Object.assign({}, xf || {}, { x: over.x, y: over.y, cx: over.cx, cy: over.cy });
+  if(!xf) return;
+  const b0 = tBox(T, xf); const box = { x: b0.x * k, y: b0.y * k, w: b0.cx * k, h: b0.cy * k };
+  if(level === 'slide') ctx.boxes.sp[idx] = { x: b0.x, y: b0.y, cx: b0.cx, cy: b0.cy, inherited: !!inherited };
+  const style = xChild(sp, 'style');
+  const srcPr = (spPr && (xChild(spPr, 'solidFill') || xChild(spPr, 'gradFill') || xChild(spPr, 'noFill') || xChild(spPr, 'pattFill') || xChild(spPr, 'blipFill'))) ? spPr : (inherited ? xChild(inherited, 'spPr') : spPr);
+  g.save();
+  pptRotate(g, xf, box);
+  const pg = xChild(spPr, 'prstGeom'); const prst = pg ? xAttr(pg, 'prst', 'rect') : (xChild(spPr, 'custGeom') ? 'custom' : (inherited ? xAttr(xFind(inherited, 'spPr/prstGeom'), 'prst', 'rect') : 'rect'));
+  const geomPr = (pg || xChild(spPr, 'custGeom')) ? spPr : (inherited ? xChild(inherited, 'spPr') : spPr);
+  if(prst === 'line' || prst === 'straightConnector1' || prst === 'bentConnector3'){
+    const ln = xChild(spPr, 'ln'); let lc = ln ? pptFillColor(ln, ctx) : undefined; if(lc === undefined && style){ const lr = xChild(style, 'lnRef'); lc = lr && +xAttr(lr, 'idx', '0') > 0 ? pptColorOf(lr.firstElementChild, ctx) : (lr ? null : '#000'); } if(lc === undefined) lc = '#000';
+    if(lc){ g.strokeStyle = lc; g.lineWidth = Math.max(0.5, (+xAttr(ln, 'w', 9525)) * k); const d = pptDash(ln); if(d) g.setLineDash(d.map(v => v * g.lineWidth)); g.beginPath(); g.moveTo(box.x, box.y); const bent = prst === 'bentConnector3'; if(bent){ g.lineTo(box.x + box.w / 2, box.y); g.lineTo(box.x + box.w / 2, box.y + box.h); } g.lineTo(box.x + box.w, box.y + box.h); g.stroke(); g.setLineDash([]);
+      pptArrow(g, ln, 'tailEnd', bent ? box.x + box.w / 2 : box.x, bent ? box.y + box.h : box.y, box.x + box.w, box.y + box.h, g.lineWidth); pptArrow(g, ln, 'headEnd', bent ? box.x + box.w / 2 : box.x + box.w, bent ? box.y : box.y + box.h, box.x, box.y, g.lineWidth); }
+  } else {
+    let fill = pptFillOf(srcPr, ctx, g, box);
+    if(fill === undefined && style){ const fr = xChild(style, 'fillRef'); if(fr && +xAttr(fr, 'idx', '0') > 0) fill = pptColorOf(fr.firstElementChild, ctx); }
+    const blip = xChild(srcPr, 'blipFill');
+    pptShapePath(g, box, geomPr);
+    if(blip){ const rid = xAttr(xChild(blip, 'blip'), 'r:embed', null); const rel = rid && part.rels[rid]; const img = rel ? await pptImage(ctx.zip, part.resolve(rel.target), ctx.tier) : null; g.save(); g.clip(); if(img){ try{ g.drawImage(img, box.x, box.y, box.w, box.h); }catch(e){} } else { g.fillStyle = '#ddd'; g.fillRect(box.x, box.y, box.w, box.h); } g.restore(); }
+    else if(fill){ g.fillStyle = fill; g.fill(); }
+    const ln = xChild(spPr, 'ln') || (inherited ? xFind(inherited, 'spPr/ln') : null); let lc = ln ? pptFillColor(ln, ctx) : undefined;
+    if(lc === undefined && style){ const lr = xChild(style, 'lnRef'); if(lr && +xAttr(lr, 'idx', '0') > 0) lc = pptColorOf(lr.firstElementChild, ctx); }
+    if(lc){ g.strokeStyle = lc; g.lineWidth = Math.max(0.5, (+xAttr(ln, 'w', 9525)) * k); const d = pptDash(ln); if(d) g.setLineDash(d.map(v => v * g.lineWidth)); g.stroke(); g.setLineDash([]); }
+  }
+  // 글
+  const txBody = xChild(sp, 'txBody');
+  let overrideText; if(level === 'slide' && op && op.texts && op.texts[idx] !== undefined) overrideText = op.texts[idx];
+  if(txBody || overrideText !== undefined){
+    const def = { levels: null, base: {}, anchor: undefined };
+    if(ph){ const type = xAttr(ph, 'type', 'body'); const ms = ctx.masterTx; const L = [];
+      // 글 기본값 순서: 마스터 txStyles → 마스터 자리표시자 lstStyle → 레이아웃 자리표시자 lstStyle → (슬라이드 txBody lstStyle은 pptDrawTextBody에서)
+      if(ms){ const st = /title/i.test(type) ? ms.title : (type === 'body' || type === 'subTitle' || type === 'obj' ? ms.body : ms.other); if(st) L.push(st); }
+      if(phM){ L.push(pptLstLevels(xFind(phM, 'txBody/lstStyle'), ctx)); const bp = xFind(phM, 'txBody/bodyPr'); if(bp) def.anchor = xAttr(bp, 'anchor', null) || undefined; }
+      if(phL && phL !== phM){ L.push(pptLstLevels(xFind(phL, 'txBody/lstStyle'), ctx)); const bp = xFind(phL, 'txBody/bodyPr'); if(bp && xAttr(bp, 'anchor', null)) def.anchor = xAttr(bp, 'anchor', null); }
+      def.levels = pptMergeLevels.apply(null, L); }
+    else { if(ctx.masterTx && ctx.masterTx.other) def.levels = ctx.masterTx.other; if(style){ const fr = xChild(style, 'fontRef'); if(fr && fr.firstElementChild){ const c = pptColorOf(fr.firstElementChild, ctx); if(c) def.base.color = c; } } }
+    pptDrawTextBody(g, txBody, box, ctx, def, overrideText);
+    if(overrideText !== undefined && !ctx.plain){ g.strokeStyle = '#B3261E'; g.lineWidth = 1.5; g.setLineDash([4, 3]); g.strokeRect(box.x, box.y, box.w, box.h); g.setLineDash([]); }
+  }
+  g.restore();
+}
+async function pptDrawPic(ctx, pic, T, level, part){
+  const g = ctx.g, k = ctx.k; let idx = -1; if(level === 'slide'){ ctx.picIdx++; idx = ctx.picIdx; }
+  if(xAttr(xFind(pic, 'nvPicPr/cNvPr'), 'hidden', '0') === '1') return;
+  const op = ctx.op;
+  if(level === 'slide' && op && ctx.hidePics.has(idx)) return;
+  let xf = pptXfrm(xChild(pic, 'spPr'));
+  if(!xf){ const ph = xFind(pic, 'nvPicPr/nvPr/ph'); if(ph){ const a = pptPhLookup(ph, [ctx.layoutPh]); xf = a ? pptXfrm(xChild(a, 'spPr')) : null; if(!xf){ const b = pptPhLookup(ph, [ctx.masterPh]); if(b) xf = pptXfrm(xChild(b, 'spPr')); } } }
+  if(!xf) return;
+  const over = op && op.picBox && level === 'slide' ? op.picBox[idx] : null; if(over && T === ctx.T0) xf = Object.assign({}, xf, { x: over.x, y: over.y, cx: over.cx, cy: over.cy });
+  const b0 = tBox(T, xf); let box = { x: b0.x * k, y: b0.y * k, w: b0.cx * k, h: b0.cy * k };
+  if(level === 'slide') ctx.boxes.pic[idx] = { x: b0.x, y: b0.y, cx: b0.cx, cy: b0.cy };
+  const bf = xChild(pic, 'blipFill'); const blip = bf && xChild(bf, 'blip'); const rid = blip ? xAttr(blip, 'r:embed', null) : null; const rel = rid && part.rels[rid];
+  let img = rel ? await pptImage(ctx.zip, part.resolve(rel.target), ctx.tier) : null;
+  let crop = null; const sr = bf && xChild(bf, 'srcRect'); if(sr){ crop = { l: +xAttr(sr, 'l', 0) / 100000, t: +xAttr(sr, 't', 0) / 100000, r: +xAttr(sr, 'r', 0) / 100000, b: +xAttr(sr, 'b', 0) / 100000 }; }
+  let alpha = 1; const am = blip && xChild(blip, 'alphaModFix'); if(am) alpha = +xAttr(am, 'amt', 100000) / 100000;
+  let replaced = false;
+  if(level === 'slide' && op && op.replace && op.replace[idx]){ const rs = pptSrcUrl(op.replace[idx]); if(rs){ const im = await pptImgEl(rs); if(im){ img = im; replaced = true; alpha = 1; const src = op.replace[idx]; if(src.startsWith('data:')) crop = coverCrop(box.w, box.h, pptImgW(im), pptImgH(im)); else if(src !== 'card:'){ const fb = fitBox(box.x, box.y, box.w, box.h, pptImgW(im), pptImgH(im)); box = { x: fb.x, y: fb.y, w: fb.w, h: fb.h }; crop = null; } else crop = null; } } }
+  g.save();
+  pptRotate(g, xf, box);
+  g.globalAlpha = alpha;
+  // 둥근 그림 등: spPr의 기하로 자름
+  const spPr = xChild(pic, 'spPr'); const pg = spPr && xChild(spPr, 'prstGeom'); const prst = pg ? xAttr(pg, 'prst', 'rect') : 'rect';
+  if(prst !== 'rect' || xChild(spPr, 'custGeom')){ pptShapePath(g, box, spPr); g.clip(); }
+  if(img){ const iw = pptImgW(img), ih = pptImgH(img); try{ if(crop){ const sx = iw * crop.l, sy = ih * crop.t, sw = iw * (1 - crop.l - crop.r), sh = ih * (1 - crop.t - crop.b); if(sw > 0 && sh > 0) g.drawImage(img, sx, sy, sw, sh, box.x, box.y, box.w, box.h); else g.drawImage(img, box.x, box.y, box.w, box.h); } else g.drawImage(img, box.x, box.y, box.w, box.h); }catch(e){} }
+  else { g.fillStyle = '#E6E8EB'; g.fillRect(box.x, box.y, box.w, box.h); g.strokeStyle = '#B5BAC2'; g.lineWidth = 1; g.strokeRect(box.x, box.y, box.w, box.h); if(box.w > 40 && box.h > 14){ g.fillStyle = '#7A8290'; g.font = `${Math.max(9, Math.min(14, box.h / 3))}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(rel && /\.(emf|wmf)$/i.test(rel.target) ? '그림(EMF — 미리보기 불가)' : '그림', box.x + box.w / 2, box.y + box.h / 2); g.textAlign = 'left'; } }
+  g.globalAlpha = 1;
+  // 그림 테두리(a:ln)
+  const ln = spPr && xChild(spPr, 'ln'); const lc = ln ? pptFillColor(ln, ctx) : undefined; if(lc){ g.strokeStyle = lc; g.lineWidth = Math.max(0.5, (+xAttr(ln, 'w', 9525)) * k); g.strokeRect(box.x, box.y, box.w, box.h); }
+  if(replaced && !ctx.plain){ g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.setLineDash([5, 3]); g.strokeRect(box.x, box.y, box.w, box.h); g.setLineDash([]); }
+  g.restore();
+}
+function pptDrawCxn(ctx, el, T){ const g = ctx.g, k = ctx.k; const spPr = xChild(el, 'spPr'); const xf = pptXfrm(spPr); if(!xf) return; const b0 = tBox(T, xf); const ln = xChild(spPr, 'ln'); let lc = ln ? pptFillColor(ln, ctx) : undefined; if(lc === undefined){ const st = xChild(el, 'style'); const lr = st && xChild(st, 'lnRef'); lc = lr ? pptColorOf(lr.firstElementChild, ctx) : '#666'; } if(!lc) return;
+  const prst = xAttr(xChild(spPr, 'prstGeom'), 'prst', 'straightConnector1');
+  g.save(); g.strokeStyle = lc; g.lineWidth = Math.max(0.5, (+xAttr(ln, 'w', 9525)) * k); const d = pptDash(ln); if(d) g.setLineDash(d.map(v => v * g.lineWidth));
+  const box = { x: b0.x * k, y: b0.y * k, w: b0.cx * k, h: b0.cy * k }; pptRotate(g, xf, box);
+  const bent = /^bentConnector/.test(prst); g.beginPath(); g.moveTo(box.x, box.y); if(bent){ g.lineTo(box.x + box.w / 2, box.y); g.lineTo(box.x + box.w / 2, box.y + box.h); } g.lineTo(box.x + box.w, box.y + box.h); g.stroke(); g.setLineDash([]);
+  pptArrow(g, ln, 'tailEnd', bent ? box.x + box.w / 2 : box.x, bent ? box.y + box.h : box.y, box.x + box.w, box.y + box.h, g.lineWidth); pptArrow(g, ln, 'headEnd', bent ? box.x + box.w / 2 : box.x + box.w, bent ? box.y : box.y + box.h, box.x, box.y, g.lineWidth); g.restore(); }
+async function pptDrawFrame(ctx, fr, T, level, part){
+  const g = ctx.g, k = ctx.k;
+  const xfEl = xChild(fr, 'xfrm'); const off = xfEl && xChild(xfEl, 'off'), ext = xfEl && xChild(xfEl, 'ext');
+  if(level === 'slide') ctx.frameIdx++;
+  if(!off || !ext) return;
+  const b0 = tBox(T, { x: +xAttr(off, 'x', 0), y: +xAttr(off, 'y', 0), cx: +xAttr(ext, 'cx', 0), cy: +xAttr(ext, 'cy', 0) }); const box = { x: b0.x * k, y: b0.y * k, w: b0.cx * k, h: b0.cy * k };
+  const gd = xFind(fr, 'graphic/graphicData'); const tbl = gd && xChild(gd, 'tbl');
+  if(tbl){ await pptDrawTbl(ctx, tbl, box, level === 'slide' ? ctx.frameIdx : -1); return; }
+  const uri = xAttr(gd, 'uri', ''); g.fillStyle = 'rgba(230,232,235,.9)'; g.fillRect(box.x, box.y, box.w, box.h); g.strokeStyle = '#B5BAC2'; g.strokeRect(box.x, box.y, box.w, box.h); g.fillStyle = '#7A8290'; g.font = '12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(/chart/.test(uri) ? '차트(미리보기 불가)' : (/diagram/.test(uri) ? '스마트아트(미리보기 불가)' : (/ole/i.test(uri) ? '개체(미리보기 불가)' : '개체')), box.x + box.w / 2, box.y + box.h / 2); g.textAlign = 'left';
+}
+// 표 스타일(ppt/tableStyles.xml) — styleId → 요소
+async function pptTableStyles(zip){ if(pptPartCache['tblStyles']) return pptPartCache['tblStyles']; const map = {}; try{ const part = await pptPart(zip, 'ppt/tableStyles.xml'); if(part) xChildren(part.doc.documentElement, 'tblStyle').forEach(st => { map[xAttr(st, 'styleId', '')] = st; }); }catch(e){} pptPartCache['tblStyles'] = map; return map; }
+async function pptDrawTbl(ctx, tbl, box, fi){
+  const g = ctx.g, k = ctx.k; const cols = xChildren(xChild(tbl, 'tblGrid'), 'gridCol').map(c => +xAttr(c, 'w', 0)); const rows = xChildren(tbl, 'tr');
+  const colSum = cols.reduce((a, b) => a + b, 0) || 1;
+  const sx = box.w / (colSum * k); const colW = cols.map(c => c * k * sx);
+  // 표 스타일
+  const tblPr = xChild(tbl, 'tblPr'); const sid = tblPr && xChild(tblPr, 'tableStyleId') ? xChild(tblPr, 'tableStyleId').textContent.trim() : ''; const styles = await pptTableStyles(ctx.zip); const st = sid ? styles[sid] : null;
+  const F = { firstRow: xAttr(tblPr, 'firstRow', '0') === '1', lastRow: xAttr(tblPr, 'lastRow', '0') === '1', firstCol: xAttr(tblPr, 'firstCol', '0') === '1', lastCol: xAttr(tblPr, 'lastCol', '0') === '1', bandRow: xAttr(tblPr, 'bandRow', '0') === '1', bandCol: xAttr(tblPr, 'bandCol', '0') === '1' };
+  const partStyle = nm => { const p = st && xChild(st, nm); if(!p) return null; const tcs = xChild(p, 'tcStyle'), tx = xChild(p, 'tcTxStyle'); const o = { fill: undefined, color: null, b: null, bdr: {} };
+    if(tcs){ const f = xChild(tcs, 'fill'); if(f) o.fill = pptFillColor(f, ctx); const fr = xChild(tcs, 'fillRef'); if(fr && o.fill === undefined) o.fill = pptColorOf(fr.firstElementChild, ctx); const bd = xChild(tcs, 'tcBdr'); if(bd) for(const e of xChildren(bd)){ const ln = xChild(e, 'ln'); if(ln) o.bdr[e.localName] = ln; } }
+    if(tx){ for(const c of xChildren(tx)){ if(c.localName !== 'fontRef'){ const col = pptColorOf(c, ctx); if(col) o.color = col; } } const b = xAttr(tx, 'b', null); if(b !== null) o.b = b === 'on'; }
+    return o; };
+  const PS = { whole: partStyle('wholeTbl'), band1H: partStyle('band1H'), band2H: partStyle('band2H'), band1V: partStyle('band1V'), band2V: partStyle('band2V'), firstCol: partStyle('firstCol'), lastCol: partStyle('lastCol'), lastRow: partStyle('lastRow'), firstRow: partStyle('firstRow') };
+  let grid = null; if(fi >= 0 && ctx.op && ctx.s && !ctx.plain){ try{ const tables = pptSlideTables(ctx.s.__xml); const frm = tables.find(t => t.fi === fi); const kind = frm ? pptTableKind(frm) : ''; if(kind && pptFillOn(ctx.op, fi)){ const D = window.__pptD || (window.__pptD = pptProfitData()); if(D) grid = pptFillGrid(kind, frm, D); } }catch(e){} }
+  const nR = rows.length;
+  const cellStyle = (ri, ci, nC) => { const parts = [PS.whole];
+    if(F.bandRow){ const bi = ri - (F.firstRow ? 1 : 0); if(bi >= 0 && !(F.lastRow && ri === nR - 1)) parts.push(bi % 2 === 0 ? PS.band1H : PS.band2H); }
+    if(F.bandCol){ const bi = ci - (F.firstCol ? 1 : 0); if(bi >= 0) parts.push(bi % 2 === 0 ? PS.band1V : PS.band2V); }
+    if(F.firstCol && ci === 0) parts.push(PS.firstCol); if(F.lastCol && ci === nC - 1) parts.push(PS.lastCol); if(F.lastRow && ri === nR - 1) parts.push(PS.lastRow); if(F.firstRow && ri === 0) parts.push(PS.firstRow);
+    let fill, color = null, bold = null; const bdr = {}; parts.forEach(p => { if(!p) return; if(p.fill !== undefined) fill = p.fill; if(p.color) color = p.color; if(p.b !== null) bold = p.b; Object.assign(bdr, p.bdr); }); return { fill, color, bold, bdr }; };
+  const cellText = (tc, ri, ci) => { const txBody = xChild(tc, 'txBody'); if(!txBody) return null; const tcPr = xChild(tc, 'tcPr'); const cs = cellStyle(ri, ci, xChildren(tc.parentNode, 'tc').length); const ov = grid && grid[ri] && grid[ri][ci] !== null && grid[ri][ci] !== undefined ? String(grid[ri][ci]) : undefined;
+    const ins = { l: +xAttr(tcPr, 'marL', 91440) * k, r: +xAttr(tcPr, 'marR', 91440) * k, t: +xAttr(tcPr, 'marT', 45720) * k, b: +xAttr(tcPr, 'marB', 45720) * k };
+    const base = { sz: 18 }; if(cs.color) base.color = cs.color; if(cs.bold !== null) base.b = cs.bold; if(ov !== undefined) base.color = '#B3261E';
+    return { txBody, ov, def: { base, anchor: xAttr(tcPr, 'anchor', 't'), ins, levels: ctx.masterTx ? ctx.masterTx.other : null } }; };
+  // 1) 행 높이: 지정 h와 글 높이 중 큰 쪽(PowerPoint처럼 글이 많으면 행이 늘어남)
+  const rowH = rows.map(r => (+xAttr(r, 'h', 0)) * k);
+  rows.forEach((tr, ri) => { const cells = xChildren(tr, 'tc'); cells.forEach((tc, ci) => { if(xAttr(tc, 'hMerge', '0') === '1' || xAttr(tc, 'vMerge', '0') === '1' || +xAttr(tc, 'rowSpan', 1) > 1) return; const span = +xAttr(tc, 'gridSpan', 1); let w = 0; for(let q = 0; q < span; q++) w += colW[ci + q] || 0; const ct = cellText(tc, ri, ci); if(!ct) return; const need = pptDrawTextBody(g, ct.txBody, { x: 0, y: 0, w, h: 10 }, ctx, ct.def, ct.ov, true); if(need > rowH[ri]) rowH[ri] = need; }); });
+  // 2) 그리기
+  let y = box.y;
+  rows.forEach((tr, ri) => { const h = rowH[ri]; let x = box.x; const cells = xChildren(tr, 'tc'); const nC = cells.length;
+    cells.forEach((tc, ci) => { const span = +xAttr(tc, 'gridSpan', 1); let w = 0; for(let q = 0; q < span; q++) w += colW[ci + q] || 0; const rspan = +xAttr(tc, 'rowSpan', 1); let hh = h; for(let q = 1; q < rspan; q++) hh += rowH[ri + q] || 0;
+      const adv = colW[ci] || 0;
+      if(xAttr(tc, 'hMerge', '0') === '1' || xAttr(tc, 'vMerge', '0') === '1'){ x += adv; return; }
+      const cs = cellStyle(ri, ci, nC); let fill = cs.fill; const tcPr = xChild(tc, 'tcPr'); const own = tcPr ? pptFillOf(tcPr, ctx, g, { x, y, w, h: hh }) : undefined; if(own !== undefined) fill = own;
+      if(fill){ g.fillStyle = fill; g.fillRect(x, y, w, hh); }
+      const edge = (own, stName, x1, y1, x2, y2) => { const ln = (tcPr && xChild(tcPr, own)) || cs.bdr[stName] || null; const c = ln ? pptFillColor(ln, ctx) : undefined; const col = c === undefined ? (st ? null : 'rgba(0,0,0,.35)') : c; if(!col) return; g.strokeStyle = col; g.lineWidth = Math.max(0.4, (+xAttr(ln, 'w', 12700)) * k); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+      edge('lnT', ri === 0 ? 'top' : 'insideH', x, y, x + w, y); edge('lnB', ri + rspan >= nR ? 'bottom' : 'insideH', x, y + hh, x + w, y + hh); edge('lnL', ci === 0 ? 'left' : 'insideV', x, y, x, y + hh); edge('lnR', ci + span >= nC ? 'right' : 'insideV', x + w, y, x + w, y + hh);
+      const ct = cellText(tc, ri, ci);
+      if(ct){ g.save(); g.beginPath(); g.rect(x, y, w, hh); g.clip(); pptDrawTextBody(g, ct.txBody, { x, y, w, h: hh }, ctx, ct.def, ct.ov); g.restore(); }
+      x += adv; }); y += h; });
+}
+// 배경: 슬라이드 → 레이아웃 → 마스터
+async function pptDrawBg(ctx, parts){
+  const g = ctx.g, W = ctx.W, H = ctx.H;
+  for(const part of parts){ const bg = xFind(part.doc.documentElement, 'cSld/bg'); if(!bg) continue;
+    const pr = xChild(bg, 'bgPr'); if(pr){ const bf = xChild(pr, 'blipFill'); if(bf){ const rid = xAttr(xChild(bf, 'blip'), 'r:embed', null); const rel = rid && part.rels[rid]; const img = rel ? await pptImage(ctx.zip, part.resolve(rel.target), ctx.tier) : null; if(img){ try{ g.drawImage(img, 0, 0, W, H); }catch(e){} return; } } const c = pptFillOf(pr, ctx, g, { x: 0, y: 0, w: W, h: H }); if(c){ g.fillStyle = c; g.fillRect(0, 0, W, H); return; } }
+    const ref = xChild(bg, 'bgRef'); if(ref){ const c = pptColorOf(ref.firstElementChild, ctx); if(c){ g.fillStyle = c; g.fillRect(0, 0, W, H); return; } } }
+}
+function pptMasterTxStyles(masterDoc, ctx){ const ts = xChild(masterDoc.documentElement, 'txStyles'); if(!ts) return null; const get = nm => { const st = xChild(ts, nm); return st ? pptLstLevels(st, ctx) : null; }; return { title: get('titleStyle'), body: get('bodyStyle'), other: get('otherStyle') }; }
+const __pptImgEl = {};
+function pptImgEl(src){ if(__pptImgEl[src] !== undefined) return Promise.resolve(__pptImgEl[src]); return new Promise(res => { const im = new Image(); im.onload = () => { __pptImgEl[src] = im; res(im); }; im.onerror = () => { __pptImgEl[src] = null; res(null); }; im.src = src; }); }
+// 메인: 슬라이드 s → 폭 W(px) 캔버스. withOps면 편집 내용(숨김·교체·옮김·글·표 채움·넣은 그림)을 반영하고 s.__boxes에 도형 위치(EMU)를 기록
+async function pptRenderSlide(s, W, withOps, tier){
+  const zip = pptInfo.zip; const SW = pptInfo.size ? pptInfo.size.cx : 12192000, SH = pptInfo.size ? pptInfo.size.cy : 6858000;
   const H = Math.round(W * SH / SW); const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
-  const k = W / SW;
-  const op = withOps ? pptOpFor(s.no) : null;
-  const drawImg = (src, x, y, w, h) => new Promise(res => { if(!src){ res(); return; } const im = new Image(); im.onload = () => { g.drawImage(im, x, y, w, h); res(); }; im.onerror = () => res(); im.src = src; });
-  const hide = new Set(); if(op){ const stacks = pptStackGroups(s); Object.entries(op.replace).forEach(([i, v]) => { if(v === 'card:'){ const g = stacks.find(g => g.includes(+i)) || []; g.forEach(j => { if(j !== +i) hide.add(j); }); } }); }
-  if(op && op.hidePic) Object.keys(op.hidePic).forEach(i => { if(op.hidePic[i]) hide.add(+i); });
-  for(let i = 0; i < s.picList.length; i++){ if(hide.has(i)) continue; const p = s.picList[i]; const pb = pptPicBox(s, i, op); let src = await pptMediaUrl(s, p); let x = pb.x * k, y = pb.y * k, w = pb.cx * k, h = pb.cy * k;
-    let crop = null;
-    if(op && op.replace[i]){ const rs = pptSrcUrl(op.replace[i]); if(rs){ const im = await pptImgSize(rs); if(im && op.replace[i].startsWith('data:')) crop = coverCrop(w, h, im.w, im.h); else if(im && op.replace[i] !== 'card:'){ const b = fitBox(x, y, w, h, im.w, im.h); x = b.x; y = b.y; w = b.w; h = b.h; } src = rs; g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.strokeRect(pb.x * k, pb.y * k, pb.cx * k, pb.cy * k); } }
-    if(crop && src){ await new Promise(res => { const im = new Image(); im.onload = () => { const sx = im.naturalWidth * crop.l, sy = im.naturalHeight * crop.t, sw = im.naturalWidth * (1 - crop.l - crop.r), sh = im.naturalHeight * (1 - crop.t - crop.b); g.drawImage(im, sx, sy, sw, sh, x, y, w, h); res(); }; im.onerror = () => res(); im.src = src; }); }
-    else await drawImg(src, x, y, w, h); }
-  g.fillStyle = '#222'; g.textBaseline = 'top';
-  try{ pptDrawTables(g, s, k, op); }catch(e){ console.warn('tables preview', e); }
-  const boxes = pptShapeBoxes(s, op);
-  s.shapes.forEach(sh => { const bx = boxes[sh.idx]; const sx = bx.x, sy = bx.y, scx = bx.cx, scy = bx.cy, ph = bx.ph;
-    const txt = (op && op.texts[sh.idx] !== undefined) ? op.texts[sh.idx] : sh.text; if(txt === '') return; const fs = Math.max(6, (ph ? Math.min(sh.sz, 16) : sh.sz) * 12700 * k); g.font = `${sh.sz >= 24 ? 'bold ' : ''}${fs}px "Noto Sans KR", sans-serif`; g.fillStyle = (op && op.texts[sh.idx] !== undefined) ? '#B3261E' : '#222';
-    const lines = txt.split('\n'); let yy = sy * k + 2; const maxW = Math.max(10, scx * k - 4);
-    for(const ln of lines){ let t = ln; while(t && g.measureText(t).width > maxW && t.length > 1) t = t.slice(0, -1); g.fillText(t, sx * k + 2, yy); yy += fs * 1.25; if(yy > (sy + scy) * k) break; } });
-  if(op){ for(const ov of op.overlays){ const src = pptSrcUrl(ov.src); await drawImg(src, ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.strokeStyle = '#B7472A'; g.lineWidth = 2; g.setLineDash([6, 3]); g.strokeRect(ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.setLineDash([]); } }
+  try{
+    const slidePart = await pptPart(zip, s.path); if(!slidePart) return cv;
+    const layoutPath = pptRelTarget(slidePart, 'slideLayout'); const layoutPart = layoutPath ? await pptPart(zip, layoutPath) : null;
+    const masterPath = layoutPart ? pptRelTarget(layoutPart, 'slideMaster') : ''; const masterPart = masterPath ? await pptPart(zip, masterPath) : null;
+    const theme = masterPart ? await pptTheme(zip, masterPart) : { colors: {}, fonts: {} };
+    const clrMap = {}; if(masterPart){ const cm = xChild(masterPart.doc.documentElement, 'clrMap'); if(cm) for(const a of cm.attributes) clrMap[a.name] = a.value; }
+    const ovr = xFind(slidePart.doc.documentElement, 'clrMapOvr/overrideClrMapping'); if(ovr) for(const a of ovr.attributes) clrMap[a.name] = a.value;
+    const op = withOps ? pptOpFor(s.no) : null;
+    const ctx = { zip, g, k: W / SW, W, H, theme, clrMap, op, s, tier: tier || 'full', plain: tier === 'thumb', spIdx: -1, picIdx: -1, frameIdx: -1, boxes: { sp: {}, pic: {} }, T0: T_ID, hidePics: new Set(), layoutPh: layoutPart ? pptPhMap(layoutPart.doc) : null, masterPh: masterPart ? pptPhMap(masterPart.doc) : null };
+    ctx.masterTx = masterPart ? pptMasterTxStyles(masterPart.doc, ctx) : null;
+    if(op){ const stacks = pptStackGroups(s); Object.entries(op.replace || {}).forEach(([i, v]) => { if(v === 'card:'){ (stacks.find(gg => gg.includes(+i)) || []).forEach(j => { if(j !== +i) ctx.hidePics.add(j); }); } }); Object.keys(op.hidePic || {}).forEach(i => { if(op.hidePic[i]) ctx.hidePics.add(+i); }); }
+    const slideDoc = slidePart.doc.documentElement;
+    await pptDrawBg(ctx, [slidePart, layoutPart, masterPart].filter(Boolean));
+    const showMaster = xAttr(slideDoc, 'showMasterSp', '1') !== '0';
+    if(showMaster && masterPart && (!layoutPart || xAttr(layoutPart.doc.documentElement, 'showMasterSp', '1') !== '0')) await pptDrawTree(ctx, xFind(masterPart.doc.documentElement, 'cSld/spTree'), T_ID, 'master', masterPart);
+    if(showMaster && layoutPart) await pptDrawTree(ctx, xFind(layoutPart.doc.documentElement, 'cSld/spTree'), T_ID, 'layout', layoutPart);
+    await pptDrawTree(ctx, xFind(slideDoc, 'cSld/spTree'), T_ID, 'slide', slidePart);
+    if(withOps) s.__boxes = ctx.boxes;
+    if(op){ for(const ov of op.overlays){ const src = pptSrcUrl(ov.src); const im = src ? await pptImgEl(src) : null; const kk = ctx.k; if(im){ try{ g.drawImage(im, ov.x * kk, ov.y * kk, ov.w * kk, ov.h * kk); }catch(e){} } if(!ctx.plain){ g.strokeStyle = '#B7472A'; g.lineWidth = 2; g.setLineDash([6, 3]); g.strokeRect(ov.x * kk, ov.y * kk, ov.w * kk, ov.h * kk); g.setLineDash([]); } } }
+  }catch(e){ console.warn('ppt render', e); }
   return cv;
 }
 function pptSrcUrl(src){ if(!src) return ''; if(src.startsWith('gen:')){ const P = window.__pptPreview || {}; return P[src.slice(4)] || ''; } if(src === 'card:'){ const c = pptCardCur(); return c ? c.url : ''; } return src; }
@@ -4011,10 +4455,11 @@ function renderPptEditor(){
   // 다시 그려도 보던 자리 유지: 띠 가로 스크롤 · 카드(크게 보기) 세로 스크롤 · 창 스크롤
   const strip0 = document.getElementById('pptStrip'); const keepStrip = strip0 ? strip0.scrollLeft : null;
   const card = document.getElementById('pptCard'); const keepCard = card ? card.scrollTop : 0; const keepWin = window.scrollY;
-  const strip = pptOrder.map((key, i) => { const it = pptItemOf(key); if(!it) return ''; const del = it.kind === 's' && pptOpFor(it.s.no).del; const label = it.kind === 's' ? it.s.no : '새'; const thumb = it.kind === 's' ? (pptThumbs[it.s.no] || '') : '';
-    return `<div class="ppt-s${key === pptCur ? ' cur' : ''}${del ? ' del' : ''}" onclick="pptGo('${key}')" title="${it.kind === 's' ? escLand(it.s.snippet) : '새 슬라이드'}"><img data-k="${key}" src="${thumb}" alt=""><span>${i + 1}${it.kind === 's' ? '' : ' ✚'}${del ? ' ✕' : ''}</span></div>`; }).join('');
+  const vis = pptVisibleOrder(); if(!vis.includes(pptCur)) pptCur = vis[0] || pptOrder[0];
+  const strip = vis.map((key, i) => { const it = pptItemOf(key); if(!it) return ''; const del = it.kind === 's' && pptOpFor(it.s.no).del; const star = it.kind === 's' && pptEdit.has(it.s.no); const thumb = it.kind === 's' ? (pptThumbs[it.s.no] || '') : '';
+    return `<div class="ppt-s${key === pptCur ? ' cur' : ''}${del ? ' del' : ''}${star ? ' star' : ''}" onclick="pptGo('${key}')" title="${it.kind === 's' ? escLand(it.s.snippet) : '새 슬라이드'}"><img data-k="${key}" src="${thumb}" alt=""><span>${it.kind === 's' ? it.s.no : '새 ✚'}${star && !pptOnlyEdit ? ' ★' : ''}${del ? ' ✕' : ''}</span></div>`; }).join('');
   const it = pptItemOf(pptCur);
-  const pos = pptOrder.indexOf(pptCur);
+  const pos = vis.indexOf(pptCur);
   const P = window.__pptPreview || {};
   const chips = PPT_ITEMS.map(([k, n]) => `<button type="button" class="ppt-chip${P[k] ? '' : ' nop'}${pptSnap[k] ? ' snap' : ''}" onclick="pptAddOverlay('gen:${k}')" title="${pptSnap[k] ? pptSnapNote(k) + ' — 배치도 탭에서 저장한 그림을 그대로 씀' : (P[k] ? '현재 슬라이드에 넣기(끌어서 위치·크기 조절)' : '아직 만들지 않음 — 아래 🖼 미리보기 만들기 먼저')}">${P[k] ? `<img src="${P[k]}" alt="">` : ''}${n}${pptSnap[k] ? ' 💾' : ''}</button>`).join('');
   const snapNote = Object.keys(pptSnap).length ? `<div style="font-size:11px;color:#0B5A2A;margin-top:4px;">💾 표시는 배치도 탭에서 저장한 그림(저장본)이며 제안서에 그대로 들어갑니다. <button type="button" onclick="pptSnapClear()" style="font-size:10.5px;">저장본 지우고 다시 만들기</button></div>` : '';
@@ -4027,11 +4472,12 @@ function renderPptEditor(){
     const txtRows = s.shapes.map(sh => `<div class="ppt-txt-row"><textarea rows="${Math.min(4, Math.max(1, sh.text.split('\n').length))}" onchange="pptSetText(${s.no}, ${sh.idx}, this.value)" title="글 고치기(비우면 원래 글)">${escLand(op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text)}</textarea>${op.texts[sh.idx] !== undefined ? `<button type="button" onclick="pptSetText(${s.no}, ${sh.idx}, null)" title="원래 글로">↩</button>` : ''}${kep && /변전소/.test(sh.text) && /MTR/.test(sh.text) && op.texts[sh.idx] !== kep ? `<button type="button" onclick="pptSetText(${s.no}, ${sh.idx}, ${JSON.stringify(kep).replace(/"/g, '&quot;')})" title="한전ON 조회값으로 채우기: ${escLand(kep)}">⚡ 한전값</button>` : ''}</div>`).join('');
     const tbls = pptDetectTables(s); const D0 = tbls.length ? (window.__pptD || (window.__pptD = pptProfitData())) : null;
     const tblRows = tbls.length ? `<div class="ppt-sec"><b>표 자동 채우기</b> <small>${D0 ? `(${n0(D0.kW)}kW · ${D0.grade} · ${D0.hours}h · 견적 ${n0(D0.sel.final)}원 — 값은 제안서 탭 견적·수익성 입력 기준)` : '<span style="color:#b3402a;">배치(모듈 장수)가 없어 값을 계산할 수 없음</span>'}</small>${tbls.map(t => `<label style="display:block;margin-top:3px;"><input type="checkbox" ${pptFillOn(op, t.fi) ? 'checked' : ''} onchange="pptSetFill(${s.no}, ${t.fi}, this.checked)"> 표 ${t.fi + 1}: ${PPT_TABLE_NAMES[t.kind] || t.kind} <small>(${t.rows}줄)</small></label>`).join('')}<div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">빨간 글자 = 채워지는 값. 자가소비 표의 전기사용량·RE100은 한전파워플래너 자료가 없어 비웁니다.</div></div>` : '';
-    body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div>
+    body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><div class="ppt-stage-in" id="pptStageIn"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div></div>
       <div class="ppt-side">
         <div class="ppt-tools"><button type="button" onclick="pptMove(-1)" title="앞으로">◀ 앞으로</button><button type="button" onclick="pptMove(1)" title="뒤로">뒤로 ▶</button>
           <button type="button" onclick="pptToggleDel(${s.no})" style="color:${op.del ? '#0B5A2A' : '#b3402a'};">${op.del ? '↩ 이 장 되살리기' : '🗑 이 장 지우기'}</button>
-          <button type="button" onclick="pptAddBlank()" title="이 장 뒤에 빈 슬라이드 추가">➕ 뒤에 빈 장</button></div>
+          <button type="button" onclick="pptAddBlank()" title="이 장 뒤에 빈 슬라이드 추가">➕ 뒤에 빈 장</button>
+          <button type="button" onclick="pptToggleEdit(${s.no})" title="편집 장(★)에 넣거나 뺌 — '편집 장만 보기'에 보이는 장">${pptEdit.has(s.no) ? '★ 편집 장에서 빼기' : '☆ 편집 장에 넣기'}</button></div>
         <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()" title="이 장의 사진 칸(가장 큰 그림, 명함 자리 제외)에 꽉 채워 넣음 — 그림이 없는 장은 가운데에 넣고 끌어서 조절">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${cardRows}
         ${picRows ? `<div class="ppt-sec"><b>이 장의 그림 바꾸기</b>${picRows}${Object.keys(op.hidePic || {}).filter(i => op.hidePic[i]).length ? `<div style="margin-top:4px;">숨긴 그림: ${Object.keys(op.hidePic).filter(i => op.hidePic[i]).map(i => `<button type="button" onclick="pptUnhidePic(${s.no}, ${i})" style="font-size:10.5px;">그림 ${+i + 1} ↩</button>`).join(' ')}</div>` : ''}${(op.spBox && Object.keys(op.spBox).length) || (op.picBox && Object.keys(op.picBox).length) ? `<div style="margin-top:4px;"><button type="button" onclick="pptResetBoxes(${s.no})" style="font-size:10.5px;">↺ 옮긴 위치·크기 되돌리기</button></div>` : ''}</div>` : ''}
@@ -4041,16 +4487,20 @@ function renderPptEditor(){
       </div></div>`;
   } else if(it && it.kind === 'n'){
     const n = it.n;
-    body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div>
+    body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><div class="ppt-stage-in" id="pptStageIn"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div></div>
       <div class="ppt-side">
         <div class="ppt-tools"><button type="button" onclick="pptMove(-1)">◀ 앞으로</button><button type="button" onclick="pptMove(1)">뒤로 ▶</button><button type="button" onclick="pptDelBlank(${n.id})" style="color:#b3402a;">🗑 이 장 지우기</button><button type="button" onclick="pptAddBlank()">➕ 뒤에 빈 장</button></div>
         <div class="ppt-sec"><b>넣기</b><div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()" title="이 장의 사진 칸(가장 큰 그림, 명함 자리 제외)에 꽉 채워 넣음 — 그림이 없는 장은 가운데에 넣고 끌어서 조절">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${n.overlays.length ? `<div class="ppt-sec"><b>넣은 그림</b> ${n.overlays.map((o, i) => `<span class="ppt-ov-tag">${o.src.startsWith('gen:') ? PPT_ITEM_NAME[o.src.slice(4)] : '사진'} <button type="button" onclick="pptDelOverlayN(${n.id}, ${i})">✕</button></span>`).join(' ')}</div>` : ''}
       </div></div>`;
   }
-  const delCount = pptInfo.slides.filter(s => pptOpFor(s.no).del).length;
-  box.innerHTML = `<div class="ppt-strip" id="pptStrip">${strip}</div>
-    <div class="ppt-head"><button type="button" onclick="pptMoveTo(-1)" title="이전 장 (←)" style="font-size:11px;">◀</button> 슬라이드 <input type="number" min="1" max="${pptOrder.length}" value="${pos + 1}" onchange="pptJump(this.value)" onkeydown="if(event.key==='Enter'){ pptJump(this.value); }" style="width:52px;font-size:12px;" title="번호를 넣고 Enter → 그 장으로"> / ${pptOrder.length} <button type="button" onclick="pptMoveTo(1)" title="다음 장 (→)" style="font-size:11px;">▶</button>${it && it.kind === 's' ? ` (원본 ${it.s.no}번) · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''} <small style="color:var(--ink-soft);">← → 키로 이동</small>
+  const delCount = pptInfo.slides.filter(s => pptOpFor(s.no).del).length; const nEdit = pptInfo.slides.filter(s => pptEdit.has(s.no)).length; const nRest = pptInfo.slides.filter(s => !pptEdit.has(s.no) && !pptOpFor(s.no).del).length;
+  const zoomSel = `<select onchange="pptZoomSet(this.value)" style="font-size:11px;" title="미리보기 크기 — 100%는 PowerPoint 100%와 같은 실제 크기(96dpi 화면 기준)"><option value="fit"${pptZoom === 'fit' ? ' selected' : ''}>맞춤</option>${[0.5, 0.75, 1, 1.25, 1.5, 2].map(z => `<option value="${z}"${pptZoom === z ? ' selected' : ''}>${Math.round(z * 100)}%${z === 1 ? ' (실제 크기)' : ''}</option>`).join('')}</select>`;
+  box.innerHTML = `<div class="ppt-edit-bar"><label title="제안서에서 내용을 고치는 장(★)만 띠에 보임"><input type="checkbox" ${pptOnlyEdit ? 'checked' : ''} onchange="pptSetOnlyEdit(this.checked)"> 편집 장 ★ ${nEdit}장만 보기</label> <small style="color:var(--ink-soft);">(전체 ${pptInfo.count}장 · ★ ${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no)) || '없음'})</small>
+      <button type="button" onclick="pptDelOthers()" ${nRest ? '' : 'disabled'} title="편집 장이 아닌 장을 모두 지우도록 표시(저장 때 빠짐)">🗑 ★ 외 ${nRest}장 지우기</button> <button type="button" onclick="pptRestoreAll()" ${delCount ? '' : 'disabled'}>↩ 지운 장 모두 되살리기${delCount ? `(${delCount})` : ''}</button>
+      <span style="margin-left:auto;">크기 ${zoomSel} <button type="button" id="pptWideBtn2" onclick="pptToggleWide()" style="font-size:11px;">${document.getElementById('pptCard') && document.getElementById('pptCard').classList.contains('wide') ? '⤡ 작게' : '⤢ 크게 보기'}</button></span></div>
+    <div class="ppt-strip" id="pptStrip">${strip}</div>
+    <div class="ppt-head"><button type="button" onclick="pptMoveTo(-1)" title="이전 장 (←)" style="font-size:11px;">◀</button> ${pptOnlyEdit ? '편집 장' : '슬라이드'} <input type="number" min="1" max="${vis.length}" value="${pos + 1}" onchange="pptJump(this.value)" onkeydown="if(event.key==='Enter'){ pptJump(this.value); }" style="width:52px;font-size:12px;" title="번호를 넣고 Enter → 그 장으로"> / ${vis.length} <button type="button" onclick="pptMoveTo(1)" title="다음 장 (→)" style="font-size:11px;">▶</button>${it && it.kind === 's' ? ` <b>원본 ${it.s.no}번</b>${pptEdit.has(it.s.no) ? ' ★' : ''} · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''} <small style="color:var(--ink-soft);">← → 키로 이동 · Ctrl+V: 그림은 사진 칸에, 글은 선택한 글상자에</small>
       <span style="float:right;"><button type="button" onclick="pptResetAll()" style="font-size:11px;">↺ 편집 모두 되돌리기</button> <button type="button" onclick="pptForgetTemplate()" style="font-size:11px;color:#b3402a;">🗑 저장된 양식 지우기</button></span></div>
     ${body}<input id="pptPhotoInput" type="file" accept="image/*" style="display:none;" onchange="pptPhotoChosen(this.files[0]); this.value='';"><input id="pptCardInput" type="file" accept="image/*" style="display:none;" onchange="pptCardAdd(this.files[0]); this.value='';">`;
   const stripEl = document.getElementById('pptStrip');
@@ -4059,18 +4509,35 @@ function renderPptEditor(){
   __pptLastCur = pptCur;
   pptDrawStage();
 }
-function pptJump(v){ const n = parseInt(v, 10); if(!(n >= 1 && n <= pptOrder.length)) return; pptGo(pptOrder[n - 1]); }
+function pptJump(v){ const vis = pptVisibleOrder(); const n = parseInt(v, 10); if(!(n >= 1 && n <= vis.length)) return; pptGo(vis[n - 1]); }
 document.addEventListener('keydown', e => {
   if(!pptInfo || !document.getElementById('pptStrip')) return; const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
   const pane = document.getElementById('pptCard'); if(!pane || pane.offsetWidth === 0) return;
-  const i = pptOrder.indexOf(pptCur);
-  if(e.key === 'ArrowRight' || e.key === 'PageDown'){ if(i < pptOrder.length - 1){ pptGo(pptOrder[i + 1]); e.preventDefault(); } }
-  else if(e.key === 'ArrowLeft' || e.key === 'PageUp'){ if(i > 0){ pptGo(pptOrder[i - 1]); e.preventDefault(); } }
-  else if(e.key === 'Home'){ pptGo(pptOrder[0]); e.preventDefault(); } else if(e.key === 'End'){ pptGo(pptOrder[pptOrder.length - 1]); e.preventDefault(); }
+  const vis = pptVisibleOrder(); const i = vis.indexOf(pptCur);
+  if(e.key === 'ArrowRight' || e.key === 'PageDown'){ if(i < vis.length - 1){ pptGo(vis[i + 1]); e.preventDefault(); } }
+  else if(e.key === 'ArrowLeft' || e.key === 'PageUp'){ if(i > 0){ pptGo(vis[i - 1]); e.preventDefault(); } }
+  else if(e.key === 'Home'){ pptGo(vis[0]); e.preventDefault(); } else if(e.key === 'End'){ pptGo(vis[vis.length - 1]); e.preventDefault(); }
 });
-function pptGo(key){ pptCur = key; renderPptEditor(); }
-function pptMoveTo(dir){ const i = pptOrder.indexOf(pptCur); const j = i + dir; if(j >= 0 && j < pptOrder.length) pptGo(pptOrder[j]); }
-function pptMove(dir){ const i = pptOrder.indexOf(pptCur); const j = i + dir; if(i < 0 || j < 0 || j >= pptOrder.length) return; [pptOrder[i], pptOrder[j]] = [pptOrder[j], pptOrder[i]]; pptSaveState(); renderPptEditor(); }
+function pptGo(key){ pptCur = key; pptSel = null; if(pptOrder.includes(key) && !pptVisibleOrder().includes(key)){ pptOnlyEdit = false; pptSaveState(); } renderPptEditor(); }
+// 보이는 순서: '편집 장만 보기'면 ★ 장과 새 장만
+function pptVisibleOrder(){ return pptOnlyEdit ? pptOrder.filter(k => !k.startsWith('s:') || pptEdit.has(+k.slice(2))) : pptOrder.slice(); }
+function pptMoveTo(dir){ const vis = pptVisibleOrder(); const i = vis.indexOf(pptCur); const j = i + dir; if(j >= 0 && j < vis.length) pptGo(vis[j]); }
+function pptMove(dir){ const vis = pptVisibleOrder(); const vi = vis.indexOf(pptCur); const other = vis[vi + dir]; if(vi < 0 || !other) return; const i = pptOrder.indexOf(pptCur), j = pptOrder.indexOf(other); [pptOrder[i], pptOrder[j]] = [pptOrder[j], pptOrder[i]]; pptSaveState(); renderPptEditor(); }
+function pptToggleEdit(no){ if(pptEdit.has(no)) pptEdit.delete(no); else pptEdit.add(no); pptSaveState(); if(!pptVisibleOrder().includes(pptCur)) pptCur = pptVisibleOrder()[0] || pptOrder[0]; renderPptEditor(); }
+function pptSetOnlyEdit(on){ pptOnlyEdit = !!on; pptSaveState(); if(!pptVisibleOrder().includes(pptCur)) pptCur = pptVisibleOrder()[0] || pptOrder[0]; renderPptEditor(); }
+function pptDelOthers(){ const rest = pptInfo.slides.filter(s => !pptEdit.has(s.no) && !pptOpFor(s.no).del); if(!rest.length){ alert('편집 장 외에 남은 장이 없습니다.'); return; } if(!confirm(`편집 장(★ ${pptInfo.slides.filter(s => pptEdit.has(s.no)).length}장) 외 ${rest.length}장(${rangeText(rest.map(s => s.no))})을 지우도록 표시할까요?\n저장할 때 빠지며, "모두 되살리기"로 언제든 되돌릴 수 있습니다.`)) return; rest.forEach(s => { pptOpFor(s.no).del = true; }); pptSaveState(); renderPptEditor(); }
+function pptRestoreAll(){ pptInfo.slides.forEach(s => { if(pptOps[s.no]) pptOps[s.no].del = false; }); pptSaveState(); renderPptEditor(); }
+function rangeText(nums){ const a = nums.slice().sort((x, y) => x - y); const out = []; let i = 0; while(i < a.length){ let j = i; while(j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i + 1 ? `${a[i]}~${a[j]}` : (j === i + 1 ? `${a[i]}, ${a[j]}` : `${a[i]}`)); i = j + 1; } return out.join(', '); }
+// 붙여넣기(Ctrl+V): 그림 → 사진 칸(선택한 그림이 있으면 그 칸)에, 글 → 선택한 글상자에
+document.addEventListener('paste', e => {
+  if(!pptInfo) return; const pane = document.getElementById('pptCard'); if(!pane || pane.offsetWidth === 0 || !document.getElementById('pptStrip')) return;
+  const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  const items = (e.clipboardData && e.clipboardData.items) || []; let file = null; for(const it of items){ if(it.kind === 'file' && /^image\//.test(it.type)){ file = it.getAsFile(); break; } }
+  const it = pptItemOf(pptCur); if(!it) return;
+  if(file){ e.preventDefault(); if(pptSel && pptSel.kind === 'pic' && it.kind === 's') window.__pptReplaceTarget = { no: it.s.no, i: pptSel.i }; pptPhotoChosen(file); return; }
+  const txt = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+  if(txt && pptSel && pptSel.kind === 'sp' && it.kind === 's'){ e.preventDefault(); pptSetText(it.s.no, pptSel.i, txt.replace(/\r/g, '')); }
+});
 function pptToggleDel(no){ const op = pptOpFor(no); op.del = !op.del; pptSaveState(); renderPptEditor(); }
 let __pptNewId = 0;
 function pptAddBlank(){ const id = Date.now() + (++__pptNewId); const n = { id, overlays: [] }; pptNewSlides.push(n); const i = pptOrder.indexOf(pptCur); pptOrder.splice(i + 1, 0, 'n:' + id); pptCur = 'n:' + id; pptSaveState(); renderPptEditor(); }
@@ -4115,22 +4582,29 @@ async function pptPreviewGen(){
 }
 function pptResetAll(){ if(!confirm('이 양식의 편집(삭제·그림·글·순서)을 모두 되돌릴까요?')) return; pptOps = {}; pptNewSlides = []; pptOrder = pptInfo.slides.map(s => 's:' + s.no); pptAutoAssign(); pptCur = pptOrder[0]; pptSaveState(); renderPptEditor(); }
 // 큰 미리보기 + 넣은 그림 끌기/크기
+let __pptDrawTok = 0;
 async function pptDrawStage(){
-  const stage = document.getElementById('pptStage'), cv = document.getElementById('pptStageCv'), layer = document.getElementById('pptOvLayer'); if(!stage || !cv || !pptInfo) return;
-  const W = Math.max(300, stage.clientWidth || 600); const SW = pptInfo.size.cx, SH = pptInfo.size.cy; const H = Math.round(W * SH / SW);
+  const stage = document.getElementById('pptStage'), inner = document.getElementById('pptStageIn'), cv = document.getElementById('pptStageCv'), layer = document.getElementById('pptOvLayer'); if(!stage || !cv || !pptInfo) return;
+  const SW = pptInfo.size.cx, SH = pptInfo.size.cy;
+  const avail = Math.max(300, (stage.clientWidth || 600) - 2);
+  const W = pptZoom === 'fit' ? avail : Math.max(200, Math.round(SW / 9525 * pptZoom)); const H = Math.round(W * SH / SW);
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1)); const RW = Math.round(W * dpr);
   const it = pptItemOf(pptCur); if(!it) return;
+  const tok = ++__pptDrawTok;
   let src;
-  if(it.kind === 's') src = await pptRenderSlide(it.s, W, true);
-  else { src = document.createElement('canvas'); src.width = W; src.height = H; const g = src.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.strokeStyle = '#ccc'; g.strokeRect(0.5, 0.5, W - 1, H - 1); for(const ov of it.n.overlays){ const u = pptSrcUrl(ov.src); if(!u) continue; await new Promise(res => { const im = new Image(); im.onload = () => { g.drawImage(im, ov.x / SW * W, ov.y / SH * H, ov.w / SW * W, ov.h / SH * H); res(); }; im.onerror = res; im.src = u; }); } }
-  cv.width = W; cv.height = H; cv.getContext('2d').drawImage(src, 0, 0);
-  // 제자리 편집 층: 글상자·그림·넣은 그림을 투명 상자로 덮어 클릭(선택)·끌기(이동)·모서리(크기)·더블클릭(글 고치기)
+  if(it.kind === 's') src = await pptRenderSlide(it.s, RW, true);
+  else { src = document.createElement('canvas'); src.width = RW; src.height = Math.round(RW * SH / SW); const g = src.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, src.width, src.height); g.strokeStyle = '#ccc'; g.strokeRect(0.5, 0.5, src.width - 1, src.height - 1); for(const ov of it.n.overlays){ const u = pptSrcUrl(ov.src); if(!u) continue; await new Promise(res => { const im = new Image(); im.onload = () => { g.drawImage(im, ov.x / SW * src.width, ov.y / SH * src.height, ov.w / SW * src.width, ov.h / SH * src.height); res(); }; im.onerror = res; im.src = u; }); } }
+  if(tok !== __pptDrawTok || !document.getElementById('pptStageCv')) return; // 그리는 사이 다른 장으로 옮겼음
+  cv.width = src.width; cv.height = src.height; cv.style.width = W + 'px'; cv.style.height = H + 'px'; cv.__cssW = W; cv.getContext('2d').drawImage(src, 0, 0);
+  if(inner){ inner.style.width = W + 'px'; inner.style.height = H + 'px'; }
+  // 제자리 편집 층: 글상자·그림·넣은 그림을 투명 상자로 덮어 클릭(선택)·끌기(이동)·모서리(크기)·더블클릭(글 고치기). 그룹 안 도형은 고정(글 고치기·숨김만)
   const k = W / SW; const els = [];
   const px = (x, y, w, h) => `left:${x * k}px;top:${y * k}px;width:${Math.max(6, w * k)}px;height:${Math.max(6, h * k)}px;`;
   if(it.kind === 's'){
     const s = it.s, op = pptOpFor(s.no); const boxes = pptShapeBoxes(s, op); const stacks = pptStackGroups(s);
     const hidden = new Set(); Object.entries(op.replace).forEach(([i, v]) => { if(v === 'card:'){ (stacks.find(g => g.includes(+i)) || []).forEach(j => { if(j !== +i) hidden.add(j); }); } }); Object.keys(op.hidePic || {}).forEach(i => { if(op.hidePic[i]) hidden.add(+i); });
-    s.picList.forEach((p, i) => { if(hidden.has(i) || p.inGroup) return; const b = pptPicBox(s, i, op); els.push(`<div class="ppt-el pic${pptSel && pptSel.kind === 'pic' && pptSel.i === i ? ' sel' : ''}" data-kind="pic" data-i="${i}" style="${px(b.x, b.y, b.cx, b.cy)}" title="그림 ${i + 1} — 끌어서 옮김 · 모서리로 크기 · Delete 키로 숨김" onmousedown="pptElDown(event, 'pic', ${i}, 'move')"><div class="ppt-ov-h" onmousedown="pptElDown(event, 'pic', ${i}, 'size')"></div></div>`); });
-    s.shapes.forEach(sh => { if(sh.inGroup) return; const b = boxes[sh.idx]; const txt = op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text; els.push(`<div class="ppt-el sp${pptSel && pptSel.kind === 'sp' && pptSel.i === sh.idx ? ' sel' : ''}${b.ph ? ' ph' : ''}" data-kind="sp" data-i="${sh.idx}" style="${px(b.x, b.y, b.cx, b.cy)}" title="${escLand(txt.slice(0, 60))} — 클릭: 선택 · 끌기: 이동 · 더블클릭: 글 고치기" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'move')" ondblclick="pptInlineEdit(${sh.idx})"><div class="ppt-ov-h" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'size')"></div></div>`); });
+    s.picList.forEach((p, i) => { if(hidden.has(i)) return; const b = pptPicBox(s, i, op); const fx = !!p.inGroup; els.push(`<div class="ppt-el pic${fx ? ' fixed' : ''}${pptSel && pptSel.kind === 'pic' && pptSel.i === i ? ' sel' : ''}" data-kind="pic" data-i="${i}" style="${px(b.x, b.y, b.cx, b.cy)}" title="그림 ${i + 1} — ${fx ? '그룹 안 그림: 클릭 선택 · Delete 키로 숨김 · Ctrl+V로 바꾸기' : '끌어서 옮김 · 모서리로 크기 · Delete 키로 숨김 · Ctrl+V로 바꾸기'}" onmousedown="pptElDown(event, 'pic', ${i}, 'move', ${fx})">${fx ? '' : `<div class="ppt-ov-h" onmousedown="pptElDown(event, 'pic', ${i}, 'size')"></div>`}</div>`); });
+    s.shapes.forEach(sh => { const b = boxes[sh.idx]; if(!b) return; const fx = !!sh.inGroup; const txt = op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text; els.push(`<div class="ppt-el sp${fx ? ' fixed' : ''}${pptSel && pptSel.kind === 'sp' && pptSel.i === sh.idx ? ' sel' : ''}${b.ph ? ' ph' : ''}" data-kind="sp" data-i="${sh.idx}" style="${px(b.x, b.y, b.cx, b.cy)}" title="${escLand(txt.slice(0, 60))} — 클릭: 선택 · ${fx ? '그룹 안 글상자(이동 불가)' : '끌기: 이동'} · 더블클릭: 글 고치기 · Ctrl+V: 글 붙여넣기" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'move', ${fx})" ondblclick="pptInlineEdit(${sh.idx})">${fx ? '' : `<div class="ppt-ov-h" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'size')"></div>`}</div>`); });
   }
   const list = pptCurOverlays() || [];
   list.forEach((o, i) => els.push(`<div class="ppt-el ov${pptSel && pptSel.kind === 'ov' && pptSel.i === i ? ' sel' : ''}" data-kind="ov" data-i="${i}" style="${px(o.x, o.y, o.w, o.h)}" title="넣은 그림 — 끌어서 옮김 · 모서리로 크기 · Delete 키로 빼기" onmousedown="pptElDown(event, 'ov', ${i}, 'move')"><div class="ppt-ov-h" onmousedown="pptElDown(event, 'ov', ${i}, 'size')"></div></div>`));
@@ -4154,12 +4628,13 @@ function pptElSetBox(kind, i, b){
   if(kind === 'pic'){ op.picBox = op.picBox || {}; op.picBox[i] = { x: Math.round(b.x), y: Math.round(b.y), cx: Math.round(b.w), cy: Math.round(b.h) }; }
   else { op.spBox = op.spBox || {}; op.spBox[i] = { x: Math.round(b.x), y: Math.round(b.y), cx: Math.round(b.w), cy: Math.round(b.h) }; }
 }
-function pptElDown(ev, kind, i, mode){
+function pptElDown(ev, kind, i, mode, fixed){
   if(ev.button !== 0) return; ev.preventDefault(); ev.stopPropagation();
   const layer = document.getElementById('pptOvLayer'); layer.querySelectorAll('.ppt-el.sel').forEach(el => el.classList.remove('sel'));
   const el = layer.querySelector(`.ppt-el[data-kind="${kind}"][data-i="${i}"]`); if(el) el.classList.add('sel'); pptSel = { kind, i };
+  if(fixed) return; // 그룹 안 도형: 선택만
   const b0 = pptElBox(kind, i); if(!b0) return;
-  const SW = pptInfo.size.cx; const W = document.getElementById('pptStageCv').width; const k = SW / W;
+  const k = 1 / pptStageK();
   pptElDrag = { kind, i, mode, sx: ev.clientX, sy: ev.clientY, b0, k, moved: false, keepAr: kind !== 'sp' };
   const mv = e => { const d = pptElDrag; if(!d) return; const dx = (e.clientX - d.sx) * d.k, dy = (e.clientY - d.sy) * d.k; if(!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return; d.moved = true;
     let b; if(d.mode === 'move') b = { x: d.b0.x + dx, y: d.b0.y + dy, w: d.b0.w, h: d.b0.h };
@@ -4172,7 +4647,7 @@ function pptElDown(ev, kind, i, mode){
 function pptInlineEdit(idx){
   const it = pptItemOf(pptCur); if(!it || it.kind !== 's') return; const s = it.s, op = pptOpFor(s.no); const sh = s.shapes.find(x => x.idx === idx); if(!sh) return;
   const layer = document.getElementById('pptOvLayer'); const old = layer.querySelector('.ppt-inline'); if(old) old.remove();
-  const b = pptShapeBoxes(s, op)[idx]; const SW = pptInfo.size.cx; const W = document.getElementById('pptStageCv').width; const k = W / SW;
+  const b = pptShapeBoxes(s, op)[idx]; if(!b) return; const k = pptStageK();
   const ta = document.createElement('textarea'); ta.className = 'ppt-inline'; ta.value = op.texts[idx] !== undefined ? op.texts[idx] : sh.text;
   const fs = Math.max(10, Math.min(sh.sz, 40) * 12700 * k); ta.style.cssText = `left:${b.x * k}px;top:${b.y * k}px;width:${Math.max(80, b.cx * k)}px;height:${Math.max(fs * 1.6, b.cy * k)}px;font-size:${fs}px;`;
   let done = false; const commit = () => { if(done) return; done = true; const v = ta.value; ta.remove(); if(v !== (op.texts[idx] !== undefined ? op.texts[idx] : sh.text)) pptSetText(s.no, idx, v); };
@@ -4322,6 +4797,8 @@ async function pptMake(){
     }
     presXml = presXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, '<p:sldIdLst>' + idXmls.join('') + '</p:sldIdLst>');
     zip.file(presPath, presXml); zip.file(presRelPath, presRels); zip.file(ctPath, ct);
+    // 지운 장에서만 쓰던 그림(media)은 파일에서 뺌(남은 모든 .rels가 가리키는 그림만 남김)
+    if(removed.length){ try{ const used = new Set(); for(const f of zip.file(/\.rels$/)){ const t = await f.async('string'); t.replace(/Target="([^"]+)"/g, (m, tg) => { const i = tg.indexOf('media/'); if(i >= 0) used.add('ppt/' + tg.slice(i)); return m; }); } const gone = zip.file(/^ppt\/media\//).filter(f => !used.has(f.name)); gone.forEach(f => zip.remove(f.name)); if(gone.length) console.log('media 정리', gone.length); }catch(e){ console.warn('media cleanup', e); } }
     zip.forEach((rel, f) => { if(!f.dir) f.options.compression = /\.(xml|rels)$/i.test(rel) ? 'DEFLATE' : 'STORE'; });
     const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' }, meta => { if(st && meta.percent % 10 < 1) st.textContent = `PPT 파일을 쓰는 중… ${Math.round(meta.percent)}%`; });
     const site = ((lastJibunAddress || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_'));
@@ -4491,22 +4968,6 @@ function pptKepcoLine(){
   const L = S.lines[0]; const mw = v => { const m = (Number(v) || 0) / 1000; return (Math.abs(m) >= 100 ? Math.round(m) : Math.round(m * 10) / 10).toLocaleString('ko-KR'); };
   const ctrl = L.ctrlOk && L.ctrlA > L.vol3 ? ` (출력제어조건 ${mw(L.ctrlA)}MW)` : '';
   return `# ${L.subst}변전소 ${mw(L.vol1)}MW, #${L.mtr} MTR-${mw(L.vol2)}MW, ${L.dl}DL-${mw(L.vol3)}MW${ctrl}`;
-}
-// 미리보기용: 표 그리기(격자 + 글)
-function pptDrawTables(g, s, k, op){
-  const xml = s.__xml; if(!xml) return;
-  const frames = pptSlideTables(xml); if(!frames.length) return;
-  const D = (op && frames.some(fr => pptTableKind(fr) && pptFillOn(op, fr.fi))) ? (window.__pptD || (window.__pptD = pptProfitData())) : null;
-  for(const fr of frames){
-    const kind = pptTableKind(fr); const grid = (op && kind && D && pptFillOn(op, fr.fi)) ? pptFillGrid(kind, fr, D) : null;
-    const colSum = fr.cols.reduce((a, b) => a + b, 0) || 1; const rowSum = fr.rows.reduce((a, r) => a + r.h, 0) || 1;
-    const sx = fr.cx / colSum, sy = fr.cy / rowSum; let y = fr.y;
-    g.lineWidth = 0.5; g.strokeStyle = '#999'; g.textBaseline = 'middle';
-    fr.rows.forEach((r, ri) => { const h = r.h * sy; let x = fr.x; r.cells.forEach((c, ci) => { const w = (fr.cols[ci] || 0) * sx; g.strokeRect(x * k, y * k, w * k, h * k);
-        const v = grid && grid[ri] && grid[ri][ci] !== null && grid[ri][ci] !== undefined ? grid[ri][ci] : c.text; const changed = grid && grid[ri] && grid[ri][ci] !== null && grid[ri][ci] !== undefined;
-        if(v){ const fs = Math.max(4, Math.min(h * k * 0.6, 9 * 12700 * k)); g.font = `${fs}px "Noto Sans KR", sans-serif`; g.fillStyle = changed ? '#B3261E' : '#222'; let t = String(v).split('\n')[0]; const maxW = Math.max(4, w * k - 3); while(t && g.measureText(t).width > maxW && t.length > 1) t = t.slice(0, -1); g.textAlign = 'center'; g.fillText(t, (x + w / 2) * k, (y + h / 2) * k); }
-        x += w; }); y += h; });
-  }
 }
 // ===== 🧾 견적 · 📈 수익성 =====
 // 단가 체계 출처: "2026년 견적서 ★★★복사해서 사용하세요_2026-09-28.xlsx"(INDEX·건물 시트), 샘플 "08-0606 견적서_리엔젠 평택공장.xlsx",
