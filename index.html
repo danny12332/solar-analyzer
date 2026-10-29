@@ -3908,8 +3908,10 @@ async function pptRenderSlide(s, W, withOps){
   const drawImg = (src, x, y, w, h) => new Promise(res => { if(!src){ res(); return; } const im = new Image(); im.onload = () => { g.drawImage(im, x, y, w, h); res(); }; im.onerror = () => res(); im.src = src; });
   const hide = new Set(); if(op){ const stacks = pptStackGroups(s); Object.entries(op.replace).forEach(([i, v]) => { if(v === 'card:'){ const g = stacks.find(g => g.includes(+i)) || []; g.forEach(j => { if(j !== +i) hide.add(j); }); } }); }
   for(let i = 0; i < s.picList.length; i++){ if(hide.has(i)) continue; const p = s.picList[i]; let src = await pptMediaUrl(s, p); let x = p.x * k, y = p.y * k, w = p.cx * k, h = p.cy * k;
-    if(op && op.replace[i]){ const rs = pptSrcUrl(op.replace[i]); if(rs){ const im = await pptImgSize(rs); if(im && op.replace[i] !== 'card:'){ const b = fitBox(x, y, w, h, im.w, im.h); x = b.x; y = b.y; w = b.w; h = b.h; } src = rs; g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.strokeRect(p.x * k, p.y * k, p.cx * k, p.cy * k); } }
-    await drawImg(src, x, y, w, h); }
+    let crop = null;
+    if(op && op.replace[i]){ const rs = pptSrcUrl(op.replace[i]); if(rs){ const im = await pptImgSize(rs); if(im && op.replace[i].startsWith('data:')) crop = coverCrop(w, h, im.w, im.h); else if(im && op.replace[i] !== 'card:'){ const b = fitBox(x, y, w, h, im.w, im.h); x = b.x; y = b.y; w = b.w; h = b.h; } src = rs; g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.strokeRect(p.x * k, p.y * k, p.cx * k, p.cy * k); } }
+    if(crop && src){ await new Promise(res => { const im = new Image(); im.onload = () => { const sx = im.naturalWidth * crop.l, sy = im.naturalHeight * crop.t, sw = im.naturalWidth * (1 - crop.l - crop.r), sh = im.naturalHeight * (1 - crop.t - crop.b); g.drawImage(im, sx, sy, sw, sh, x, y, w, h); res(); }; im.onerror = () => res(); im.src = src; }); }
+    else await drawImg(src, x, y, w, h); }
   g.fillStyle = '#222'; g.textBaseline = 'top';
   try{ pptDrawTables(g, s, k, op); }catch(e){ console.warn('tables preview', e); }
   let phY = SH * 0.04; // 위치 정보가 없는 글상자(레이아웃 자리표시자)는 왼쪽 위에 차례로
@@ -4011,7 +4013,7 @@ function renderPptEditor(){
         <div class="ppt-tools"><button type="button" onclick="pptMove(-1)" title="앞으로">◀ 앞으로</button><button type="button" onclick="pptMove(1)" title="뒤로">뒤로 ▶</button>
           <button type="button" onclick="pptToggleDel(${s.no})" style="color:${op.del ? '#0B5A2A' : '#b3402a'};">${op.del ? '↩ 이 장 되살리기' : '🗑 이 장 지우기'}</button>
           <button type="button" onclick="pptAddBlank()" title="이 장 뒤에 빈 슬라이드 추가">➕ 뒤에 빈 장</button></div>
-        <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
+        <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()" title="이 장의 사진 칸(가장 큰 그림, 명함 자리 제외)에 꽉 채워 넣음 — 그림이 없는 장은 가운데에 넣고 끌어서 조절">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${cardRows}
         ${picRows ? `<div class="ppt-sec"><b>이 장의 그림 바꾸기</b>${picRows}</div>` : ''}
         ${tblRows}
@@ -4023,7 +4025,7 @@ function renderPptEditor(){
     body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div>
       <div class="ppt-side">
         <div class="ppt-tools"><button type="button" onclick="pptMove(-1)">◀ 앞으로</button><button type="button" onclick="pptMove(1)">뒤로 ▶</button><button type="button" onclick="pptDelBlank(${n.id})" style="color:#b3402a;">🗑 이 장 지우기</button><button type="button" onclick="pptAddBlank()">➕ 뒤에 빈 장</button></div>
-        <div class="ppt-sec"><b>넣기</b><div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
+        <div class="ppt-sec"><b>넣기</b><div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()" title="이 장의 사진 칸(가장 큰 그림, 명함 자리 제외)에 꽉 채워 넣음 — 그림이 없는 장은 가운데에 넣고 끌어서 조절">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${n.overlays.length ? `<div class="ppt-sec"><b>넣은 그림</b> ${n.overlays.map((o, i) => `<span class="ppt-ov-tag">${o.src.startsWith('gen:') ? PPT_ITEM_NAME[o.src.slice(4)] : '사진'} <button type="button" onclick="pptDelOverlayN(${n.id}, ${i})">✕</button></span>`).join(' ')}</div>` : ''}
       </div></div>`;
   }
@@ -4073,8 +4075,17 @@ async function pptPhotoChosen(f){
   if(im && Math.max(im.w, im.h) > 1600){ const sc = 1600 / Math.max(im.w, im.h); const cv = document.createElement('canvas'); cv.width = Math.round(im.w * sc); cv.height = Math.round(im.h * sc); await new Promise(res => { const i2 = new Image(); i2.onload = () => { cv.getContext('2d').drawImage(i2, 0, 0, cv.width, cv.height); res(); }; i2.src = url; }); out = cv.toDataURL('image/jpeg', 0.85); }
   const tgt = window.__pptReplaceTarget; window.__pptReplaceTarget = null;
   if(tgt){ pptOpFor(tgt.no).replace[tgt.i] = out; pptSaveState(); renderPptEditor(); return; }
+  // 사진 칸에 맞춰 넣기: 이 장에서 겹친 묶음(명함 자리)을 뺀 가장 큰 그림을 사진으로 교체(칸을 꽉 채우고 넘치는 부분은 잘라냄) — 명함·글을 덮지 않음
+  const it = pptItemOf(pptCur);
+  if(it && it.kind === 's' && it.s.picList.length){
+    const s = it.s; const inStack = new Set(pptStackGroups(s).flat()); const op = pptOpFor(s.no);
+    let best = -1; s.picList.forEach((p, i) => { if(inStack.has(i)) return; if(op.replace[i] === 'card:') return; if(best < 0 || p.area > s.picList[best].area) best = i; });
+    if(best >= 0){ op.replace[best] = out; pptSaveState(); renderPptEditor(); const st = document.getElementById('pptStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `📷 사진을 이 장의 그림 ${best + 1}번 칸(${(s.picList[best].cx / 360000).toFixed(1)}×${(s.picList[best].cy / 360000).toFixed(1)}cm)에 맞춰 넣었습니다. 다른 칸에 넣으려면 "이 장의 그림 바꾸기"에서 고르세요.`; } return; }
+  }
   await pptAddOverlay(out);
 }
+// 사진을 칸에 꽉 채울 때 잘라낼 비율(양쪽 합, 0~1) — 가로/세로 중 남는 쪽을 잘라냄
+function coverCrop(fw, fh, iw, ih){ const fr = fw / fh, ir = iw / ih; if(ir > fr) return { l: (1 - fr / ir) / 2, r: (1 - fr / ir) / 2, t: 0, b: 0 }; return { l: 0, r: 0, t: (1 - ir / fr) / 2, b: (1 - ir / fr) / 2 }; }
 async function pptPreviewGen(){
   const st = document.getElementById('pptStatus');
   if(!layoutRegistry.length){ st.style.color = '#b3402a'; st.textContent = '❌ 배치가 없어 미리보기를 만들 수 없습니다. 배치도 탭에서 배치를 먼저 만드세요.'; return; }
@@ -4195,8 +4206,11 @@ async function pptMake(){
           // 같은 자리에 겹친 다른 명함 그림은 지움
           const grp = stacks.find(g => g.includes(i)) || []; for(const j of grp){ if(j !== i && pics[j]) xml = xml.replace(pics[j].xml, ''); } }
         const m = await putMedia(src); if(!m){ skipped.push(`${s.no}번 그림${i + 1}`); continue; }
-        const r = addRel(rels, IMG, '../media/' + m.mn); rels = r.rels; const box = src0 === 'card:' ? { x: p.x, y: p.y, w: p.cx, h: p.cy } : fitBox(p.x, p.y, p.cx, p.cy, m.w, m.h); // 명함은 칸 크기에 딱 맞춤
-        let np = p.xml.replace(/<p:blipFill>[\s\S]*?<\/p:blipFill>/, `<p:blipFill><a:blip r:embed="${r.id}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>`);
+        const r = addRel(rels, IMG, '../media/' + m.mn); rels = r.rels;
+        const isPhoto = src0.startsWith('data:'); // 내 사진: 칸을 꽉 채우고 넘치는 쪽을 잘라냄 · 명함: 칸에 늘림 · 배치도 등 생성 쪽: 비율 유지
+        const box = (src0 === 'card:' || isPhoto) ? { x: p.x, y: p.y, w: p.cx, h: p.cy } : fitBox(p.x, p.y, p.cx, p.cy, m.w, m.h);
+        const cr = isPhoto ? coverCrop(p.cx, p.cy, m.w, m.h) : null; const pc = v => Math.round(v * 100000);
+        let np = p.xml.replace(/<p:blipFill\b[^>]*>[\s\S]*?<\/p:blipFill>/, `<p:blipFill><a:blip r:embed="${r.id}"/>${cr ? `<a:srcRect l="${pc(cr.l)}" t="${pc(cr.t)}" r="${pc(cr.r)}" b="${pc(cr.b)}"/>` : ''}<a:stretch><a:fillRect/></a:stretch></p:blipFill>`);
         np = np.replace(/<a:off x="-?\d+" y="-?\d+"\/><a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${Math.round(box.x)}" y="${Math.round(box.y)}"/><a:ext cx="${Math.round(box.w)}" cy="${Math.round(box.h)}"/>`);
         xml = xml.replace(p.xml, np); }
       // 글
