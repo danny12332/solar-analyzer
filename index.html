@@ -2327,8 +2327,7 @@ function renderAddressLabel(pos, jibun, road){
   lastLatLng = pos;
   try{ localStorage.setItem('solarLastSite', JSON.stringify({ lat: pos.getLat(), lng: pos.getLng(), addr: jibun || road || '', t: Date.now() })); }catch(e){}
   const esc = s => (s || '').replace(/'/g, "\\'");
-  const content = `<div onmousedown="addrDragStart(event)" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 30px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;">
-    <div class="addr-grip" title="여기를 끌어서 팻말을 옮깁니다" style="position:absolute;left:6px;top:8px;bottom:8px;width:18px;border-radius:6px;background:#EEF1F5;color:#8A94A3;display:flex;align-items:center;justify-content:center;cursor:grab;font-size:14px;user-select:none;-webkit-user-select:none;">✥</div>
+  const content = `<div onmousedown="addrDragStart(event)" title="글자 바깥(여백)을 손으로 끌면 팻말이 옮겨지고, 글자는 끌어 선택해서 복사할 수 있습니다" style="position:relative;user-select:text;-webkit-user-select:text;background:#fff;border-radius:12px;padding:14px 40px 12px 16px;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.22);font-family:inherit;cursor:grab;">
     <div style="position:absolute;top:10px;right:10px;">${closeBtnHtml('closeAddressOverlay()')}</div>
     <div class="addr-text" title="글자를 끌어 선택해서 복사할 수 있습니다" style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.4;white-space:nowrap;cursor:text;">${road || jibun || '주소 정보 없음'}</div>
     <div class="addr-text" style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;cursor:text;">${road ? `(지번) ${jibun || '지번 정보 없음'}` : '(이 위치엔 도로명주소 없음 — 위 주소는 지번)'}</div>
@@ -2351,11 +2350,12 @@ let addrDrag = null;
 function addrDragStart(ev){
   try{ kakao.maps.event.preventMap(); }catch(e){} // 팻말 위에서는 지도가 끌리지 않게(글자 선택·복사 가능)
   if(ev.button !== 0 || !addressOverlay) return;
-  if(ev.target && ev.target.closest && (ev.target.closest('button') || ev.target.closest('.addr-text'))) return; // 글자·버튼 위: 드래그 안 함(선택 가능)
-  if(!(ev.target && ev.target.closest && ev.target.closest('.addr-grip'))) return; // ✥ 손잡이로만 옮김
+  if(ev.target && ev.target.closest && (ev.target.closest('button') || ev.target.closest('.addr-text'))) return; // 글자·버튼 위: 드래그 안 함(글자는 선택·복사)
+  // 그 외(여백) 위: 손 모양으로 끌어서 이동
   const proj = ensureKakaoMap().getProjection();
   const pt = proj.containerPointFromCoords(addressOverlay.getPosition());
   addrDrag = { sx: ev.clientX, sy: ev.clientY, px: pt.x, py: pt.y, moved: false };
+  const box = ev.currentTarget; if(box && box.style) box.style.cursor = 'grabbing';
   const mv = e => {
     if(!addrDrag) return;
     const dx = e.clientX - addrDrag.sx, dy = e.clientY - addrDrag.sy;
@@ -2363,7 +2363,7 @@ function addrDragStart(ev){
     addrDrag.moved = true; e.preventDefault();
     addressOverlay.setPosition(proj.coordsFromContainerPoint(new kakao.maps.Point(addrDrag.px + dx, addrDrag.py + dy)));
   };
-  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if(addrDrag && addrDrag.moved) addressOverlay.__moved = true; addrDrag = null; };
+  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if(addrDrag && addrDrag.moved) addressOverlay.__moved = true; addrDrag = null; if(box && box.style) box.style.cursor = 'grab'; };
   document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
 }
 function updateAddressLabel(pos){
