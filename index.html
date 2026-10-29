@@ -914,6 +914,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <label>발전시간(h/일) <input id="pHours" type="number" min="2" max="5" step="0.1" value="3.6" style="width:60px;"></label>
           <label title="장기계약 단가 = SMP 86.350 + REC(1등급 77.336 · 2등급 68.336 · 무등급 40.756) × 가중치 → 1등급 202.354 · 2등급 188.854 · 무등급 147.484 원/kWh (PPT 49쪽)">REC 가중치 <input id="pRecW" type="number" step="0.1" value="1.5" style="width:55px;"></label>
           <label title="비우면 등급별 장기계약 단가 자동. 현물 등 다른 단가는 직접 입력">판매단가(원/kWh) <input id="pPrice" type="number" step="0.001" style="width:85px;" placeholder="등급 자동"></label>
+          <label title="제안서 양식의 '현물' 비교 단가(원/kWh). 양식 샘플값 220 — 실제 현물 시세로 바꿔 쓰세요">현물 단가(원/kWh) <input id="pSpot" type="number" step="0.001" value="220" style="width:70px;"></label>
           <label>계통(한전연계비 vat별도) <select id="pGrid"><option value="120000">저압 공중(12만/kW)</option><option value="140000">저압 지중(14만/kW)</option><option value="24000">고압 공중(2.4만/kW)</option><option value="50000">고압 지중(5만/kW)</option></select></label>
           <label title="EGI 연간 보험료 표(≤100kW 40만 … ≤3,000kW 623만). 비우면 자동">보험료(년) <input id="pInsurance" type="number" step="10000" style="width:95px;" placeholder="자동"></label>
           <label title="전기안전관리 대행 수수료 2026 표(월) × 12. 비우면 자동">전기안전관리비(년) <input id="pSafety" type="number" step="10000" style="width:95px;" placeholder="자동"></label>
@@ -3847,7 +3848,7 @@ async function pptInspect(buf){
     const rp = order[i].path.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
     const rels = zip.file(rp) ? await zip.file(rp).async('string') : '';
     const relMap = {}; rels.replace(/<Relationship\b[^>]*>/g, m => { const id = (m.match(/\bId="([^"]+)"/) || [])[1]; const tg = (m.match(/\bTarget="([^"]+)"/) || [])[1]; if(id && tg) relMap[id] = tg; return m; });
-    slides.push({ no: i + 1, path: order[i].path, rid: order[i].rid, shapes, texts, snippet: texts.slice(0, 2).join(' · ').slice(0, 60), key: texts.join('|').slice(0, 400), picList: pics.map(p => ({ x: p.x, y: p.y, cx: p.cx, cy: p.cy, area: p.area, rid: p.rid, target: relMap[p.rid] || '' })), tags, hasSample: texts.some(t => /\(샘플\)|샘플/.test(t)) });
+    slides.push({ no: i + 1, path: order[i].path, rid: order[i].rid, shapes, texts, snippet: texts.slice(0, 2).join(' · ').slice(0, 60), key: texts.join('|').slice(0, 400), picList: pics.map(p => ({ x: p.x, y: p.y, cx: p.cx, cy: p.cy, area: p.area, rid: p.rid, target: relMap[p.rid] || '' })), tags, hasSample: texts.some(t => /\(샘플\)|샘플/.test(t)), __xml: xml });
   }
   return { count: order.length, size: sz ? { cx: +sz[1], cy: +sz[2] } : null, slides, zip };
 }
@@ -3897,9 +3898,10 @@ async function pptRenderSlide(s, W, withOps){
     if(op && op.replace[i]){ const rs = pptSrcUrl(op.replace[i]); if(rs){ const im = await pptImgSize(rs); if(im){ const b = fitBox(x, y, w, h, im.w, im.h); x = b.x; y = b.y; w = b.w; h = b.h; } src = rs; g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.strokeRect(p.x * k, p.y * k, p.cx * k, p.cy * k); } }
     await drawImg(src, x, y, w, h); }
   g.fillStyle = '#222'; g.textBaseline = 'top';
+  try{ pptDrawTables(g, s, k, op); }catch(e){ console.warn('tables preview', e); }
   let phY = SH * 0.04; // 위치 정보가 없는 글상자(레이아웃 자리표시자)는 왼쪽 위에 차례로
-  s.shapes.forEach(sh => { let sx = sh.x, sy = sh.y, scx = sh.cx, scy = sh.cy; if(sx === null){ sx = SW * 0.03; sy = phY; scx = SW * 0.5; scy = SH * 0.12; phY += SH * 0.12; }
-    const txt = (op && op.texts[sh.idx] !== undefined) ? op.texts[sh.idx] : sh.text; const fs = Math.max(6, sh.sz * 12700 * k); g.font = `${sh.sz >= 24 ? 'bold ' : ''}${fs}px "Noto Sans KR", sans-serif`; g.fillStyle = (op && op.texts[sh.idx] !== undefined) ? '#B3261E' : '#222';
+  s.shapes.forEach(sh => { let sx = sh.x, sy = sh.y, scx = sh.cx, scy = sh.cy; let ph = false; if(sx === null){ ph = true; sx = SW * 0.03; sy = phY; scx = SW * 0.45; scy = SH * 0.07; phY += SH * 0.07; }
+    const txt = (op && op.texts[sh.idx] !== undefined) ? op.texts[sh.idx] : sh.text; const fs = Math.max(6, (ph ? Math.min(sh.sz, 16) : sh.sz) * 12700 * k); g.font = `${sh.sz >= 24 ? 'bold ' : ''}${fs}px "Noto Sans KR", sans-serif`; g.fillStyle = (op && op.texts[sh.idx] !== undefined) ? '#B3261E' : '#222';
     const lines = txt.split('\n'); let yy = sy * k + 2; const maxW = Math.max(10, scx * k - 4);
     for(const ln of lines){ let t = ln; while(t && g.measureText(t).width > maxW && t.length > 1) t = t.slice(0, -1); g.fillText(t, sx * k + 2, yy); yy += fs * 1.25; if(yy > (sy + scy) * k) break; } });
   if(op){ for(const ov of op.overlays){ const src = pptSrcUrl(ov.src); await drawImg(src, ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.strokeStyle = '#B7472A'; g.lineWidth = 2; g.setLineDash([6, 3]); g.strokeRect(ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.setLineDash([]); } }
@@ -3968,9 +3970,13 @@ function pptImgSize(src){ if(__imgSizeCache[src]) return Promise.resolve(__imgSi
 function fitBox(bx, by, bw, bh, iw, ih){ const sc = Math.min(bw / iw, bh / ih); const w = iw * sc, h = ih * sc; return { x: bx + (bw - w) / 2, y: by + (bh - h) / 2, w, h }; }
 // ---- 화면 ----
 function pptItemOf(key){ if(!key) return null; if(key.startsWith('s:')) return { kind: 's', s: pptInfo.slides.find(x => x.no === +key.slice(2)) }; const n = pptNewSlides.find(x => 'n:' + x.id === key); return n ? { kind: 'n', n } : null; }
+let __pptLastCur = null;
 function renderPptEditor(){
   const box = document.getElementById('pptBoard'); if(!box || !pptInfo) return;
   if(!pptCur || !pptItemOf(pptCur)) pptCur = pptOrder[0];
+  // 다시 그려도 보던 자리 유지: 띠 가로 스크롤 · 카드(크게 보기) 세로 스크롤 · 창 스크롤
+  const strip0 = document.getElementById('pptStrip'); const keepStrip = strip0 ? strip0.scrollLeft : null;
+  const card = document.getElementById('pptCard'); const keepCard = card ? card.scrollTop : 0; const keepWin = window.scrollY;
   const strip = pptOrder.map((key, i) => { const it = pptItemOf(key); if(!it) return ''; const del = it.kind === 's' && pptOpFor(it.s.no).del; const label = it.kind === 's' ? it.s.no : '새'; const thumb = it.kind === 's' ? (pptThumbs[it.s.no] || '') : '';
     return `<div class="ppt-s${key === pptCur ? ' cur' : ''}${del ? ' del' : ''}" onclick="pptGo('${key}')" title="${it.kind === 's' ? escLand(it.s.snippet) : '새 슬라이드'}"><img data-k="${key}" src="${thumb}" alt=""><span>${i + 1}${it.kind === 's' ? '' : ' ✚'}${del ? ' ✕' : ''}</span></div>`; }).join('');
   const it = pptItemOf(pptCur);
@@ -3983,7 +3989,10 @@ function renderPptEditor(){
     const s = it.s, op = pptOpFor(s.no);
     const picRows = s.picList.map((p, i) => `<label class="ppt-pic-row"><span>그림 ${i + 1} <small>(${(p.cx / 360000).toFixed(1)}×${(p.cy / 360000).toFixed(1)}cm)</small></span><select onchange="pptSetReplace(${s.no}, ${i}, this.value)"><option value="">그대로</option>${PPT_ITEMS.map(([k, n]) => `<option value="gen:${k}"${op.replace[i] === 'gen:' + k ? ' selected' : ''}>${n}로 바꾸기</option>`).join('')}<option value="card:"${op.replace[i] === 'card:' ? ' selected' : ''}>선택한 명함으로 바꾸기</option><option value="__file"${(op.replace[i] || '').startsWith('data:') ? ' selected' : ''}>내 사진으로 바꾸기…</option></select></label>`).join('');
     const cardRows = `<div class="ppt-sec"><b>명함</b> <small>(고른 명함이 표지의 명함 자리에 들어감${(() => { const where = pptWhereIs('__card'); return where ? ' — ' + where : ''; })()})</small><div class="ppt-cards">${pptCards.map(c => `<div class="ppt-card-item${c.id === pptCardSel ? ' sel' : ''}" onclick="pptCardPick('${c.id}')" title="누르면 이 명함을 씀"><img src="${c.url}" alt=""><div><span>${escLand(c.name)}</span><button type="button" onclick="event.stopPropagation();pptCardRename('${c.id}')" title="이름 바꾸기">✎</button><button type="button" onclick="event.stopPropagation();pptCardDel('${c.id}')" title="목록에서 빼기">✕</button></div></div>`).join('')}</div><button type="button" onclick="document.getElementById('pptCardInput').click()" style="font-size:11px;margin-top:4px;">➕ 명함 사진 추가</button> <button type="button" onclick="pptCardsFromTemplate().then(n => { renderPptEditor(); })" style="font-size:11px;margin-top:4px;" title="양식 표지에 겹쳐 둔 명함 그림을 목록으로 가져옴">양식에서 가져오기</button></div>`;
-    const txtRows = s.shapes.map(sh => `<div class="ppt-txt-row"><textarea rows="${Math.min(4, Math.max(1, sh.text.split('\n').length))}" onchange="pptSetText(${s.no}, ${sh.idx}, this.value)" title="글 고치기(비우면 원래 글)">${escLand(op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text)}</textarea>${op.texts[sh.idx] !== undefined ? `<button type="button" onclick="pptSetText(${s.no}, ${sh.idx}, null)" title="원래 글로">↩</button>` : ''}</div>`).join('');
+    const kep = pptKepcoLine();
+    const txtRows = s.shapes.map(sh => `<div class="ppt-txt-row"><textarea rows="${Math.min(4, Math.max(1, sh.text.split('\n').length))}" onchange="pptSetText(${s.no}, ${sh.idx}, this.value)" title="글 고치기(비우면 원래 글)">${escLand(op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text)}</textarea>${op.texts[sh.idx] !== undefined ? `<button type="button" onclick="pptSetText(${s.no}, ${sh.idx}, null)" title="원래 글로">↩</button>` : ''}${kep && /변전소/.test(sh.text) && /MTR/.test(sh.text) && op.texts[sh.idx] !== kep ? `<button type="button" onclick="pptSetText(${s.no}, ${sh.idx}, ${JSON.stringify(kep).replace(/"/g, '&quot;')})" title="한전ON 조회값으로 채우기: ${escLand(kep)}">⚡ 한전값</button>` : ''}</div>`).join('');
+    const tbls = pptDetectTables(s); const D0 = tbls.length ? (window.__pptD || (window.__pptD = pptProfitData())) : null;
+    const tblRows = tbls.length ? `<div class="ppt-sec"><b>표 자동 채우기</b> <small>${D0 ? `(${n0(D0.kW)}kW · ${D0.grade} · ${D0.hours}h · 견적 ${n0(D0.sel.final)}원 — 값은 제안서 탭 견적·수익성 입력 기준)` : '<span style="color:#b3402a;">배치(모듈 장수)가 없어 값을 계산할 수 없음</span>'}</small>${tbls.map(t => `<label style="display:block;margin-top:3px;"><input type="checkbox" ${pptFillOn(op, t.fi) ? 'checked' : ''} onchange="pptSetFill(${s.no}, ${t.fi}, this.checked)"> 표 ${t.fi + 1}: ${PPT_TABLE_NAMES[t.kind] || t.kind} <small>(${t.rows}줄)</small></label>`).join('')}<div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">빨간 글자 = 채워지는 값. 자가소비 표의 전기사용량·RE100은 한전파워플래너 자료가 없어 비웁니다.</div></div>` : '';
     body = `<div class="ppt-stage-wrap"><div class="ppt-stage" id="pptStage"><canvas id="pptStageCv"></canvas><div id="pptOvLayer"></div></div>
       <div class="ppt-side">
         <div class="ppt-tools"><button type="button" onclick="pptMove(-1)" title="앞으로">◀ 앞으로</button><button type="button" onclick="pptMove(1)" title="뒤로">뒤로 ▶</button>
@@ -3992,6 +4001,7 @@ function renderPptEditor(){
         <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${cardRows}
         ${picRows ? `<div class="ppt-sec"><b>이 장의 그림 바꾸기</b>${picRows}</div>` : ''}
+        ${tblRows}
         ${txtRows ? `<div class="ppt-sec"><b>글 고치기</b>${txtRows}</div>` : ''}
         ${op.overlays.length ? `<div class="ppt-sec"><b>넣은 그림</b> ${op.overlays.map((o, i) => `<span class="ppt-ov-tag">${o.src.startsWith('gen:') ? PPT_ITEM_NAME[o.src.slice(4)] : '사진'} <button type="button" onclick="pptDelOverlay(${s.no}, ${i})">✕</button></span>`).join(' ')}</div>` : ''}
       </div></div>`;
@@ -4006,12 +4016,26 @@ function renderPptEditor(){
   }
   const delCount = pptInfo.slides.filter(s => pptOpFor(s.no).del).length;
   box.innerHTML = `<div class="ppt-strip" id="pptStrip">${strip}</div>
-    <div class="ppt-head">슬라이드 ${pos + 1} / ${pptOrder.length}${it && it.kind === 's' ? ` (원본 ${it.s.no}번) · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''}
+    <div class="ppt-head"><button type="button" onclick="pptMoveTo(-1)" title="이전 장 (←)" style="font-size:11px;">◀</button> 슬라이드 <input type="number" min="1" max="${pptOrder.length}" value="${pos + 1}" onchange="pptJump(this.value)" onkeydown="if(event.key==='Enter'){ pptJump(this.value); }" style="width:52px;font-size:12px;" title="번호를 넣고 Enter → 그 장으로"> / ${pptOrder.length} <button type="button" onclick="pptMoveTo(1)" title="다음 장 (→)" style="font-size:11px;">▶</button>${it && it.kind === 's' ? ` (원본 ${it.s.no}번) · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''} <small style="color:var(--ink-soft);">← → 키로 이동</small>
       <span style="float:right;"><button type="button" onclick="pptResetAll()" style="font-size:11px;">↺ 편집 모두 되돌리기</button> <button type="button" onclick="pptForgetTemplate()" style="font-size:11px;color:#b3402a;">🗑 저장된 양식 지우기</button></span></div>
     ${body}<input id="pptPhotoInput" type="file" accept="image/*" style="display:none;" onchange="pptPhotoChosen(this.files[0]); this.value='';"><input id="pptCardInput" type="file" accept="image/*" style="display:none;" onchange="pptCardAdd(this.files[0]); this.value='';">`;
+  const stripEl = document.getElementById('pptStrip');
+  if(stripEl){ if(keepStrip !== null) stripEl.scrollLeft = keepStrip; const cur = stripEl.querySelector('.ppt-s.cur'); if(cur && (pptCur !== __pptLastCur || keepStrip === null)){ const L = cur.offsetLeft, R = L + cur.offsetWidth; if(L < stripEl.scrollLeft + 10 || R > stripEl.scrollLeft + stripEl.clientWidth - 10) stripEl.scrollLeft = Math.max(0, L - stripEl.clientWidth / 2 + cur.offsetWidth / 2); } }
+  if(card) card.scrollTop = keepCard; window.scrollTo(window.scrollX, keepWin);
+  __pptLastCur = pptCur;
   pptDrawStage();
 }
+function pptJump(v){ const n = parseInt(v, 10); if(!(n >= 1 && n <= pptOrder.length)) return; pptGo(pptOrder[n - 1]); }
+document.addEventListener('keydown', e => {
+  if(!pptInfo || !document.getElementById('pptStrip')) return; const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  const pane = document.getElementById('pptCard'); if(!pane || pane.offsetWidth === 0) return;
+  const i = pptOrder.indexOf(pptCur);
+  if(e.key === 'ArrowRight' || e.key === 'PageDown'){ if(i < pptOrder.length - 1){ pptGo(pptOrder[i + 1]); e.preventDefault(); } }
+  else if(e.key === 'ArrowLeft' || e.key === 'PageUp'){ if(i > 0){ pptGo(pptOrder[i - 1]); e.preventDefault(); } }
+  else if(e.key === 'Home'){ pptGo(pptOrder[0]); e.preventDefault(); } else if(e.key === 'End'){ pptGo(pptOrder[pptOrder.length - 1]); e.preventDefault(); }
+});
 function pptGo(key){ pptCur = key; renderPptEditor(); }
+function pptMoveTo(dir){ const i = pptOrder.indexOf(pptCur); const j = i + dir; if(j >= 0 && j < pptOrder.length) pptGo(pptOrder[j]); }
 function pptMove(dir){ const i = pptOrder.indexOf(pptCur); const j = i + dir; if(i < 0 || j < 0 || j >= pptOrder.length) return; [pptOrder[i], pptOrder[j]] = [pptOrder[j], pptOrder[i]]; pptSaveState(); renderPptEditor(); }
 function pptToggleDel(no){ const op = pptOpFor(no); op.del = !op.del; pptSaveState(); renderPptEditor(); }
 let __pptNewId = 0;
@@ -4128,9 +4152,13 @@ async function pptMake(){
     };
     const edited = [], removed = [], addedN = [], skipped = [];
     // 1) 기존 슬라이드: 삭제 / 그림 교체 / 글 / 넣은 그림
+    window.__pptD = null; const D = pptProfitData();
+    const filled = [];
     for(const s of pptInfo.slides){
-      const o = order[s.no - 1]; if(!o) continue; const op = pptOps[s.no]; if(!op) continue;
-      if(op.del){
+      const o = order[s.no - 1]; if(!o) continue; const op = pptOps[s.no] || null;
+      const tbls = pptDetectTables(s).filter(t => pptFillOn(op, t.fi));
+      if(!op && !(tbls.length && D)) continue;
+      if(op && op.del){
         presXml = presXml.replace(o.sldIdXml, '');
         presRels = presRels.replace(new RegExp(`<Relationship\\b[^>]*\\bId="${o.rid}"[^>]*/>`), '');
         const rp = relPathOf(o.path); const rels = zip.file(rp) ? await zip.file(rp).async('string') : '';
@@ -4139,16 +4167,17 @@ async function pptMake(){
         zip.remove(o.path); zip.remove(rp); ct = ct.replace(new RegExp(`<Override PartName="/${o.path.replace(/\./g, '\\.')}"[^>]*/>`), '');
         removed.push(s.no); continue;
       }
-      const hasRep = Object.keys(op.replace || {}).length, hasTxt = Object.keys(op.texts || {}).length, hasOv = (op.overlays || []).length;
-      if(!hasRep && !hasTxt && !hasOv) continue;
+      const hasRep = Object.keys((op && op.replace) || {}).length, hasTxt = Object.keys((op && op.texts) || {}).length, hasOv = ((op && op.overlays) || []).length, hasTbl = tbls.length && D;
+      if(!hasRep && !hasTxt && !hasOv && !hasTbl) continue;
       let xml = await zip.file(o.path).async('string');
+      if(hasTbl){ const frames = pptSlideTables(xml); for(const t of tbls){ const fr = frames.find(f => f.fi === t.fi); if(!fr) continue; try{ xml = pptApplyTableFill(xml, fr, pptFillGrid(t.kind, fr, D)); filled.push(`${s.no}번 ${PPT_TABLE_NAMES[t.kind] || t.kind}`); }catch(e){ console.warn('table fill', e); skipped.push(`${s.no}번 표${t.fi + 1}`); } } }
       const rp = relPathOf(o.path);
       let rels = zip.file(rp) ? await zip.file(rp).async('string') : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
       let maxId = 1; xml.replace(/<p:cNvPr\b[^>]*\bid="(\d+)"/g, (m, d) => { maxId = Math.max(maxId, +d); return m; });
       // 그림 교체
       const pics = pptSlidePics(xml);
       const stacks = pptStackGroups(s);
-      for(const [iStr, src0] of Object.entries(op.replace || {})){ const i = +iStr; const p = pics[i]; if(!p) continue; let src = src0;
+      for(const [iStr, src0] of Object.entries((op && op.replace) || {})){ const i = +iStr; const p = pics[i]; if(!p) continue; let src = src0;
         if(src === 'card:'){ const c = pptCardCur(); if(!c){ skipped.push(`${s.no}번 명함(고른 명함 없음)`); continue; } src = c.url;
           // 같은 자리에 겹친 다른 명함 그림은 지움
           const grp = stacks.find(g => g.includes(i)) || []; for(const j of grp){ if(j !== i && pics[j]) xml = xml.replace(pics[j].xml, ''); } }
@@ -4158,9 +4187,9 @@ async function pptMake(){
         np = np.replace(/<a:off x="-?\d+" y="-?\d+"\/><a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${Math.round(box.x)}" y="${Math.round(box.y)}"/><a:ext cx="${Math.round(box.w)}" cy="${Math.round(box.h)}"/>`);
         xml = xml.replace(p.xml, np); }
       // 글
-      for(const [idx, t] of Object.entries(op.texts || {})) xml = pptReplaceShapeText(xml, +idx, t);
+      for(const [idx, t] of Object.entries((op && op.texts) || {})) xml = pptReplaceShapeText(xml, +idx, t);
       // 넣은 그림
-      for(const ov of (op.overlays || [])){ const m = await putMedia(ov.src); if(!m){ skipped.push(`${s.no}번 넣은 그림`); continue; } const r = addRel(rels, IMG, '../media/' + m.mn); rels = r.rels; xml = xml.replace('</p:spTree>', pptPicXml(++maxId, ov.src.startsWith('gen:') ? PPT_ITEM_NAME[ov.src.slice(4)] : '사진', r.id, ov.x, ov.y, ov.w, ov.h) + '</p:spTree>'); }
+      for(const ov of ((op && op.overlays) || [])){ const m = await putMedia(ov.src); if(!m){ skipped.push(`${s.no}번 넣은 그림`); continue; } const r = addRel(rels, IMG, '../media/' + m.mn); rels = r.rels; xml = xml.replace('</p:spTree>', pptPicXml(++maxId, ov.src.startsWith('gen:') ? PPT_ITEM_NAME[ov.src.slice(4)] : '사진', r.id, ov.x, ov.y, ov.w, ov.h) + '</p:spTree>'); }
       zip.file(o.path, xml); zip.file(rp, rels); edited.push(s.no);
     }
     // 2) 순서(pptOrder) + 새 슬라이드
@@ -4196,9 +4225,180 @@ async function pptMake(){
     }
     if(!how){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = outName; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); how = `✅ ${outName} 내려받음`; }
     st.style.color = 'var(--ink-soft)';
-    st.textContent = `${how} — 슬라이드 ${idXmls.length}장${edited.length ? ' · 고친 장: ' + edited.join(', ') + '번' : ''}${addedN.length ? ' · 새 슬라이드 ' + addedN.length + '장' : ''}${removed.length ? ' · 지운 장: ' + removed.join(', ') + '번' : ''}${skipped.length ? ' · 건너뜀: ' + skipped.join(', ') : ''}.`;
+    st.textContent = `${how} — 슬라이드 ${idXmls.length}장${edited.length ? ' · 고친 장: ' + edited.join(', ') + '번' : ''}${filled.length ? ' · 표 채움: ' + filled.join(', ') : ''}${addedN.length ? ' · 새 슬라이드 ' + addedN.length + '장' : ''}${removed.length ? ' · 지운 장: ' + removed.join(', ') + '번' : ''}${skipped.length ? ' · 건너뜀: ' + skipped.join(', ') : ''}.`;
     return { edited, removed, addedN: addedN.length, skipped, outName, blob, count: idXmls.length };
   }catch(e){ console.warn('ppt make', e); st.style.color = '#b3402a'; st.textContent = '❌ PPT 만들기 실패: ' + (e && e.message ? e.message : e); }
+}
+// ===== 📊 제안서 표 자동 채우기: 양식의 수익성 표(a:tbl)를 견적·수익 모델 값으로 채움(서식 유지) =====
+// 표 종류는 머리글 글로 알아봄. 슬라이드별 "표 채우기" 체크로 끄고 켤 수 있음(기본 켬).
+function pptSlideTables(xml){
+  const out = []; let fi = -1;
+  xml.replace(/<p:graphicFrame\b[\s\S]*?<\/p:graphicFrame>/g, fr => { fi++;
+    const t = fr.match(/<a:tbl>[\s\S]*?<\/a:tbl>/); if(!t) return fr;
+    const xf = fr.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/);
+    const cols = (t[0].match(/<a:gridCol\b[^>]*w="(\d+)"/g) || []).map(m => +m.match(/w="(\d+)"/)[1]);
+    const rows = [];
+    t[0].replace(/<a:tr\b[^>]*>[\s\S]*?<\/a:tr>/g, tr => { const h = +((tr.match(/^<a:tr\b[^>]*h="(\d+)"/) || [0, 0])[1]); const cells = [];
+      tr.replace(/<a:tc\b[^>]*\/>|<a:tc\b[^>]*>[\s\S]*?<\/a:tc>/g, tc => { const text = (tc.match(/<a:t>([\s\S]*?)<\/a:t>|<a:t\s[^>]*>([\s\S]*?)<\/a:t>/g) || []).map(x => xmlUnesc(x.replace(/<[^>]+>/g, ''))).join('').replace(/　/g, '').trim(); cells.push({ xml: tc, text }); return tc; });
+      rows.push({ xml: tr, h, cells }); return tr; });
+    out.push({ fi, xml: fr, tblXml: t[0], x: xf ? +xf[1] : 0, y: xf ? +xf[2] : 0, cx: xf ? +xf[3] : 0, cy: xf ? +xf[4] : 0, cols, rows });
+    return fr; });
+  return out;
+}
+// 셀 글 바꾸기: 첫 문단 서식(pPr·rPr)을 살리고 글만 교체. 런이 없던 셀은 endParaRPr 서식으로 런을 만듦
+function tcSetText(tc, text){
+  const tb = tc.match(/<a:txBody>[\s\S]*?<\/a:txBody>/); if(!tb) return tc;
+  const body = tb[0];
+  const paras = body.match(/<a:p\b[^>]*>[\s\S]*?<\/a:p>|<a:p\/>/g) || [];
+  const p0 = paras[0] || '<a:p></a:p>';
+  const pPr = (p0.match(/<a:pPr\b[^>]*\/>|<a:pPr\b[\s\S]*?<\/a:pPr>/) || [''])[0];
+  const run0 = (p0.match(/<a:r>[\s\S]*?<\/a:r>/) || [''])[0];
+  let rPr = (run0.match(/<a:rPr\b[^>]*\/>|<a:rPr\b[\s\S]*?<\/a:rPr>/) || [null])[0];
+  const endPr = (p0.match(/<a:endParaRPr\b[^>]*\/>|<a:endParaRPr\b[\s\S]*?<\/a:endParaRPr>/) || [''])[0];
+  if(!rPr && endPr) rPr = endPr.replace(/<a:endParaRPr/g, '<a:rPr').replace(/<\/a:endParaRPr>/g, '</a:rPr>');
+  if(!rPr) rPr = '<a:rPr lang="ko-KR" sz="1000"/>';
+  const lines = String(text).split('\n');
+  const np = lines.map(ln => `<a:p>${pPr}${ln === '' ? '' : `<a:r>${rPr}<a:t>${xmlEsc(ln)}</a:t></a:r>`}${endPr}</a:p>`).join('');
+  const bodyPr = (body.match(/<a:bodyPr\b[^>]*\/>|<a:bodyPr\b[\s\S]*?<\/a:bodyPr>/) || ['<a:bodyPr/>'])[0];
+  const lst = (body.match(/<a:lstStyle\b[^>]*\/>|<a:lstStyle\b[\s\S]*?<\/a:lstStyle>/) || ['<a:lstStyle/>'])[0];
+  return tc.replace(body, `<a:txBody>${bodyPr}${lst}${np}</a:txBody>`);
+}
+// grid[r][c]: 문자열이면 그 글로, null/undefined면 그대로
+function pptApplyTableFill(xml, fr, grid){
+  let ri = -1;
+  const newTbl = fr.tblXml.replace(/<a:tr\b[^>]*>[\s\S]*?<\/a:tr>/g, tr => { ri++; const g = grid[ri]; if(!g) return tr; let ci = -1;
+    return tr.replace(/<a:tc\b[^>]*\/>|<a:tc\b[^>]*>[\s\S]*?<\/a:tc>/g, tc => { ci++; const v = g[ci]; if(v === null || v === undefined) return tc; return tcSetText(tc, v); }); });
+  const newFr = fr.xml.replace(fr.tblXml, newTbl);
+  return xml.replace(fr.xml, newFr);
+}
+function pptTableKind(fr){
+  if(!fr.rows.length) return '';
+  const H = fr.rows[0].cells.map(c => c.text).join('|'), H2 = fr.rows[1] ? fr.rows[1].cells.map(c => c.text).join('|') : '';
+  const col0 = fr.rows.map(r => (r.cells[0] || {}).text || '').join('|');
+  if(/년차/.test(H) && /\d\.\dh/.test(H) && /연간비용/.test(H)) return 'rpsHours';
+  if(/장기계약누적매출/.test(H) && /현물누적매출/.test(H)) return 'rpsCum';
+  if(/1등급 연간매출/.test(H) && /2등급 연간매출/.test(H)) return 'rpsGrades';
+  if(/월 예상 발전량/.test(H) && /설비용량/.test(H2)) return 'rpsMonthly';
+  if(/적용가중치/.test(H2) && /SMP/.test(H2)) return 'priceTbl';
+  if(/^전기안전관리비/.test(fr.rows[0].cells[0].text) && /보험료/.test(col0)) return 'costTbl';
+  if(fr.cols.length === 2 && /설비용량/.test(col0) && /공사비/.test(col0)) return 'kvTbl';
+  if(/날\s*짜/.test(H) && /전기사용량/.test(H)) return 'selfMonthly';
+  if(/설비용량/.test(H) && /계약방식/.test(H)) return 'selfSummary';
+  if(/수익\s*\(원\/kWh\)/.test(H)) return 'selfUnit';
+  return '';
+}
+const PPT_TABLE_NAMES = { rpsHours: '발전사업 30년(발전시간별)', rpsCum: '발전사업 누적(장기계약·현물)', rpsGrades: '발전사업 20년(등급별)', rpsMonthly: '월 예상 발전량·수익', priceTbl: 'SMP·REC 단가', costTbl: '연간 비용·계통', kvTbl: '사업 조건(용량·공사비·단가)', selfMonthly: '자가소비 월별', selfSummary: '자가소비 요약', selfUnit: '자가소비 단가' };
+// 모델 값: 선택 모듈 기준 + 등급별(같은 제조사 모듈로 바꿔 견적) 가격·공사비
+function pptProfitData(){
+  if(typeof computeQuote !== 'function') return null;
+  const Q = computeQuote(); const q = Q.q; if(!q.kW) return null;
+  const P = computeProfit(Q);
+  const byG = {};
+  ['1등급', '2등급', '무등급'].forEach(g => {
+    const keys = Object.keys(QUOTE.modules).filter(k => QUOTE.modules[k].grade === g); const key = keys.find(k => QUOTE.modules[k].maker === q.mod.maker) || keys[0]; const mod = QUOTE.modules[key];
+    const Qg = mod === q.mod ? Q : computeQuote(Object.assign({}, q, { mod, kW: q.count * mod.wp / 1000 }));
+    byG[g] = { mod, kW: Qg.q.kW, price: PROFIT.smp + (PROFIT.rec[g] || 0) * q.recW, rec: PROFIT.rec[g] || 0, build: roundDownTo(Qg.total, 1000000), final: Qg.customer };
+  });
+  const sel = byG[q.mod.grade] || byG['1등급'];
+  const spot = (() => { const v = parseFloat(((document.getElementById('pSpot') || {}).value) || ''); return isFinite(v) ? v : 220; })();
+  const gridLabel = (() => { const el = document.getElementById('pGrid'); return el && el.options[el.selectedIndex] ? el.options[el.selectedIndex].textContent.replace(/\(.*\)/, '').trim() : '저압 공중'; })();
+  const yearly = (price, h, years) => { const rows = []; let cum = 0; for(let y = 1; y <= years; y++){ const eff = PROFIT.effYear1 - PROFIT.effDrop * (y - 1); const rev = q.kW * h * 365 * eff * price; const cost = (P.insurance + P.safetyY) * Math.pow(PROFIT.costInflation, y - 1); cum += rev - cost; rows.push({ y, eff, rev, cost, cum }); } return rows; };
+  return { Q, q, P, kW: q.kW, hours: q.hours, hoursList: P.hoursList, byG, sel, grade: q.mod.grade, price: P.price, spot, insurance: P.insurance, safetyY: P.safetyY, gridFee: P.gridFee, gridLabel, recW: q.recW, yearly, unit: P.self.unit, self: P.self };
+}
+const pct2 = v => (v * 100).toFixed(2) + '%';
+const n0 = v => wonFmt(v);
+const kw2 = v => Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+const f3 = v => Number(v).toFixed(3);
+// 표 종류별로 채울 값(grid)
+function pptFillGrid(kind, fr, D){
+  const R = fr.rows, grid = R.map(() => null);
+  const isY = t => /^\d+\s*$/.test(t);
+  if(kind === 'rpsHours'){
+    const hs = D.hoursList; const g = D.sel; const Ys = hs.map(h => D.yearly(g.price, h, 30));
+    grid[0] = R[0].cells.map((c, i) => (i >= 2 && i <= 4 && hs[i - 2] !== undefined) ? c.text.replace(/\d\.\dh/, hs[i - 2].toFixed(1) + 'h').replace(/^\S+등급/, D.grade) : null);
+    const sums = hs.map(() => 0); let sumC = 0;
+    R.forEach((r, ri) => { if(ri === 0) return; const t = r.cells[0].text; if(isY(t)){ const y = +t; const row = Ys[0][y - 1]; if(!row) return; grid[ri] = [String(y), pct2(row.eff), ...hs.map((h, k) => n0(Ys[k][y - 1].rev)), n0(row.cost)]; hs.forEach((h, k) => sums[k] += Ys[k][y - 1].rev); sumC += row.cost; }
+      else if(/합\s*계/.test(t)) grid[ri] = ['합계', '', ...sums.map(n0), n0(sumC)]; });
+  } else if(kind === 'rpsCum'){
+    const g = D.sel; const L = D.yearly(g.price, D.hours, 30), S = D.yearly(D.spot, D.hours, 30);
+    R.forEach((r, ri) => { if(ri === 0) return; const t = r.cells[0].text;
+      if(/^0\s*$/.test(t)) grid[ri] = ['0', '100.00%', '', n0(-g.build), '', n0(-g.build), '0'];
+      else if(isY(t)){ const y = +t; const l = L[y - 1], s = S[y - 1]; if(!l) return; grid[ri] = [String(y), pct2(l.eff), n0(l.cum), n0(l.cum - g.build), n0(s.cum), n0(s.cum - g.build), n0(l.cost)]; }
+      else if(/합\s*계/.test(t)){ const l = L[L.length - 1], s = S[S.length - 1]; grid[ri] = ['합계', '', n0(l.cum), n0(l.cum - g.build), n0(s.cum), n0(s.cum - g.build), n0(L.reduce((a, x) => a + x.cost, 0))]; } });
+  } else if(kind === 'rpsGrades'){
+    const G = ['1등급', '2등급', '무등급'].map(k => ({ k, b: D.byG[k], Y: D.yearly(D.byG[k].price, D.hours, 30) }));
+    const nY = R.filter(r => isY(r.cells[0].text)).length || 20;
+    const sumR = G.map(() => 0); let sumC = 0;
+    R.forEach((r, ri) => { if(ri === 0) return; const t = r.cells[0].text;
+      if(isY(t)){ const y = +t; if(!G[0].Y[y - 1]) return; const row = [String(y), pct2(G[0].Y[y - 1].eff)]; G.forEach((gg, k) => { const yr = gg.Y[y - 1]; row.push(n0(yr.rev), n0(yr.cum - gg.b.build)); sumR[k] += yr.rev; }); row.push(n0(G[0].Y[y - 1].cost)); sumC += G[0].Y[y - 1].cost; grid[ri] = row.slice(0, r.cells.length); }
+      else if(/합\s*계/.test(t)){ const row = ['합계', '']; G.forEach((gg, k) => { const last = gg.Y[Math.min(nY, 30) - 1]; row.push(n0(sumR[k]), n0(last.cum - gg.b.build)); }); row.push(n0(sumC)); grid[ri] = row.slice(0, r.cells.length); } });
+  } else if(kind === 'rpsMonthly'){
+    const order = ['1등급', '2등급', '무등급'];
+    R.forEach((r, ri) => { if(ri < 2) return; const k = order[ri - 2]; if(!k) return; const b = D.byG[k]; const y1 = D.yearly(b.price, D.hours, 1)[0]; const first = ri === 2 ? kw2(D.kW) : (ri === 4 ? n0(D.kW * D.hours * 30) : null); grid[ri] = [first, null, n0(y1.rev / 12), n0((y1.rev - y1.cost) / 12)].slice(0, r.cells.length); });
+  } else if(kind === 'priceTbl'){
+    grid[1] = [`적용가중치${D.recW}`, null, null, null].slice(0, R[1].cells.length);
+    R.forEach((r, ri) => { if(ri < 2) return; const k = r.cells[0].text.trim(); const b = D.byG[k]; if(!b) return; grid[ri] = [null, f3(b.price), f3(PROFIT.smp), f3(b.rec)].slice(0, r.cells.length); });
+  } else if(kind === 'costTbl'){
+    R.forEach((r, ri) => { const k = r.cells[0].text; let v = null; if(/전기안전관리비/.test(k)) v = n0(D.safetyY); else if(/보험료/.test(k)) v = n0(D.insurance); else if(/계통 구분/.test(k)) v = D.gridLabel; else if(/한전연계비/.test(k)) v = n0(-D.gridFee); if(v !== null) grid[ri] = [null, v]; });
+  } else if(kind === 'kvTbl'){
+    R.forEach((r, ri) => { const k = r.cells[0].text.replace(/\s+/g, ' ').trim(); let v = null, m;
+      if(/^설비용량/.test(k)) v = kw2(D.kW);
+      else if(/^발전시간/.test(k)) v = String(D.hours);
+      else if((m = k.match(/^(\S+등급) 최종 공사비/))) v = D.byG[m[1]] ? n0(D.byG[m[1]].final) + ' 원' : null;
+      else if((m = k.match(/^(\S+등급) 공사비/))) v = D.byG[m[1]] ? n0(D.byG[m[1]].build) + ' 원' : null;
+      else if((m = k.match(/^(\S+등급) 장기계약\(월\)\s*([\d.]+)\s*h/))) { const b = D.byG[m[1]]; if(b) v = n0(D.yearly(b.price, parseFloat(m[2]), 1)[0].rev / 12) + ' 원'; }
+      else if(/^월수익 장기계약/.test(k)){ const y1 = D.yearly(D.sel.price, D.hours, 1)[0]; v = n0((y1.rev - y1.cost) / 12) + ' 원'; }
+      else if(/^월수익 현물/.test(k)){ const y1 = D.yearly(D.spot, D.hours, 1)[0]; v = n0((y1.rev - y1.cost) / 12) + ' 원'; }
+      else if(/전기안전관리비/.test(k)) v = n0(D.safetyY) + ' 원';
+      else if(/보험료/.test(k)) v = n0(D.insurance) + ' 원';
+      else if(/계통 구분/.test(k)) v = D.gridLabel;
+      else if(/한전연계비/.test(k)) v = n0(-D.gridFee) + ' 원';
+      else if((m = k.match(/^장기계약 \((\S+등급)\)/))) v = D.byG[m[1]] ? f3(D.byG[m[1]].price) : null;
+      else if(/^장기계약$/.test(k)) v = f3(D.sel.price);
+      else if(/^현물$/.test(k)) v = f3(D.spot);
+      if(v !== null) grid[ri] = [null, v]; });
+  } else if(kind === 'selfMonthly'){
+    const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; let sg = 0, si = 0;
+    R.forEach((r, ri) => { const t = r.cells[0].text; const m = t.match(/(\d{1,2})\s*월/); if(m && ri >= 1){ const mi = +m[1] - 1; const gen = D.kW * D.hours * (days[mi] || 30); const inc = gen * D.unit; sg += gen; si += inc; grid[ri] = [null, '', n0(gen), '0', n0(inc), '0', n0(inc)].slice(0, r.cells.length); }
+      else if(/합\s*계/.test(t)) grid[ri] = [null, '', n0(sg), '0', n0(si), '0', n0(si)].slice(0, r.cells.length); });
+  } else if(kind === 'selfSummary'){
+    if(R[1]) grid[1] = [kw2(D.kW) + 'kW', String(D.hours), null, null, D.self.co2.toFixed(2), '', n0(D.self.yearIncome)].slice(0, R[1].cells.length);
+  } else if(kind === 'selfUnit'){
+    if(R[1]) grid[1] = [f3(D.unit)];
+  }
+  return grid;
+}
+// 슬라이드에서 채울 수 있는 표 목록 [{fi, kind, name, rows}]
+function pptDetectTables(s){
+  if(s.__tables) return s.__tables;
+  const xml = s.__xml; if(!xml) return [];
+  s.__tables = pptSlideTables(xml).map(fr => ({ fi: fr.fi, kind: pptTableKind(fr), rows: fr.rows.length })).filter(t => t.kind);
+  return s.__tables;
+}
+function pptFillOn(op, fi){ return !(op && op.fill && op.fill[fi] === false); }
+function pptSetFill(no, fi, on){ const op = pptOpFor(no); op.fill = op.fill || {}; op.fill[fi] = !!on; pptSaveState(); renderPptEditor(); }
+// 한전 선로 문구: "# 변전소 MW, MTR- MW, DL- MW (출력제어조건 MW)" 자리에 조회값
+function pptKepcoLine(){
+  const S = (typeof lastKepcoSummary !== 'undefined') ? lastKepcoSummary : null; if(!S || S.failed || !S.lines || !S.lines.length) return '';
+  const L = S.lines[0]; const mw = v => { const m = (Number(v) || 0) / 1000; return (Math.abs(m) >= 100 ? Math.round(m) : Math.round(m * 10) / 10).toLocaleString('ko-KR'); };
+  const ctrl = L.ctrlOk && L.ctrlA > L.vol3 ? ` (출력제어조건 ${mw(L.ctrlA)}MW)` : '';
+  return `# ${L.subst}변전소 ${mw(L.vol1)}MW, #${L.mtr} MTR-${mw(L.vol2)}MW, ${L.dl}DL-${mw(L.vol3)}MW${ctrl}`;
+}
+// 미리보기용: 표 그리기(격자 + 글)
+function pptDrawTables(g, s, k, op){
+  const xml = s.__xml; if(!xml) return;
+  const frames = pptSlideTables(xml); if(!frames.length) return;
+  const D = (op && frames.some(fr => pptTableKind(fr) && pptFillOn(op, fr.fi))) ? (window.__pptD || (window.__pptD = pptProfitData())) : null;
+  for(const fr of frames){
+    const kind = pptTableKind(fr); const grid = (op && kind && D && pptFillOn(op, fr.fi)) ? pptFillGrid(kind, fr, D) : null;
+    const colSum = fr.cols.reduce((a, b) => a + b, 0) || 1; const rowSum = fr.rows.reduce((a, r) => a + r.h, 0) || 1;
+    const sx = fr.cx / colSum, sy = fr.cy / rowSum; let y = fr.y;
+    g.lineWidth = 0.5; g.strokeStyle = '#999'; g.textBaseline = 'middle';
+    fr.rows.forEach((r, ri) => { const h = r.h * sy; let x = fr.x; r.cells.forEach((c, ci) => { const w = (fr.cols[ci] || 0) * sx; g.strokeRect(x * k, y * k, w * k, h * k);
+        const v = grid && grid[ri] && grid[ri][ci] !== null && grid[ri][ci] !== undefined ? grid[ri][ci] : c.text; const changed = grid && grid[ri] && grid[ri][ci] !== null && grid[ri][ci] !== undefined;
+        if(v){ const fs = Math.max(4, Math.min(h * k * 0.6, 9 * 12700 * k)); g.font = `${fs}px "Noto Sans KR", sans-serif`; g.fillStyle = changed ? '#B3261E' : '#222'; let t = String(v).split('\n')[0]; const maxW = Math.max(4, w * k - 3); while(t && g.measureText(t).width > maxW && t.length > 1) t = t.slice(0, -1); g.textAlign = 'center'; g.fillText(t, (x + w / 2) * k, (y + h / 2) * k); }
+        x += w; }); y += h; });
+  }
 }
 // ===== 🧾 견적 · 📈 수익성 =====
 // 단가 체계 출처: "2026년 견적서 ★★★복사해서 사용하세요_2026-09-28.xlsx"(INDEX·건물 시트), 샘플 "08-0606 견적서_리엔젠 평택공장.xlsx",
@@ -4388,6 +4588,7 @@ function computeProfit(Q){
   return { price, insurance, safetyY, gridFee, invest, hoursList, rows, sums, sum20, payback, self: { unit, months, yearIncome, yearGen, co2: yearGen / 1000 * PROFIT.co2PerMWh, payback: yearIncome > 0 ? invest / yearIncome : null } };
 }
 function renderQuotePanel(){
+  window.__pptD = null;
   const box = document.getElementById('quoteSummary'); if(!box) return;
   const mSel = document.getElementById('qMethod');
   if(mSel && __qMethodAuto){ const gm = guessMethod(); if(gm && mSel.value !== gm && document.activeElement !== mSel) mSel.value = gm; }
