@@ -142,6 +142,15 @@
   .ppt-stage canvas{display:block;width:100%;height:auto;}
   #pptOvLayer{position:absolute;left:0;top:0;}
   .ppt-ov{position:absolute;border:2px solid #B7472A;cursor:move;box-sizing:border-box;}
+  .ppt-el{position:absolute;box-sizing:border-box;border:1px dashed transparent;cursor:move;}
+  .ppt-el:hover{border-color:rgba(26,95,180,.7);}
+  .ppt-el.sel{border:2px solid #1A5FB4;background:rgba(26,95,180,.05);}
+  .ppt-el.ov{border:2px solid #B7472A;}
+  .ppt-el.sp.ph{border-style:dotted;}
+  .ppt-el .ppt-ov-h{display:none;}
+  .ppt-el.sel .ppt-ov-h{display:block;background:#1A5FB4;}
+  .ppt-el.ov .ppt-ov-h{display:block;background:#B7472A;}
+  .ppt-inline{position:absolute;z-index:5;background:rgba(255,255,255,.96);border:2px solid #1A5FB4;font-family:"Noto Sans KR",sans-serif;line-height:1.25;padding:2px;resize:both;box-sizing:border-box;}
   .ppt-ov-h{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:#B7472A;border:2px solid #fff;border-radius:2px;cursor:nwse-resize;}
   .ppt-side{font-size:11.5px;display:flex;flex-direction:column;gap:8px;}
   .ppt-tools{display:flex;flex-wrap:wrap;gap:4px;}
@@ -3829,23 +3838,32 @@ function pptShapeTags(xml){
 function xmlUnesc(t){ return String(t).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&'); }
 function xmlEsc(t){ return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // 슬라이드의 글상자(p:sp, 글이 있는 것만): 순서(idx)·글·위치·글자 크기
+// 그룹(p:grpSp) 범위 — 그 안의 도형은 좌표가 그룹 기준이라 제자리 이동 대상에서 뺌
+function pptGroupRanges(xml){ const r = []; const st = []; const re = /<p:grpSp\b[^>]*>|<\/p:grpSp>/g; let m; while((m = re.exec(xml))){ if(m[0][1] === '/'){ const a = st.pop(); if(a !== undefined) r.push([a, m.index]); } else st.push(m.index); } return r; }
 function pptSlideShapes(xml){
-  const out = []; let idx = -1;
-  xml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, sp => { idx++;
+  const out = []; let idx = -1; const GR = pptGroupRanges(xml);
+  xml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, (sp, off) => { idx++; const inGroup = GR.some(([a, b]) => off > a && off < b);
     const paras = []; sp.replace(/<a:p\b[\s\S]*?<\/a:p>|<a:p\/>/g, p => { const t = (p.match(/<a:t>([\s\S]*?)<\/a:t>|<a:t\s[^>]*>([\s\S]*?)<\/a:t>/g) || []).map(x => xmlUnesc(x.replace(/<[^>]+>/g, ''))).join(''); paras.push(t); return p; });
     const text = paras.join('\n').replace(/\n+$/, '');
     if(!text.trim()) return sp;
     const xf = sp.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/);
     const sz = (sp.match(/<a:rPr\b[^>]*\bsz="(\d+)"/) || [])[1];
-    out.push({ idx, text, x: xf ? +xf[1] : null, y: xf ? +xf[2] : null, cx: xf ? +xf[3] : null, cy: xf ? +xf[4] : null, sz: sz ? +sz / 100 : 18, ph: /<p:ph\b/.test(sp) });
+    out.push({ idx, text, x: xf ? +xf[1] : null, y: xf ? +xf[2] : null, cx: xf ? +xf[3] : null, cy: xf ? +xf[4] : null, sz: sz ? +sz / 100 : 18, ph: /<p:ph\b/.test(sp), inGroup });
     return sp; });
   return out;
 }
 function pptSlidePics(xml){
-  const pics = [];
-  xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, pic => { const xf = pic.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/); const rid = (pic.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1]; if(xf){ pics.push({ xml: pic, x: +xf[1], y: +xf[2], cx: +xf[3], cy: +xf[4], area: (+xf[3]) * (+xf[4]), rid }); } return pic; });
+  const pics = []; const GR = pptGroupRanges(xml);
+  xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, (pic, off) => { const xf = pic.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/); const rid = (pic.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1]; if(xf){ pics.push({ xml: pic, x: +xf[1], y: +xf[2], cx: +xf[3], cy: +xf[4], area: (+xf[3]) * (+xf[4]), rid, inGroup: GR.some(([a, b]) => off > a && off < b) }); } return pic; });
   return pics;
 }
+// 제자리 편집용 위치: 옮긴 값(op.spBox/op.picBox)이 있으면 그것, 없으면 원본. 위치 정보가 없는 자리표시자는 왼쪽 위에 차례로
+function pptShapeBoxes(s, op){
+  const SW = pptInfo.size ? pptInfo.size.cx : 12192000, SH = pptInfo.size ? pptInfo.size.cy : 6858000; let phY = SH * 0.04; const out = {};
+  s.shapes.forEach(sh => { const ov = op && op.spBox && op.spBox[sh.idx]; if(ov){ out[sh.idx] = Object.assign({ ph: false }, ov); return; } if(sh.x === null){ out[sh.idx] = { x: SW * 0.03, y: phY, cx: SW * 0.45, cy: SH * 0.07, ph: true }; phY += SH * 0.07; } else out[sh.idx] = { x: sh.x, y: sh.y, cx: sh.cx, cy: sh.cy, ph: false }; });
+  return out;
+}
+function pptPicBox(s, i, op){ const p = s.picList[i]; const ov = op && op.picBox && op.picBox[i]; return ov ? { x: ov.x, y: ov.y, cx: ov.cx, cy: ov.cy } : { x: p.x, y: p.y, cx: p.cx, cy: p.cy }; }
 async function pptInspect(buf){
   const zip = await JSZip.loadAsync(buf);
   const presXml = await zip.file('ppt/presentation.xml').async('string');
@@ -3861,7 +3879,7 @@ async function pptInspect(buf){
     const rp = order[i].path.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
     const rels = zip.file(rp) ? await zip.file(rp).async('string') : '';
     const relMap = {}; rels.replace(/<Relationship\b[^>]*>/g, m => { const id = (m.match(/\bId="([^"]+)"/) || [])[1]; const tg = (m.match(/\bTarget="([^"]+)"/) || [])[1]; if(id && tg) relMap[id] = tg; return m; });
-    slides.push({ no: i + 1, path: order[i].path, rid: order[i].rid, shapes, texts, snippet: texts.slice(0, 2).join(' · ').slice(0, 60), key: texts.join('|').slice(0, 400), picList: pics.map(p => ({ x: p.x, y: p.y, cx: p.cx, cy: p.cy, area: p.area, rid: p.rid, target: relMap[p.rid] || '' })), tags, hasSample: texts.some(t => /\(샘플\)|샘플/.test(t)), __xml: xml });
+    slides.push({ no: i + 1, path: order[i].path, rid: order[i].rid, shapes, texts, snippet: texts.slice(0, 2).join(' · ').slice(0, 60), key: texts.join('|').slice(0, 400), picList: pics.map(p => ({ x: p.x, y: p.y, cx: p.cx, cy: p.cy, area: p.area, rid: p.rid, target: relMap[p.rid] || '', inGroup: !!p.inGroup })), tags, hasSample: texts.some(t => /\(샘플\)|샘플/.test(t)), __xml: xml });
   }
   return { count: order.length, size: sz ? { cx: +sz[1], cy: +sz[2] } : null, slides, zip };
 }
@@ -3907,16 +3925,17 @@ async function pptRenderSlide(s, W, withOps){
   const op = withOps ? pptOpFor(s.no) : null;
   const drawImg = (src, x, y, w, h) => new Promise(res => { if(!src){ res(); return; } const im = new Image(); im.onload = () => { g.drawImage(im, x, y, w, h); res(); }; im.onerror = () => res(); im.src = src; });
   const hide = new Set(); if(op){ const stacks = pptStackGroups(s); Object.entries(op.replace).forEach(([i, v]) => { if(v === 'card:'){ const g = stacks.find(g => g.includes(+i)) || []; g.forEach(j => { if(j !== +i) hide.add(j); }); } }); }
-  for(let i = 0; i < s.picList.length; i++){ if(hide.has(i)) continue; const p = s.picList[i]; let src = await pptMediaUrl(s, p); let x = p.x * k, y = p.y * k, w = p.cx * k, h = p.cy * k;
+  if(op && op.hidePic) Object.keys(op.hidePic).forEach(i => { if(op.hidePic[i]) hide.add(+i); });
+  for(let i = 0; i < s.picList.length; i++){ if(hide.has(i)) continue; const p = s.picList[i]; const pb = pptPicBox(s, i, op); let src = await pptMediaUrl(s, p); let x = pb.x * k, y = pb.y * k, w = pb.cx * k, h = pb.cy * k;
     let crop = null;
-    if(op && op.replace[i]){ const rs = pptSrcUrl(op.replace[i]); if(rs){ const im = await pptImgSize(rs); if(im && op.replace[i].startsWith('data:')) crop = coverCrop(w, h, im.w, im.h); else if(im && op.replace[i] !== 'card:'){ const b = fitBox(x, y, w, h, im.w, im.h); x = b.x; y = b.y; w = b.w; h = b.h; } src = rs; g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.strokeRect(p.x * k, p.y * k, p.cx * k, p.cy * k); } }
+    if(op && op.replace[i]){ const rs = pptSrcUrl(op.replace[i]); if(rs){ const im = await pptImgSize(rs); if(im && op.replace[i].startsWith('data:')) crop = coverCrop(w, h, im.w, im.h); else if(im && op.replace[i] !== 'card:'){ const b = fitBox(x, y, w, h, im.w, im.h); x = b.x; y = b.y; w = b.w; h = b.h; } src = rs; g.strokeStyle = '#1A5FB4'; g.lineWidth = 2; g.strokeRect(pb.x * k, pb.y * k, pb.cx * k, pb.cy * k); } }
     if(crop && src){ await new Promise(res => { const im = new Image(); im.onload = () => { const sx = im.naturalWidth * crop.l, sy = im.naturalHeight * crop.t, sw = im.naturalWidth * (1 - crop.l - crop.r), sh = im.naturalHeight * (1 - crop.t - crop.b); g.drawImage(im, sx, sy, sw, sh, x, y, w, h); res(); }; im.onerror = () => res(); im.src = src; }); }
     else await drawImg(src, x, y, w, h); }
   g.fillStyle = '#222'; g.textBaseline = 'top';
   try{ pptDrawTables(g, s, k, op); }catch(e){ console.warn('tables preview', e); }
-  let phY = SH * 0.04; // 위치 정보가 없는 글상자(레이아웃 자리표시자)는 왼쪽 위에 차례로
-  s.shapes.forEach(sh => { let sx = sh.x, sy = sh.y, scx = sh.cx, scy = sh.cy; let ph = false; if(sx === null){ ph = true; sx = SW * 0.03; sy = phY; scx = SW * 0.45; scy = SH * 0.07; phY += SH * 0.07; }
-    const txt = (op && op.texts[sh.idx] !== undefined) ? op.texts[sh.idx] : sh.text; const fs = Math.max(6, (ph ? Math.min(sh.sz, 16) : sh.sz) * 12700 * k); g.font = `${sh.sz >= 24 ? 'bold ' : ''}${fs}px "Noto Sans KR", sans-serif`; g.fillStyle = (op && op.texts[sh.idx] !== undefined) ? '#B3261E' : '#222';
+  const boxes = pptShapeBoxes(s, op);
+  s.shapes.forEach(sh => { const bx = boxes[sh.idx]; const sx = bx.x, sy = bx.y, scx = bx.cx, scy = bx.cy, ph = bx.ph;
+    const txt = (op && op.texts[sh.idx] !== undefined) ? op.texts[sh.idx] : sh.text; if(txt === '') return; const fs = Math.max(6, (ph ? Math.min(sh.sz, 16) : sh.sz) * 12700 * k); g.font = `${sh.sz >= 24 ? 'bold ' : ''}${fs}px "Noto Sans KR", sans-serif`; g.fillStyle = (op && op.texts[sh.idx] !== undefined) ? '#B3261E' : '#222';
     const lines = txt.split('\n'); let yy = sy * k + 2; const maxW = Math.max(10, scx * k - 4);
     for(const ln of lines){ let t = ln; while(t && g.measureText(t).width > maxW && t.length > 1) t = t.slice(0, -1); g.fillText(t, sx * k + 2, yy); yy += fs * 1.25; if(yy > (sy + scy) * k) break; } });
   if(op){ for(const ov of op.overlays){ const src = pptSrcUrl(ov.src); await drawImg(src, ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.strokeStyle = '#B7472A'; g.lineWidth = 2; g.setLineDash([6, 3]); g.strokeRect(ov.x * k, ov.y * k, ov.w * k, ov.h * k); g.setLineDash([]); } }
@@ -4015,7 +4034,7 @@ function renderPptEditor(){
           <button type="button" onclick="pptAddBlank()" title="이 장 뒤에 빈 슬라이드 추가">➕ 뒤에 빈 장</button></div>
         <div class="ppt-sec"><b>넣기</b> — 누르면 가운데에 들어가고, 미리보기에서 끌어 옮기고 모서리를 끌어 크기 조절 <div class="ppt-chips">${chips}<button type="button" class="ppt-chip" onclick="document.getElementById('pptPhotoInput').click()" title="이 장의 사진 칸(가장 큰 그림, 명함 자리 제외)에 꽉 채워 넣음 — 그림이 없는 장은 가운데에 넣고 끌어서 조절">📷 내 사진…</button></div><button type="button" onclick="pptPreviewGen()" style="font-size:11px;margin-top:4px;">🖼 배치도·측면도 미리보기 만들기(현재 배치)</button>${snapNote}</div>
         ${cardRows}
-        ${picRows ? `<div class="ppt-sec"><b>이 장의 그림 바꾸기</b>${picRows}</div>` : ''}
+        ${picRows ? `<div class="ppt-sec"><b>이 장의 그림 바꾸기</b>${picRows}${Object.keys(op.hidePic || {}).filter(i => op.hidePic[i]).length ? `<div style="margin-top:4px;">숨긴 그림: ${Object.keys(op.hidePic).filter(i => op.hidePic[i]).map(i => `<button type="button" onclick="pptUnhidePic(${s.no}, ${i})" style="font-size:10.5px;">그림 ${+i + 1} ↩</button>`).join(' ')}</div>` : ''}${(op.spBox && Object.keys(op.spBox).length) || (op.picBox && Object.keys(op.picBox).length) ? `<div style="margin-top:4px;"><button type="button" onclick="pptResetBoxes(${s.no})" style="font-size:10.5px;">↺ 옮긴 위치·크기 되돌리기</button></div>` : ''}</div>` : ''}
         ${tblRows}
         ${txtRows ? `<div class="ppt-sec"><b>글 고치기</b>${txtRows}</div>` : ''}
         ${op.overlays.length ? `<div class="ppt-sec"><b>넣은 그림</b> ${op.overlays.map((o, i) => `<span class="ppt-ov-tag">${o.src.startsWith('gen:') ? PPT_ITEM_NAME[o.src.slice(4)] : '사진'} <button type="button" onclick="pptDelOverlay(${s.no}, ${i})">✕</button></span>`).join(' ')}</div>` : ''}
@@ -4104,23 +4123,74 @@ async function pptDrawStage(){
   if(it.kind === 's') src = await pptRenderSlide(it.s, W, true);
   else { src = document.createElement('canvas'); src.width = W; src.height = H; const g = src.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.strokeStyle = '#ccc'; g.strokeRect(0.5, 0.5, W - 1, H - 1); for(const ov of it.n.overlays){ const u = pptSrcUrl(ov.src); if(!u) continue; await new Promise(res => { const im = new Image(); im.onload = () => { g.drawImage(im, ov.x / SW * W, ov.y / SH * H, ov.w / SW * W, ov.h / SH * H); res(); }; im.onerror = res; im.src = u; }); } }
   cv.width = W; cv.height = H; cv.getContext('2d').drawImage(src, 0, 0);
-  // 넣은 그림 손잡이
-  const list = pptCurOverlays() || []; const k = W / SW;
+  // 제자리 편집 층: 글상자·그림·넣은 그림을 투명 상자로 덮어 클릭(선택)·끌기(이동)·모서리(크기)·더블클릭(글 고치기)
+  const k = W / SW; const els = [];
+  const px = (x, y, w, h) => `left:${x * k}px;top:${y * k}px;width:${Math.max(6, w * k)}px;height:${Math.max(6, h * k)}px;`;
+  if(it.kind === 's'){
+    const s = it.s, op = pptOpFor(s.no); const boxes = pptShapeBoxes(s, op); const stacks = pptStackGroups(s);
+    const hidden = new Set(); Object.entries(op.replace).forEach(([i, v]) => { if(v === 'card:'){ (stacks.find(g => g.includes(+i)) || []).forEach(j => { if(j !== +i) hidden.add(j); }); } }); Object.keys(op.hidePic || {}).forEach(i => { if(op.hidePic[i]) hidden.add(+i); });
+    s.picList.forEach((p, i) => { if(hidden.has(i) || p.inGroup) return; const b = pptPicBox(s, i, op); els.push(`<div class="ppt-el pic${pptSel && pptSel.kind === 'pic' && pptSel.i === i ? ' sel' : ''}" data-kind="pic" data-i="${i}" style="${px(b.x, b.y, b.cx, b.cy)}" title="그림 ${i + 1} — 끌어서 옮김 · 모서리로 크기 · Delete 키로 숨김" onmousedown="pptElDown(event, 'pic', ${i}, 'move')"><div class="ppt-ov-h" onmousedown="pptElDown(event, 'pic', ${i}, 'size')"></div></div>`); });
+    s.shapes.forEach(sh => { if(sh.inGroup) return; const b = boxes[sh.idx]; const txt = op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text; els.push(`<div class="ppt-el sp${pptSel && pptSel.kind === 'sp' && pptSel.i === sh.idx ? ' sel' : ''}${b.ph ? ' ph' : ''}" data-kind="sp" data-i="${sh.idx}" style="${px(b.x, b.y, b.cx, b.cy)}" title="${escLand(txt.slice(0, 60))} — 클릭: 선택 · 끌기: 이동 · 더블클릭: 글 고치기" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'move')" ondblclick="pptInlineEdit(${sh.idx})"><div class="ppt-ov-h" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'size')"></div></div>`); });
+  }
+  const list = pptCurOverlays() || [];
+  list.forEach((o, i) => els.push(`<div class="ppt-el ov${pptSel && pptSel.kind === 'ov' && pptSel.i === i ? ' sel' : ''}" data-kind="ov" data-i="${i}" style="${px(o.x, o.y, o.w, o.h)}" title="넣은 그림 — 끌어서 옮김 · 모서리로 크기 · Delete 키로 빼기" onmousedown="pptElDown(event, 'ov', ${i}, 'move')"><div class="ppt-ov-h" onmousedown="pptElDown(event, 'ov', ${i}, 'size')"></div></div>`));
   layer.style.width = W + 'px'; layer.style.height = H + 'px';
-  layer.innerHTML = list.map((o, i) => `<div class="ppt-ov" data-i="${i}" style="left:${o.x * k}px;top:${o.y * k}px;width:${o.w * k}px;height:${o.h * k}px;" onmousedown="pptOvDown(event, ${i}, 'move')"><div class="ppt-ov-h" onmousedown="pptOvDown(event, ${i}, 'size')"></div></div>`).join('');
+  layer.innerHTML = els.join('');
+  layer.onmousedown = e => { if(e.target === layer){ pptSel = null; layer.querySelectorAll('.ppt-el.sel').forEach(el => el.classList.remove('sel')); } };
 }
-let pptOvDrag = null;
-function pptOvDown(ev, i, mode){
-  ev.preventDefault(); ev.stopPropagation();
-  const list = pptCurOverlays(); if(!list || !list[i]) return;
+let pptSel = null, pptElDrag = null;
+// 선택한 요소의 현재 상자(EMU) 읽기/쓰기
+function pptElBox(kind, i){
+  const it = pptItemOf(pptCur); if(!it) return null;
+  if(kind === 'ov'){ const o = (pptCurOverlays() || [])[i]; return o ? { x: o.x, y: o.y, w: o.w, h: o.h } : null; }
+  if(it.kind !== 's') return null; const op = pptOpFor(it.s.no);
+  if(kind === 'pic'){ const b = pptPicBox(it.s, i, op); return { x: b.x, y: b.y, w: b.cx, h: b.cy }; }
+  const b = pptShapeBoxes(it.s, op)[i]; return b ? { x: b.x, y: b.y, w: b.cx, h: b.cy } : null;
+}
+function pptElSetBox(kind, i, b){
+  const it = pptItemOf(pptCur); if(!it) return;
+  if(kind === 'ov'){ const o = (pptCurOverlays() || [])[i]; if(o){ o.x = Math.round(b.x); o.y = Math.round(b.y); o.w = Math.round(b.w); o.h = Math.round(b.h); } return; }
+  if(it.kind !== 's') return; const op = pptOpFor(it.s.no);
+  if(kind === 'pic'){ op.picBox = op.picBox || {}; op.picBox[i] = { x: Math.round(b.x), y: Math.round(b.y), cx: Math.round(b.w), cy: Math.round(b.h) }; }
+  else { op.spBox = op.spBox || {}; op.spBox[i] = { x: Math.round(b.x), y: Math.round(b.y), cx: Math.round(b.w), cy: Math.round(b.h) }; }
+}
+function pptElDown(ev, kind, i, mode){
+  if(ev.button !== 0) return; ev.preventDefault(); ev.stopPropagation();
+  const layer = document.getElementById('pptOvLayer'); layer.querySelectorAll('.ppt-el.sel').forEach(el => el.classList.remove('sel'));
+  const el = layer.querySelector(`.ppt-el[data-kind="${kind}"][data-i="${i}"]`); if(el) el.classList.add('sel'); pptSel = { kind, i };
+  const b0 = pptElBox(kind, i); if(!b0) return;
   const SW = pptInfo.size.cx; const W = document.getElementById('pptStageCv').width; const k = SW / W;
-  const o = list[i]; pptOvDrag = { i, mode, sx: ev.clientX, sy: ev.clientY, x: o.x, y: o.y, w: o.w, h: o.h, k, ar: o.w / o.h };
-  const mv = e => { const d = pptOvDrag; if(!d) return; const dx = (e.clientX - d.sx) * d.k, dy = (e.clientY - d.sy) * d.k; const el = document.querySelector(`.ppt-ov[data-i="${d.i}"]`);
-    if(d.mode === 'move'){ o.x = Math.round(d.x + dx); o.y = Math.round(d.y + dy); } else { const nw = Math.max(200000, d.w + dx); o.w = Math.round(nw); o.h = Math.round(nw / d.ar); }
-    if(el){ el.style.left = o.x / d.k + 'px'; el.style.top = o.y / d.k + 'px'; el.style.width = o.w / d.k + 'px'; el.style.height = o.h / d.k + 'px'; } };
-  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); pptOvDrag = null; pptSaveState(); pptDrawStage(); };
+  pptElDrag = { kind, i, mode, sx: ev.clientX, sy: ev.clientY, b0, k, moved: false, keepAr: kind !== 'sp' };
+  const mv = e => { const d = pptElDrag; if(!d) return; const dx = (e.clientX - d.sx) * d.k, dy = (e.clientY - d.sy) * d.k; if(!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return; d.moved = true;
+    let b; if(d.mode === 'move') b = { x: d.b0.x + dx, y: d.b0.y + dy, w: d.b0.w, h: d.b0.h };
+    else { const nw = Math.max(150000, d.b0.w + dx); const nh = d.keepAr ? nw * d.b0.h / d.b0.w : Math.max(100000, d.b0.h + dy); b = { x: d.b0.x, y: d.b0.y, w: nw, h: nh }; }
+    d.b = b; if(el){ el.style.left = b.x / d.k + 'px'; el.style.top = b.y / d.k + 'px'; el.style.width = b.w / d.k + 'px'; el.style.height = b.h / d.k + 'px'; } };
+  const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); const d = pptElDrag; pptElDrag = null; if(d && d.moved && d.b){ pptElSetBox(d.kind, d.i, d.b); pptSaveState(); pptDrawStage(); } };
   document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
 }
+// 더블클릭: 그 자리에서 글 고치기(상자 크기의 입력칸, 바깥 클릭/Ctrl+Enter로 확정, Esc 취소)
+function pptInlineEdit(idx){
+  const it = pptItemOf(pptCur); if(!it || it.kind !== 's') return; const s = it.s, op = pptOpFor(s.no); const sh = s.shapes.find(x => x.idx === idx); if(!sh) return;
+  const layer = document.getElementById('pptOvLayer'); const old = layer.querySelector('.ppt-inline'); if(old) old.remove();
+  const b = pptShapeBoxes(s, op)[idx]; const SW = pptInfo.size.cx; const W = document.getElementById('pptStageCv').width; const k = W / SW;
+  const ta = document.createElement('textarea'); ta.className = 'ppt-inline'; ta.value = op.texts[idx] !== undefined ? op.texts[idx] : sh.text;
+  const fs = Math.max(10, Math.min(sh.sz, 40) * 12700 * k); ta.style.cssText = `left:${b.x * k}px;top:${b.y * k}px;width:${Math.max(80, b.cx * k)}px;height:${Math.max(fs * 1.6, b.cy * k)}px;font-size:${fs}px;`;
+  let done = false; const commit = () => { if(done) return; done = true; const v = ta.value; ta.remove(); if(v !== (op.texts[idx] !== undefined ? op.texts[idx] : sh.text)) pptSetText(s.no, idx, v); };
+  ta.onblur = commit; ta.onkeydown = e => { e.stopPropagation(); if(e.key === 'Escape'){ done = true; ta.remove(); } if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) commit(); };
+  ta.onmousedown = e => e.stopPropagation();
+  layer.appendChild(ta); ta.focus(); ta.select();
+}
+// Delete 키: 선택한 그림 숨김 / 넣은 그림 빼기 / 글상자 비우기
+document.addEventListener('keydown', e => {
+  if(!pptSel || !pptInfo) return; const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  if(e.key !== 'Delete' && e.key !== 'Backspace') return;
+  const it = pptItemOf(pptCur); if(!it) return; e.preventDefault();
+  if(pptSel.kind === 'ov'){ const list = pptCurOverlays(); if(list) list.splice(pptSel.i, 1); }
+  else if(it.kind === 's'){ const op = pptOpFor(it.s.no); if(pptSel.kind === 'pic'){ op.hidePic = op.hidePic || {}; op.hidePic[pptSel.i] = true; } else { op.texts[pptSel.i] = ''; } }
+  pptSel = null; pptSaveState(); renderPptEditor();
+});
+function pptUnhidePic(no, i){ const op = pptOpFor(no); if(op.hidePic) delete op.hidePic[i]; pptSaveState(); renderPptEditor(); }
+function pptResetBoxes(no){ const op = pptOpFor(no); delete op.spBox; delete op.picBox; delete op.hidePic; pptSaveState(); renderPptEditor(); }
 function canvasToJpegBlob(cv){ return new Promise(res => cv.toBlob(b => res(b), 'image/jpeg', 0.88)); }
 function dataUrlToBlob(u){ const [h, b] = u.split(','); const mime = (h.match(/data:([^;]+)/) || [])[1] || 'image/jpeg'; const bin = atob(b); const a = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: mime }); }
 function pptPicXml(id, name, rId, x, y, cx, cy){
@@ -4192,27 +4262,38 @@ async function pptMake(){
         removed.push(s.no); continue;
       }
       const hasRep = Object.keys((op && op.replace) || {}).length, hasTxt = Object.keys((op && op.texts) || {}).length, hasOv = ((op && op.overlays) || []).length, hasTbl = tbls.length && D;
-      if(!hasRep && !hasTxt && !hasOv && !hasTbl) continue;
+      const hasBox = op && ((op.spBox && Object.keys(op.spBox).length) || (op.picBox && Object.keys(op.picBox).length) || (op.hidePic && Object.values(op.hidePic).some(Boolean)));
+      if(!hasRep && !hasTxt && !hasOv && !hasTbl && !hasBox) continue;
       let xml = await zip.file(o.path).async('string');
       if(hasTbl){ const frames = pptSlideTables(xml); for(const t of tbls){ const fr = frames.find(f => f.fi === t.fi); if(!fr) continue; try{ xml = pptApplyTableFill(xml, fr, pptFillGrid(t.kind, fr, D)); filled.push(`${s.no}번 ${PPT_TABLE_NAMES[t.kind] || t.kind}`); }catch(e){ console.warn('table fill', e); skipped.push(`${s.no}번 표${t.fi + 1}`); } } }
       const rp = relPathOf(o.path);
       let rels = zip.file(rp) ? await zip.file(rp).async('string') : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
       let maxId = 1; xml.replace(/<p:cNvPr\b[^>]*\bid="(\d+)"/g, (m, d) => { maxId = Math.max(maxId, +d); return m; });
-      // 그림 교체
+      // 그림: 숨김 → 교체 → 옮긴 위치·크기 (원본 순서 기준으로 새 XML을 만든 뒤 한 번에 치환)
       const pics = pptSlidePics(xml);
       const stacks = pptStackGroups(s);
-      for(const [iStr, src0] of Object.entries((op && op.replace) || {})){ const i = +iStr; const p = pics[i]; if(!p) continue; let src = src0;
+      const picNew = {};
+      const hidePic = (op && op.hidePic) || {}; Object.keys(hidePic).forEach(i => { if(hidePic[i] && pics[+i]) picNew[+i] = ''; });
+      for(const [iStr, src0] of Object.entries((op && op.replace) || {})){ const i = +iStr; const p = pics[i]; if(!p || picNew[i] === '') continue; let src = src0;
         if(src === 'card:'){ const c = pptCardCur(); if(!c){ skipped.push(`${s.no}번 명함(고른 명함 없음)`); continue; } src = c.url;
           // 같은 자리에 겹친 다른 명함 그림은 지움
-          const grp = stacks.find(g => g.includes(i)) || []; for(const j of grp){ if(j !== i && pics[j]) xml = xml.replace(pics[j].xml, ''); } }
+          const grp = stacks.find(g => g.includes(i)) || []; for(const j of grp){ if(j !== i && pics[j]) picNew[j] = ''; } }
         const m = await putMedia(src); if(!m){ skipped.push(`${s.no}번 그림${i + 1}`); continue; }
         const r = addRel(rels, IMG, '../media/' + m.mn); rels = r.rels;
+        const fb = pptPicBox(s, i, op); // 옮긴 칸이 있으면 그 칸 기준
         const isPhoto = src0.startsWith('data:'); // 내 사진: 칸을 꽉 채우고 넘치는 쪽을 잘라냄 · 명함: 칸에 늘림 · 배치도 등 생성 쪽: 비율 유지
-        const box = (src0 === 'card:' || isPhoto) ? { x: p.x, y: p.y, w: p.cx, h: p.cy } : fitBox(p.x, p.y, p.cx, p.cy, m.w, m.h);
-        const cr = isPhoto ? coverCrop(p.cx, p.cy, m.w, m.h) : null; const pc = v => Math.round(v * 100000);
+        const box = (src0 === 'card:' || isPhoto) ? { x: fb.x, y: fb.y, w: fb.cx, h: fb.cy } : fitBox(fb.x, fb.y, fb.cx, fb.cy, m.w, m.h);
+        const cr = isPhoto ? coverCrop(fb.cx, fb.cy, m.w, m.h) : null; const pc = v => Math.round(v * 100000);
         let np = p.xml.replace(/<p:blipFill\b[^>]*>[\s\S]*?<\/p:blipFill>/, `<p:blipFill><a:blip r:embed="${r.id}"/>${cr ? `<a:srcRect l="${pc(cr.l)}" t="${pc(cr.t)}" r="${pc(cr.r)}" b="${pc(cr.b)}"/>` : ''}<a:stretch><a:fillRect/></a:stretch></p:blipFill>`);
         np = np.replace(/<a:off x="-?\d+" y="-?\d+"\/><a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${Math.round(box.x)}" y="${Math.round(box.y)}"/><a:ext cx="${Math.round(box.w)}" cy="${Math.round(box.h)}"/>`);
-        xml = xml.replace(p.xml, np); }
+        picNew[i] = np; }
+      Object.entries((op && op.picBox) || {}).forEach(([iStr, b]) => { const i = +iStr; if(!pics[i] || picNew[i] !== undefined) return; picNew[i] = pics[i].xml.replace(/<a:off x="-?\d+" y="-?\d+"\/><a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${b.x}" y="${b.y}"/><a:ext cx="${b.cx}" cy="${b.cy}"/>`); });
+      { let pi = -1; xml = xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, pic => { pi++; return picNew[pi] !== undefined ? picNew[pi] : pic; }); }
+      // 글상자 위치·크기(옮긴 것) — xfrm이 없던 자리표시자는 spPr에 새로 넣음
+      if(op && op.spBox && Object.keys(op.spBox).length){ let si = -1; xml = xml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, sp => { si++; const b = op.spBox[si]; if(!b) return sp; const xf = `<a:xfrm><a:off x="${b.x}" y="${b.y}"/><a:ext cx="${b.cx}" cy="${b.cy}"/></a:xfrm>`;
+        if(/<p:spPr\b[^>]*>[\s\S]*?<a:xfrm\b/.test(sp) && /<a:xfrm\b[^>]*>[\s\S]*?<\/a:xfrm>/.test(sp)) return sp.replace(/<a:off x="-?\d+" y="-?\d+"\/><a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${b.x}" y="${b.y}"/><a:ext cx="${b.cx}" cy="${b.cy}"/>`);
+        if(/<p:spPr\s*\/>/.test(sp)) return sp.replace(/<p:spPr\s*\/>/, `<p:spPr>${xf}</p:spPr>`);
+        return sp.replace(/<p:spPr\b([^>]*)>/, (m0, at) => `<p:spPr${at}>${xf}`); }); }
       // 글
       for(const [idx, t] of Object.entries((op && op.texts) || {})) xml = pptReplaceShapeText(xml, +idx, t);
       // 넣은 그림
