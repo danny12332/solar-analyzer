@@ -145,7 +145,10 @@
   .ppt-edit-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;margin-top:8px;padding:6px 8px;border:1px solid var(--card-line);border-radius:8px;background:#FFF8E1;}
   .ppt-edit-bar button,.ppt-edit-bar select{font-size:11px;}
   .ppt-s.star{background:#FFF8E1;}
-  .ppt-s.star span{color:#8a5a00;}
+  .ppt-s.star span{color:#8a5a00;font-weight:600;}
+  .ppt-s{position:relative;}
+  .ppt-s-del{position:absolute;top:1px;right:1px;border:none;background:rgba(255,255,255,.9);border-radius:3px;font-size:10px;line-height:1;padding:2px 3px;cursor:pointer;display:none;}
+  .ppt-s:hover .ppt-s-del,.ppt-s.del .ppt-s-del{display:block;}
   .ppt-el.fixed{cursor:default;}
   .ppt-ov{position:absolute;border:2px solid #B7472A;cursor:move;box-sizing:border-box;}
   .ppt-el{position:absolute;box-sizing:border-box;border:1px dashed transparent;cursor:move;}
@@ -3758,7 +3761,7 @@ let pptOrder = [];       // 표시 순서: ['s:3', 'n:1', ...]
 let pptCur = null;       // 현재 보는 항목 키
 // 편집 장: 제안서에서 내용을 고치는 장(기본 1, 18, 37, 38, 42~51). 나머지 장은 보기에서 숨기고 한 번에 지울 수 있음
 const PPT_EDIT_DEFAULT = [1, 18, 37, 38, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51];
-let pptEdit = new Set(PPT_EDIT_DEFAULT), pptOnlyEdit = true;
+let pptEdit = new Set(PPT_EDIT_DEFAULT);
 let __jszipP = null;
 function loadJSZip(){
   if(window.JSZip) return Promise.resolve();
@@ -3775,7 +3778,7 @@ async function pptDbGet(key){ try{ const db = await pptDb(); return await new Pr
 async function pptDbDel(key){ try{ const db = await pptDb(); await new Promise(res => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').delete(key); tx.oncomplete = res; }); }catch(e){} }
 function pptStateKey(){ return 'ops:' + (pptFile ? pptFile.name : '') + ':' + (pptInfo ? pptInfo.count : 0); }
 let __pptSaveT = null;
-function pptSaveState(){ clearTimeout(__pptSaveT); __pptSaveT = setTimeout(() => { if(pptFile && pptInfo) pptDbPut(pptStateKey(), { ops: pptOps, news: pptNewSlides, order: pptOrder, edit: Array.from(pptEdit), onlyEdit: pptOnlyEdit, t: Date.now() }); }, 300); }
+function pptSaveState(){ clearTimeout(__pptSaveT); __pptSaveT = setTimeout(() => { if(pptFile && pptInfo) pptDbPut(pptStateKey(), { ops: pptOps, news: pptNewSlides, order: pptOrder, edit: Array.from(pptEdit), t: Date.now() }); }, 300); }
 async function pptForgetTemplate(){
   if(!confirm('저장된 양식과 편집 내용을 모두 지울까요?')) return;
   await pptDbDel('template'); if(pptFile && pptInfo) await pptDbDel(pptStateKey());
@@ -3822,17 +3825,15 @@ async function pptOpenBuffer(name, buf, handle, restored){
   try{ await pptCardsLoad(); if(!pptCards.length) await pptCardsFromTemplate(); }catch(e){ console.warn('cards', e); }
   // 편집 내용 복원
   const saved = await pptDbGet(pptStateKey());
-  if(saved && saved.ops){ pptOps = saved.ops || {}; pptNewSlides = saved.news || []; pptOrder = saved.order || []; pptEdit = new Set(saved.edit || PPT_EDIT_DEFAULT); pptOnlyEdit = saved.onlyEdit !== undefined ? !!saved.onlyEdit : true; }
-  else { pptOps = {}; pptNewSlides = []; pptOrder = []; pptEdit = new Set(PPT_EDIT_DEFAULT); pptOnlyEdit = true; pptAutoAssign(); }
-  // 기본 편집 장이 거의 없는(다른 구성의) 양식이면 전체 보기로
-  if(pptInfo.slides.filter(s => pptEdit.has(s.no)).length < 2) pptOnlyEdit = false;
+  if(saved && saved.ops){ pptOps = saved.ops || {}; pptNewSlides = saved.news || []; pptOrder = saved.order || []; pptEdit = new Set(saved.edit || PPT_EDIT_DEFAULT); }
+  else { pptOps = {}; pptNewSlides = []; pptOrder = []; pptEdit = new Set(PPT_EDIT_DEFAULT); pptAutoAssign(); }
   try{ pptCardAutoSlot(); }catch(e){}
   const valid = new Set(pptInfo.slides.map(s => 's:' + s.no).concat(pptNewSlides.map(n => 'n:' + n.id)));
   pptOrder = pptOrder.filter(k => valid.has(k)); pptInfo.slides.forEach(s => { if(!pptOrder.includes('s:' + s.no)) pptOrder.push('s:' + s.no); }); pptNewSlides.forEach(n => { if(!pptOrder.includes('n:' + n.id)) pptOrder.push('n:' + n.id); });
   pptCur = pptVisibleOrder()[0] || pptOrder[0] || null;
   st.style.color = 'var(--ink-soft)';
   const nEdit = pptInfo.slides.filter(s => pptEdit.has(s.no)).length;
-  st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}.${pptOnlyEdit ? ` 편집 장 ★ ${nEdit}장만 보이는 중(전체 보기로 바꿀 수 있음).` : ''} 띠에서 장을 고르고 그 자리에서 편집하세요.`;
+  st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}. ★ 편집 장 ${nEdit}장(${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no))})은 직접 고치고, 나머지 장은 필요한 장만 두고 필요 없는 장은 띠의 🗑로 한 장씩 지우세요.`;
   renderPptEditor();
   document.getElementById('pptMakeBtn').disabled = false;
   pptMakeThumbs().catch(e => console.warn('thumbs', e));
@@ -4457,7 +4458,7 @@ function renderPptEditor(){
   const card = document.getElementById('pptCard'); const keepCard = card ? card.scrollTop : 0; const keepWin = window.scrollY;
   const vis = pptVisibleOrder(); if(!vis.includes(pptCur)) pptCur = vis[0] || pptOrder[0];
   const strip = vis.map((key, i) => { const it = pptItemOf(key); if(!it) return ''; const del = it.kind === 's' && pptOpFor(it.s.no).del; const star = it.kind === 's' && pptEdit.has(it.s.no); const thumb = it.kind === 's' ? (pptThumbs[it.s.no] || '') : '';
-    return `<div class="ppt-s${key === pptCur ? ' cur' : ''}${del ? ' del' : ''}${star ? ' star' : ''}" onclick="pptGo('${key}')" title="${it.kind === 's' ? escLand(it.s.snippet) : '새 슬라이드'}"><img data-k="${key}" src="${thumb}" alt=""><span>${it.kind === 's' ? it.s.no : '새 ✚'}${star && !pptOnlyEdit ? ' ★' : ''}${del ? ' ✕' : ''}</span></div>`; }).join('');
+    return `<div class="ppt-s${key === pptCur ? ' cur' : ''}${del ? ' del' : ''}${star ? ' star' : ''}" onclick="pptGo('${key}')" title="${it.kind === 's' ? escLand(it.s.snippet) : '새 슬라이드'}"><img data-k="${key}" src="${thumb}" alt=""><span>${it.kind === 's' ? it.s.no : '새 ✚'}${star ? ' ★' : ''}${del ? ' 지움' : ''}</span>${it.kind === 's' ? `<button type="button" class="ppt-s-del" onclick="event.stopPropagation();pptToggleDel(${it.s.no})" title="${del ? '이 장 되살리기' : '이 장 지우기(저장 때 빠짐)'}">${del ? '↩' : '🗑'}</button>` : ''}</div>`; }).join('');
   const it = pptItemOf(pptCur);
   const pos = vis.indexOf(pptCur);
   const P = window.__pptPreview || {};
@@ -4496,11 +4497,11 @@ function renderPptEditor(){
   }
   const delCount = pptInfo.slides.filter(s => pptOpFor(s.no).del).length; const nEdit = pptInfo.slides.filter(s => pptEdit.has(s.no)).length; const nRest = pptInfo.slides.filter(s => !pptEdit.has(s.no) && !pptOpFor(s.no).del).length;
   const zoomSel = `<select onchange="pptZoomSet(this.value)" style="font-size:11px;" title="미리보기 크기 — 100%는 PowerPoint 100%와 같은 실제 크기(96dpi 화면 기준)"><option value="fit"${pptZoom === 'fit' ? ' selected' : ''}>맞춤</option>${[0.5, 0.75, 1, 1.25, 1.5, 2].map(z => `<option value="${z}"${pptZoom === z ? ' selected' : ''}>${Math.round(z * 100)}%${z === 1 ? ' (실제 크기)' : ''}</option>`).join('')}</select>`;
-  box.innerHTML = `<div class="ppt-edit-bar"><label title="제안서에서 내용을 고치는 장(★)만 띠에 보임"><input type="checkbox" ${pptOnlyEdit ? 'checked' : ''} onchange="pptSetOnlyEdit(this.checked)"> 편집 장 ★ ${nEdit}장만 보기</label> <small style="color:var(--ink-soft);">(전체 ${pptInfo.count}장 · ★ ${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no)) || '없음'})</small>
-      <button type="button" onclick="pptDelOthers()" ${nRest ? '' : 'disabled'} title="편집 장이 아닌 장을 모두 지우도록 표시(저장 때 빠짐)">🗑 ★ 외 ${nRest}장 지우기</button> <button type="button" onclick="pptRestoreAll()" ${delCount ? '' : 'disabled'}>↩ 지운 장 모두 되살리기${delCount ? `(${delCount})` : ''}</button>
+  box.innerHTML = `<div class="ppt-edit-bar"><span title="제안서에서 내용을 직접 고치는 장">★ 편집 장 ${nEdit}장: ${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no)) || '없음'}</span> <button type="button" onclick="pptJumpStar(-1)" title="이전 ★ 편집 장으로">◀ ★</button><button type="button" onclick="pptJumpStar(1)" title="다음 ★ 편집 장으로">★ ▶</button>
+      <small style="color:var(--ink-soft);">전체 ${pptInfo.count}장 · 필요 없는 장은 띠의 🗑 또는 "이 장 지우기"로 한 장씩 지움${delCount ? ` · 지울 장 ${delCount}개(${rangeText(pptInfo.slides.filter(s => pptOpFor(s.no).del).map(s => s.no))})` : ''}</small>
       <span style="margin-left:auto;">크기 ${zoomSel} <button type="button" id="pptWideBtn2" onclick="pptToggleWide()" style="font-size:11px;">${document.getElementById('pptCard') && document.getElementById('pptCard').classList.contains('wide') ? '⤡ 작게' : '⤢ 크게 보기'}</button></span></div>
     <div class="ppt-strip" id="pptStrip">${strip}</div>
-    <div class="ppt-head"><button type="button" onclick="pptMoveTo(-1)" title="이전 장 (←)" style="font-size:11px;">◀</button> ${pptOnlyEdit ? '편집 장' : '슬라이드'} <input type="number" min="1" max="${vis.length}" value="${pos + 1}" onchange="pptJump(this.value)" onkeydown="if(event.key==='Enter'){ pptJump(this.value); }" style="width:52px;font-size:12px;" title="번호를 넣고 Enter → 그 장으로"> / ${vis.length} <button type="button" onclick="pptMoveTo(1)" title="다음 장 (→)" style="font-size:11px;">▶</button>${it && it.kind === 's' ? ` <b>원본 ${it.s.no}번</b>${pptEdit.has(it.s.no) ? ' ★' : ''} · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''} <small style="color:var(--ink-soft);">← → 키로 이동 · Ctrl+V: 그림은 사진 칸에, 글은 선택한 글상자에</small>
+    <div class="ppt-head"><button type="button" onclick="pptMoveTo(-1)" title="이전 장 (←)" style="font-size:11px;">◀</button> 슬라이드 <input type="number" min="1" max="${vis.length}" value="${pos + 1}" onchange="pptJump(this.value)" onkeydown="if(event.key==='Enter'){ pptJump(this.value); }" style="width:52px;font-size:12px;" title="번호를 넣고 Enter → 그 장으로"> / ${vis.length} <button type="button" onclick="pptMoveTo(1)" title="다음 장 (→)" style="font-size:11px;">▶</button>${it && it.kind === 's' ? ` <b>원본 ${it.s.no}번</b>${pptEdit.has(it.s.no) ? ' ★' : ''} · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''} <small style="color:var(--ink-soft);">← → 키로 이동 · Ctrl+V: 그림은 사진 칸에, 글은 선택한 글상자에</small>
       <span style="float:right;"><button type="button" onclick="pptResetAll()" style="font-size:11px;">↺ 편집 모두 되돌리기</button> <button type="button" onclick="pptForgetTemplate()" style="font-size:11px;color:#b3402a;">🗑 저장된 양식 지우기</button></span></div>
     ${body}<input id="pptPhotoInput" type="file" accept="image/*" style="display:none;" onchange="pptPhotoChosen(this.files[0]); this.value='';"><input id="pptCardInput" type="file" accept="image/*" style="display:none;" onchange="pptCardAdd(this.files[0]); this.value='';">`;
   const stripEl = document.getElementById('pptStrip');
@@ -4518,15 +4519,13 @@ document.addEventListener('keydown', e => {
   else if(e.key === 'ArrowLeft' || e.key === 'PageUp'){ if(i > 0){ pptGo(vis[i - 1]); e.preventDefault(); } }
   else if(e.key === 'Home'){ pptGo(vis[0]); e.preventDefault(); } else if(e.key === 'End'){ pptGo(vis[vis.length - 1]); e.preventDefault(); }
 });
-function pptGo(key){ pptCur = key; pptSel = null; if(pptOrder.includes(key) && !pptVisibleOrder().includes(key)){ pptOnlyEdit = false; pptSaveState(); } renderPptEditor(); }
+function pptGo(key){ pptCur = key; pptSel = null; renderPptEditor(); }
+function pptJumpStar(dir){ const i = pptOrder.indexOf(pptCur); for(let j = i + dir; j >= 0 && j < pptOrder.length; j += dir){ const k = pptOrder[j]; if(k.startsWith('s:') && pptEdit.has(+k.slice(2))){ pptGo(k); return; } } }
 // 보이는 순서: '편집 장만 보기'면 ★ 장과 새 장만
-function pptVisibleOrder(){ return pptOnlyEdit ? pptOrder.filter(k => !k.startsWith('s:') || pptEdit.has(+k.slice(2))) : pptOrder.slice(); }
+function pptVisibleOrder(){ return pptOrder.slice(); }
 function pptMoveTo(dir){ const vis = pptVisibleOrder(); const i = vis.indexOf(pptCur); const j = i + dir; if(j >= 0 && j < vis.length) pptGo(vis[j]); }
 function pptMove(dir){ const vis = pptVisibleOrder(); const vi = vis.indexOf(pptCur); const other = vis[vi + dir]; if(vi < 0 || !other) return; const i = pptOrder.indexOf(pptCur), j = pptOrder.indexOf(other); [pptOrder[i], pptOrder[j]] = [pptOrder[j], pptOrder[i]]; pptSaveState(); renderPptEditor(); }
 function pptToggleEdit(no){ if(pptEdit.has(no)) pptEdit.delete(no); else pptEdit.add(no); pptSaveState(); if(!pptVisibleOrder().includes(pptCur)) pptCur = pptVisibleOrder()[0] || pptOrder[0]; renderPptEditor(); }
-function pptSetOnlyEdit(on){ pptOnlyEdit = !!on; pptSaveState(); if(!pptVisibleOrder().includes(pptCur)) pptCur = pptVisibleOrder()[0] || pptOrder[0]; renderPptEditor(); }
-function pptDelOthers(){ const rest = pptInfo.slides.filter(s => !pptEdit.has(s.no) && !pptOpFor(s.no).del); if(!rest.length){ alert('편집 장 외에 남은 장이 없습니다.'); return; } if(!confirm(`편집 장(★ ${pptInfo.slides.filter(s => pptEdit.has(s.no)).length}장) 외 ${rest.length}장(${rangeText(rest.map(s => s.no))})을 지우도록 표시할까요?\n저장할 때 빠지며, "모두 되살리기"로 언제든 되돌릴 수 있습니다.`)) return; rest.forEach(s => { pptOpFor(s.no).del = true; }); pptSaveState(); renderPptEditor(); }
-function pptRestoreAll(){ pptInfo.slides.forEach(s => { if(pptOps[s.no]) pptOps[s.no].del = false; }); pptSaveState(); renderPptEditor(); }
 function rangeText(nums){ const a = nums.slice().sort((x, y) => x - y); const out = []; let i = 0; while(i < a.length){ let j = i; while(j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i + 1 ? `${a[i]}~${a[j]}` : (j === i + 1 ? `${a[i]}, ${a[j]}` : `${a[i]}`)); i = j + 1; } return out.join(', '); }
 // 붙여넣기(Ctrl+V): 그림 → 사진 칸(선택한 그림이 있으면 그 칸)에, 글 → 선택한 글상자에
 document.addEventListener('paste', e => {
