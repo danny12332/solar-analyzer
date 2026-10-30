@@ -895,6 +895,12 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <h2 style="margin-bottom:6px;display:flex;align-items:center;gap:8px;">📑 제안서 편집 (회사 양식 PPT) <button type="button" id="pptWideBtn" onclick="pptToggleWide()" style="font-size:11.5px;padding:2px 8px;" title="편집기를 화면 전체로 크게 (Esc로 닫기)">⤢ 크게 보기</button></h2>
         <p class="hint" style="margin:0 0 10px;">양식 .pptx를 한 번 넣으면 브라우저에 저장되어 다음에도 자동으로 열립니다. 아래 띠에서 슬라이드를 골라 한 장씩 크게 보면서(간이 미리보기) 배치도·측면도·조감도·집계표·수익성이나 내 사진을 넣고(끌어서 위치, 모서리로 크기), 그 장의 그림을 바꾸거나 글을 고치고, 필요 없는 장은 지웁니다. 편집 내용은 자동으로 기억되고, "제안서 저장"을 누르면 그때의 배치로 쪽을 만들어 .pptx로 저장합니다.</p>
         <div id="pptDrop" onclick="pptPickFile()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 회사 제안서 .pptx 파일을 끌어다 놓거나 클릭해서 열기 (양식이 바뀌면 새 파일을 다시 넣기)<input id="pptFileInput" type="file" accept=".pptx" style="display:none;" onchange="pptLoadFile(this.files[0]); this.value='';"></div>
+        <div id="pptServerBar" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:12px;padding:6px 8px;border:1px solid var(--card-line);border-radius:8px;background:var(--surface-2);">
+          <b>☁ 양식 서버</b> <span id="pptSrvStat" style="color:var(--ink-soft);">확인 전</span>
+          <button type="button" onclick="pptServerPull(true)" style="font-size:11px;" title="서버의 양식을 받아서 엶(이 컴퓨터에 저장)">⬇ 서버에서 받기</button>
+          <button type="button" onclick="pptServerPush()" style="font-size:11px;" title="지금 열어 둔 양식을 서버에 올림(비밀번호 필요) → 다른 컴퓨터도 자동으로 받음">⬆ 서버에 올리기</button>
+          <span style="margin-left:auto;"><small>주소</small> <input id="pptSrvUrl" type="text" style="font-size:11px;width:230px;" placeholder="https://solar-ppt.<계정>.workers.dev" onchange="pptServerSetUrl(this.value)"></span>
+        </div>
         <div id="pptBoard"></div>
         <div class="export-row" style="margin-top:8px;">
           <button type="button" class="run" id="pptMakeBtn" style="background:#B7472A;color:#fff;font-size:14px;" onclick="pptMake()" disabled title="편집한 대로 .pptx 저장">💾 제안서 저장 (.pptx)</button>
@@ -1146,7 +1152,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-10-30a';
+const APP_VERSION = '2026-10-30b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3801,7 +3807,53 @@ async function pptForgetTemplate(){
   const st = document.getElementById('pptStatus'); if(st) st.textContent = '저장된 양식을 지웠습니다. 새 양식을 넣어 주세요.';
   document.getElementById('pptMakeBtn').disabled = true;
 }
-document.addEventListener('DOMContentLoaded', () => { try{ pptDropInit(); }catch(e){} setTimeout(async () => { try{ const s = await pptDbGet('template'); if(s && s.buf){ await loadJSZip(); await pptOpenBuffer(s.name, s.buf, null, true); } }catch(e){ console.warn('ppt restore', e); } }, 800); });
+document.addEventListener('DOMContentLoaded', () => { try{ pptDropInit(); }catch(e){} const u = document.getElementById('pptSrvUrl'); if(u) u.value = pptServerUrl(); setTimeout(async () => { try{ const s = await pptDbGet('template'); if(s && s.buf){ await loadJSZip(); await pptOpenBuffer(s.name, s.buf, null, true); } }catch(e){ console.warn('ppt restore', e); } try{ await pptServerPull(false); }catch(e){ console.warn('ppt server', e); } }, 800); });
+// ===== ☁ 양식 서버(Cloudflare Worker + R2, cloudflare/ppt-template-worker.js): 양식을 한 번 올려 두면 어느 컴퓨터에서나 자동으로 받아 같은 양식으로 편집 =====
+const PPT_SERVER_DEFAULT = 'https://solar-ppt.ruwk66.workers.dev';
+function pptServerUrl(){ try{ return (localStorage.getItem('pptServerUrl') || PPT_SERVER_DEFAULT).replace(/\/+$/, ''); }catch(e){ return PPT_SERVER_DEFAULT; } }
+function pptServerSetUrl(v){ try{ v = String(v || '').trim().replace(/\/+$/, ''); if(v) localStorage.setItem('pptServerUrl', v); else localStorage.removeItem('pptServerUrl'); }catch(e){} const u = document.getElementById('pptSrvUrl'); if(u) u.value = pptServerUrl(); pptServerPull(false); }
+function pptSrvStat(t, color){ const el = document.getElementById('pptSrvStat'); if(el){ el.textContent = t; el.style.color = color || 'var(--ink-soft)'; } }
+async function pptServerMeta(){ const r = await fetch(pptServerUrl() + '/template/meta', { cache: 'no-store' }); if(!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+// 서버 양식 확인 → 이 컴퓨터에 없거나 서버 것이 더 새것이면(etag 다름) 받아서 엶. force면 무조건 받음
+async function pptServerPull(force){
+  const base = pptServerUrl(); if(!base) return;
+  let meta; try{ meta = await pptServerMeta(); }catch(e){ pptSrvStat('서버 연결 안 됨(' + (e && e.message ? e.message : e) + ') — 주소·Worker 배포 확인', '#b3402a'); return; }
+  if(!meta || !meta.ok){ pptSrvStat('서버에 올린 양식이 아직 없음 — 양식을 연 뒤 "⬆ 서버에 올리기"'); return; }
+  const when = meta.uploaded ? new Date(meta.uploaded) : null; const whenTxt = when ? `${when.getFullYear()}.${when.getMonth() + 1}.${when.getDate()} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : '';
+  const local = await pptDbGet('template');
+  if(!force && local && local.etag === meta.etag){ pptSrvStat(`서버 양식과 같음 — ${meta.name} (${(meta.size / 1048576).toFixed(1)}MB, ${whenTxt} 올림)`, '#0B5A2A'); return; }
+  if(!force && local && !local.etag && pptInfo){ // 이 컴퓨터에서 직접 연 양식이 있으면 묻고 받음
+    if(!confirm(`서버에 올린 양식(${meta.name}, ${whenTxt})이 있습니다. 지금 열어 둔 양식 대신 서버 양식을 받아서 열까요?\n(편집 내용은 양식·장수별로 따로 저장되므로 같은 양식이면 그대로 유지됩니다)`)){ pptSrvStat(`서버 양식 ${meta.name} (${whenTxt}) 있음 — 받으려면 "⬇ 서버에서 받기"`); return; } }
+  pptSrvStat(`서버에서 받는 중… 0% (${(meta.size / 1048576).toFixed(1)}MB)`);
+  try{
+    const r = await fetch(base + '/template', { cache: 'no-store' }); if(!r.ok) throw new Error('HTTP ' + r.status);
+    const total = +(r.headers.get('Content-Length') || meta.size || 0); const reader = r.body.getReader(); const chunks = []; let got = 0;
+    while(true){ const { done, value } = await reader.read(); if(done) break; chunks.push(value); got += value.length; if(total) pptSrvStat(`서버에서 받는 중… ${Math.round(got / total * 100)}% (${(got / 1048576).toFixed(0)}/${(total / 1048576).toFixed(0)}MB)`); }
+    const buf = new Uint8Array(got); let off = 0; for(const c of chunks){ buf.set(c, off); off += c.length; }
+    await loadJSZip(); await pptOpenBuffer(meta.name || 'template.pptx', buf.buffer, null, false);
+    await pptDbPut('template', { name: meta.name || 'template.pptx', buf: buf.buffer, etag: meta.etag, t: Date.now() });
+    pptSrvStat(`서버 양식을 받아 열었음 — ${meta.name} (${whenTxt} 올림)`, '#0B5A2A');
+  }catch(e){ console.warn('ppt pull', e); pptSrvStat('받기 실패: ' + (e && e.message ? e.message : e), '#b3402a'); }
+}
+// 지금 열어 둔 양식을 서버에 올림(20MB 조각으로 나눠 R2 multipart) — 비밀번호(UPLOAD_KEY)는 이 브라우저에 기억
+async function pptServerPush(){
+  const base = pptServerUrl(); if(!base){ alert('양식 서버 주소를 먼저 넣으세요.'); return; }
+  if(!pptFile || !pptFile.buf){ alert('먼저 양식 .pptx를 여세요.'); return; }
+  let key = ''; try{ key = localStorage.getItem('pptUploadKey') || ''; }catch(e){}
+  key = prompt('서버 올리기 비밀번호(Worker의 UPLOAD_KEY)', key); if(key === null) return; key = key.trim(); if(!key) return; try{ localStorage.setItem('pptUploadKey', key); }catch(e){}
+  const buf = pptFile.buf, size = buf.byteLength, PART = 20 * 1048576; const H = { 'X-Upload-Key': key };
+  const call = async (path, opt) => { const r = await fetch(base + path, Object.assign({ cache: 'no-store' }, opt)); const j = await r.json().catch(() => ({})); if(!r.ok || j.ok === false){ throw new Error(j.error || ('HTTP ' + r.status)); } return j; };
+  let uploadId = null;
+  try{
+    pptSrvStat(`서버에 올리는 중… 0% (${(size / 1048576).toFixed(1)}MB)`);
+    uploadId = (await call('/template/mpu/create?name=' + encodeURIComponent(pptFile.name), { method: 'POST', headers: H })).uploadId;
+    const parts = []; let n = 0;
+    for(let off = 0; off < size; off += PART){ n++; const slice = buf.slice(off, Math.min(size, off + PART)); const j = await call(`/template/mpu/part?uploadId=${encodeURIComponent(uploadId)}&part=${n}`, { method: 'PUT', headers: H, body: slice }); parts.push({ partNumber: n, etag: j.etag }); pptSrvStat(`서버에 올리는 중… ${Math.round(Math.min(size, off + PART) / size * 100)}%`); }
+    const done = await call('/template/mpu/complete?uploadId=' + encodeURIComponent(uploadId), { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, H), body: JSON.stringify({ parts, name: pptFile.name }) });
+    await pptDbPut('template', { name: pptFile.name, buf, etag: done.etag, t: Date.now() });
+    pptSrvStat(`서버에 올렸음 — ${pptFile.name} (${(size / 1048576).toFixed(1)}MB). 다른 컴퓨터는 사이트를 열면 자동으로 받습니다.`, '#0B5A2A');
+  }catch(e){ console.warn('ppt push', e); if(uploadId){ try{ await fetch(base + '/template/mpu/abort?uploadId=' + encodeURIComponent(uploadId), { method: 'POST', headers: H }); }catch(x){} } pptSrvStat('올리기 실패: ' + (e && e.message ? e.message : e) + (/bad key/.test(String(e && e.message)) ? ' — 비밀번호가 다릅니다' : ''), '#b3402a'); }
+}
 let __pptCardHome = null;
 function pptToggleWide(){
   const c = document.getElementById('pptCard'); const b = document.getElementById('pptWideBtn'); if(!c) return;
