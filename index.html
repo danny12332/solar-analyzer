@@ -772,13 +772,28 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <label title="배치(모듈 줄) 방향에 맞춰 돌림. 비우면 가장 가까운 배치의 방향"><input id="annotAlign" type="checkbox" checked style="vertical-align:middle;"> 배치 방향에 맞춤</label>
           <div class="annot-list" id="annotList"></div>
         </div>
-        <div class="panel-bar" id="laySaveBar" style="gap:6px;">
-          <span>⑥ 저장 <small style="font-weight:400;color:#9A7A3A;">(공사명·처마 높이 등 도면 설정은 제안서 탭)</small></span>
+        <div class="panel-bar" id="laySaveBar" style="gap:6px;flex-wrap:wrap;">
+          <span>⑥ 도면 설정 · 저장</span>
+          <label>공사명(주소) <input id="sheetProject" type="text" style="width:220px;" placeholder="비우면 검색한 주소"></label>
+          <label>모듈 <input id="sheetModule" type="text" value="현대 645Wp(양면)" style="width:130px;"></label>
+          <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
+          <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
+          <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
+          <label title="경계(지붕 끝) 변마다 가장 가까운 모듈 모서리까지의 거리를 mm 치수로 표시 — 지자체 제출용"><input id="sheetDim" type="checkbox" checked style="vertical-align:middle;"> 처마끝 이격 치수(mm) 표시</label>
+          <label title="측면도에 그릴 건물 처마(지붕 바닥) 높이 — 건축물대장·현장 확인값을 넣으세요(가정값)">처마 높이(m) <input id="sideEaveH" type="number" value="6" step="0.5" min="0" style="width:60px;"></label>
+          <label title="측면도 지붕 경사각(경사지붕). 평슬라브·토지는 0">지붕 경사(°) <input id="sideRoofDeg" type="number" value="10" step="1" min="0" max="45" style="width:60px;"></label>
+          <label title="같은 유형·단 수인 동은 대표 1장만 그림"><input id="sideRep" type="checkbox" checked style="vertical-align:middle;"> 같은 유형은 대표 측면도 1장</label>
+          <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
+          <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
+          <span id="sheetWinInfo" style="font-size:11px;color:var(--ink-soft);">범위: 자동(배치 전체)</span>
+          <span style="flex-basis:100%;height:0;"></span>
           <button type="button" class="run" style="background:#7A0E58;color:#fff;" onclick="layoutSave('sheet','pdf')" title="위성사진 위 배치·동별 용량·모듈 표·표제란이 들어간 모듈 배치도 — A4 가로 PDF">🖼 배치도 PDF</button>
           <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="layoutSave('sheet','png')" title="모듈 배치도 PNG 이미지">배치도 PNG</button>
           <button type="button" class="run" style="background:#1E4F8C;color:#fff;" onclick="layoutSave('side','pdf')" title="배치한 동의 측면도(단면: 지붕·모듈·이격·높이 치수) — A4 가로 PDF">📐 측면도 PDF</button>
           <button type="button" class="run" style="background:#2C6CB5;color:#fff;" onclick="layoutSave('side','png')" title="측면도 PNG 이미지(쪽마다 한 장)">측면도 PNG</button>
           <button type="button" class="run" style="background:#0B5A2A;color:#fff;" onclick="exportFrameDxf()" title="회사 기본도면(기본도면_건물_2026-09-01)의 배치도 시트·측면도 시트 안에 현재 배치를 1:1(mm)로 넣은 DXF — AutoCAD에서 열어 이어서 작업">📐 회사 도면틀 CAD(DXF)</button>
+          <button type="button" class="run" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="배치만(모듈·테이블 외곽선·경계·라벨) mm 좌표의 DXF로 — 도면틀 없이">CAD(DXF) 배치만</button>
+          <span id="sheetStatus" class="hint" style="font-size:11px;display:none;"></span>
           <span id="laySaveStatus" class="hint" style="font-size:11px;flex-basis:100%;"></span>
         </div>
         <div class="opt-row">
@@ -862,36 +877,6 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
       <!-- ▣ 제안서: 배치도 이미지·PDF·CAD 출력 -->
       <div class="rail-pane" id="railPaneProposal">
-      <div class="card" style="padding:16px 16px 14px;">
-        <h2 style="margin-bottom:12px;">제안서 · 배치도 출력</h2>
-        <p class="hint" style="margin:0 0 10px;">배치도 탭에서 배치를 만든 뒤, 위성사진 위에 배치·동별 용량·모듈 표·도면 표제란을 넣은 배치도를 저장합니다.</p>
-        <div class="panel-bar" id="sheetOpts" style="display:flex;gap:8px;">
-          <span>🖼 배치도</span>
-          <label>공사명(주소) <input id="sheetProject" type="text" style="width:220px;" placeholder="비우면 검색한 주소"></label>
-          <label>모듈 <input id="sheetModule" type="text" value="현대 645Wp(양면)" style="width:130px;"></label>
-          <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
-          <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
-          <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
-          <label title="경계(지붕 끝) 변마다 가장 가까운 모듈 모서리까지의 거리를 mm 치수로 표시 — 지자체 제출용"><input id="sheetDim" type="checkbox" checked style="vertical-align:middle;"> 처마끝 이격 치수(mm) 표시</label>
-          <label title="측면도에 그릴 건물 처마(지붕 바닥) 높이 — 건축물대장·현장 확인값을 넣으세요(가정값)">처마 높이(m) <input id="sideEaveH" type="number" value="6" step="0.5" min="0" style="width:60px;"></label>
-          <label title="측면도 지붕 경사각(경사지붕). 평슬라브·토지는 0">지붕 경사(°) <input id="sideRoofDeg" type="number" value="10" step="1" min="0" max="45" style="width:60px;"></label>
-          <label title="같은 유형·단 수인 동은 대표 1장만 그림"><input id="sideRep" type="checkbox" checked style="vertical-align:middle;"> 같은 유형은 대표 측면도 1장</label>
-          <button type="button" class="run" style="background:#1E4F8C;color:#fff;" onclick="exportSideViews('pdf')" title="배치한 동의 측면도(A-A 단면: 지붕·모듈·이격·높이 치수)를 A4 가로 PDF로">📐 측면도 PDF 저장</button>
-          <button type="button" class="run" style="background:#2C6CB5;color:#fff;" onclick="exportSideViews('png')">측면도 PNG 저장</button>
-          <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
-          <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
-          <span id="sheetWinInfo" style="font-size:11px;color:var(--ink-soft);">범위: 자동(배치 전체)</span>
-          <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="exportLayoutSheet('png')">PNG 저장</button>
-          <button type="button" class="run" style="background:#7A0E58;color:#fff;" onclick="exportLayoutSheet('pdf')">PDF 저장 (A4 가로)</button>
-          <span id="sheetStatus" class="hint" style="font-size:11px;"></span>
-        </div>
-        <div class="export-row">
-          <button type="button" class="run" style="background:#0F2A44;color:#fff;font-size:14px;" onclick="exportProposalPdf()" title="표지(위성사진 조감도 + 동지 음영) · 모듈 배치도 · 측면도 · 동별 집계표 · 수익성 분석(발전사업 30년 · 자가소비)을 한 PDF(A4 가로)로">📑 제안서 PDF 자동 생성 (조감도 · 배치도 · 측면도 · 집계표 · 수익성)</button>
-          <button type="button" class="run" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
-          <button type="button" class="run" style="background:#0B5A2A;color:#fff;" onclick="exportFrameDxf()" title="회사 도면틀(배치도 시트·측면도 시트)에 배치를 넣은 DXF">📐 회사 도면틀 CAD(DXF)</button>
-          <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
-        </div>
-      </div>
       <!-- ▣ 제안서 편집기(한 장씩): 양식 PPT를 한 슬라이드씩 크게 보며 그림·사진 넣기, 글 고치기, 삭제/추가 → .pptx 저장 -->
       <div class="card" style="padding:16px 16px 14px;" id="pptCard">
         <h2 style="margin-bottom:6px;display:flex;align-items:center;gap:8px;">📑 제안서 편집 (회사 양식 PPT) <button type="button" id="pptWideBtn" onclick="pptToggleWide()" style="font-size:11.5px;padding:2px 8px;" title="편집기를 화면 전체로 크게 (Esc로 닫기)">⤢ 크게 보기</button></h2>
@@ -910,6 +895,13 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <p id="pptStatus" class="hint" style="margin:6px 0 0;font-size:12px;"></p>
       </div>
       <!-- ▣ 견적 · 수익성: 그랜드썬 2026 견적서 엑셀 단가 체계 + 제안서 PPT 수익 모델 -->
+      <div class="card" style="padding:12px 16px;">
+        <div class="export-row" style="margin:0;">
+          <button type="button" class="run" style="background:#0F2A44;color:#fff;" onclick="exportProposalPdf()" title="표지(위성사진 조감도 + 동지 음영) · 모듈 배치도 · 측면도 · 동별 집계표 · 수익성 분석을 한 PDF(A4 가로)로 — 회사 양식 PPT 대신 간단 제안서가 필요할 때">📑 간단 제안서 PDF(자동)</button>
+          <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
+          <span class="hint" style="font-size:11px;">배치도·측면도·도면틀 CAD 저장은 배치도 탭 ⑥에 있습니다.</span>
+        </div>
+      </div>
       <div class="card" style="padding:16px 16px 14px;" id="quoteCard">
         <h2 style="margin-bottom:6px;">견적서 · 수익성 분석</h2>
         <p class="hint" style="margin:0 0 10px;">배치 용량과 모듈 등급에 따라 견적서(A4 세로 PDF: 표지·견적 목록·산출내역서)와 수익성 표(발전사업 30년 · 자가소비 월별)를 만듭니다. 단가 체계는 "2026년 견적서" 엑셀(2026-09-28)과 제안서 PPT(2026-10-13)에서 읽은 값이며, 아래 입력으로 바꿀 수 있습니다.</p>
@@ -1154,7 +1146,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-10-30e';
+const APP_VERSION = '2026-10-30f';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -1942,8 +1934,8 @@ function switchRailTab(paneId){
   document.body.setAttribute('data-rail', paneId);
   if(paneId === 'railPaneLayout' && typeof autoLayoutPending !== 'undefined' && autoLayoutPending){ autoLayoutPending = false; setTimeout(() => { try{ autoLayoutAfterSearch(); }catch(e){} }, 50); }
   const rail = document.querySelector('.rail'); if(rail) rail.scrollTop = 0;
-  if(paneId === 'railPaneProposal'){
-    setTimeout(() => { try{ pptRefreshSnap(); }catch(e){} }, 300);
+  if(paneId === 'railPaneProposal'){ setTimeout(() => { try{ pptRefreshSnap(); }catch(e){} }, 300); }
+  if(paneId === 'railPaneLayout' || paneId === 'railPaneProposal'){
     const pj = document.getElementById('sheetProject');
     if(pj && !pj.value) pj.placeholder = (typeof lastJibunAddress !== 'undefined' && lastJibunAddress) || (document.getElementById('siteAddress') || {}).value || '공사명';
   }
