@@ -32,6 +32,10 @@
     background:linear-gradient(180deg,#FBEFD9 0px,#F3F1E6 180px,var(--paper) 460px) fixed;
   }
   ::selection{background:var(--sun-tint);}
+  .copy-text{user-select:all;-webkit-user-select:all;cursor:text;background:#fff;padding:1px 5px;border-radius:4px;border:1px solid rgba(0,0,0,.12);}
+  .copy-btn{border:none;background:transparent;cursor:pointer;font-size:12px;padding:0 3px;vertical-align:middle;}
+  #verBanner{position:sticky;top:var(--header-h);z-index:39;background:#FFD23F;color:#3A2A00;font-size:13px;padding:6px 14px;display:none;align-items:center;gap:10px;}
+  #verBanner button{font-size:12px;font-weight:700;}
   :focus-visible{outline:3px solid var(--sun);outline-offset:2px;}
 
   /* ---------- 상단 띠: 지평선 ---------- */
@@ -435,7 +439,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
   <div class="brand">
     <div class="sunmark" aria-hidden="true"></div>
     <div>
-      <h1>태양광사업 분석기</h1>
+      <h1>태양광사업 분석기 <small id="appVer" style="font-size:11px;font-weight:400;opacity:.65;"></small></h1>
       <p class="eyebrow">입지 · 인허가 · 계통 · 부담금을 한 화면에서</p>
     </div>
   </div>
@@ -463,6 +467,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
 </header>
+<div id="verBanner">🔄 서버에 새 버전 <b></b>이 있습니다. 이 화면은 <span id="verCur"></span>입니다. <button type="button" onclick="reloadLatest()">지금 새로 고침</button> <small>(새로 고쳐도 안 바뀌면 Ctrl+F5)</small></div>
 
 <div class="shell">
 
@@ -1140,6 +1145,15 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 </div><!-- /shell -->
 
 <script>
+// 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
+const APP_VERSION = '2026-10-30a';
+document.addEventListener('DOMContentLoaded', () => {
+  const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
+  if(!/^https?:/.test(location.protocol)) return;
+  const check = async () => { try{ const r = await fetch(location.pathname.replace(/[^/]*$/, '') + 'index.html?v=' + Date.now(), { cache: 'no-store' }); if(!r.ok) return; const t = await r.text(); const m = t.match(/APP_VERSION = '([^']+)'/); if(m && m[1] !== APP_VERSION){ const b = document.getElementById('verBanner'); if(b){ b.style.display = 'flex'; b.querySelector('b').textContent = 'v' + m[1]; } } }catch(e){} };
+  setTimeout(check, 2500); setInterval(check, 10 * 60 * 1000);
+});
+function reloadLatest(){ const u = new URL(location.href); u.searchParams.set('v', String(Date.now())); location.replace(u.toString()); }
 const DB = {
   developmentScale: {
     urban_res:      {label:"주거·상업지역", limit:10000},
@@ -10496,10 +10510,14 @@ function kepcoOneLiner(list){
   const copyTxt = list.map(r => { const ctrlOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0; const ctrl = Math.max(14000 - Number(r.DL_PWR), 0); return `${r.SUBST_NM ?? '-'}변전소 ${mw(r.VOL_1)}, #${r.MTR_NO ?? '-'} MTR-${mw(r.VOL_2)}, ${r.DL_NM ?? '-'}DL-${mw(r.VOL_3)}` + (ctrlOk && ctrl > Number(r.VOL_3) ? ` (출력제어 조건부 ${mw(ctrl)})` : ''); }).join(' / ');
   return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--surface-2);border-left:3px solid var(--sky-deep);border-radius:0 4px 4px 0;font-size:12.5px;line-height:1.6;">${rows.join('<br>')} <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText(${JSON.stringify(copyTxt).replace(/"/g, '&quot;')}).then(() => { this.textContent = '복사됨'; setTimeout(() => this.textContent = '복사', 1200); })" style="border:1px solid var(--card-line);background:#fff;border-radius:4px;padding:0 6px;font-size:11px;cursor:pointer;vertical-align:middle;">복사</button><br><span class="sum-muted" style="font-size:11px;">실제 여유용량 기준(변전소·주변압기·배전선로), kW → MW</span></p>`;
 }
+// 글자를 끌어 선택하거나 한 번 클릭하면 통째로 선택되는 글 + 📋 복사 단추
+function copyableText(t){ const raw = String(t); return `<span class="copy-text" title="끌어서 선택하거나 클릭하면 통째로 선택됩니다">${escLand(raw)}</span> <button type="button" class="copy-btn" onclick="copyText(this, ${JSON.stringify(raw).replace(/"/g, '&quot;')})" title="복사">📋</button>`; }
+function copyText(btn, t){ const done = () => { const o = btn.textContent; btn.textContent = '✅'; setTimeout(() => { btn.textContent = o; }, 1200); }; if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(() => fallbackCopy(t, done)); else fallbackCopy(t, done); }
+function fallbackCopy(t, done){ const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done && done(); }catch(e){} ta.remove(); }
 function kepcoPhoneLine(admin){
   const localData = getJoryeEntry(admin);
   if(!localData || !localData.kepco) return '';
-  return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--sun-tint);border-left:3px solid var(--sun);border-radius:0 4px 4px 0;font-size:12.5px;">☎ <b>한전 문의</b> — ${localData.kepco}</p>`;
+  return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--sun-tint);border-left:3px solid var(--sun);border-radius:0 4px 4px 0;font-size:12.5px;">☎ <b>한전 문의</b> — ${copyableText(localData.kepco)}</p>`;
 }
 // ===== 주소 검색 시 해당 지자체 담당부서 연락처 자동 표시 =====
 let lastAdmin = null; // 마지막으로 확인된 행정구역(한전ON 형식) — 요약 카드·연락처 패널에서 사용
@@ -10597,7 +10615,7 @@ function contactHtml(admin){
     <div class="keyline" style="margin-top:10px;background:var(--amber-tint);border-left-color:var(--amber);">
       <b>📋 ${admin.siText || admin.guText || admin.do} 실사 확인 자료 (사용자 제공 데이터, 방문 확인일 기준)</b>
       ${localData.devScale ? `<p style="margin:8px 0 4px;font-size:13px;"><b>개발행위허가 규모/기준:</b> ${localData.devScale}</p>` : ''}
-      ${localData.kepco ? `<p style="margin:8px 0 4px;font-size:13px;"><b>한전선로용량 관련:</b> ${localData.kepco}</p>` : ''}
+      ${localData.kepco ? `<p style="margin:8px 0 4px;font-size:13px;"><b>한전선로용량 관련:</b> ${copyableText(localData.kepco)}</p>` : ''}
       ${localData.contact ? `<p style="margin:8px 0 0;font-size:13px;"><b>지자체 담당자·특이사항:</b> ${localData.contact}</p>` : ''}
       ${SETBACK_LAW_NOTICE}
       <p class="footnote" style="margin-top:8px;">사용자가 직접 확인한 자료이며, 시점 경과로 담당자·기준이 바뀌었을 수 있어 최종 확인은 필요합니다.</p>
