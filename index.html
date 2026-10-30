@@ -1154,7 +1154,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-10-30c';
+const APP_VERSION = '2026-10-30d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -5894,6 +5894,7 @@ function renderLayoutCards(){
         <button type="button" onclick="layCardLocate(${ed.groupId})" title="지도를 이 배치로 이동">📍 위치</button>
         <select onmousedown="event.stopPropagation()" onchange="layCardRelayoutAs(${ed.groupId}, this.value)" title="이 동만 고른 유형으로 바로 다시 배치(기존 배치는 교체, ↶ 이전으로 복구 가능)" style="font-size:11px;padding:1px 3px;border:1px solid var(--card-line);border-radius:5px;background:var(--surface-2);font-family:inherit;max-width:150px;">${layCardTypeOptions(ed)}</select>
         <button type="button" onclick="layCardMove(${ed.groupId})" title="이 배치를 선택해 화살표·손잡이로 옮기고 회전(⟲⟳)">✥ 이동·회전</button>
+        <button type="button" onclick="layCardShrink(${ed.groupId})" title="이 동의 경계를 변마다 줄이거나 늘려 배치를 다시 만듦(지도의 동그란 손잡이)">⇲ 줄이기</button>
         <button type="button" class="del" onclick="removeSolarLayout(${ed.groupId})" title="이 배치 삭제 (↶ 이전으로 복구 가능)">🗑 삭제</button>
       </div></div>`;
   });
@@ -5986,6 +5987,16 @@ function layCardRelayoutInner(gid){
     if(mt.value === 'ground' && ed.type !== 'ground'){ mt.value = 'slab'; onMountTypeChange(); }
     onGenerateLayoutClickInner();
   }
+}
+// 카드에서 경계 줄이기: 그 동의 경계를 선택(테두리 라벨)한 뒤 줄이기 시작 — 지도에서 건물을 다시 누르지 않아도 됨
+function layCardShrink(gid){
+  const ed = layoutByGroup(gid); if(!ed || !ed.boundary || ed.boundary.length < 3) return;
+  if(shrinkEdit) endShrinkOutline(true);
+  if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+  const b = (ed.origBoundary || ed.boundary).slice();
+  drawConfirmedOutline(b, ed.bldName || '');
+  try{ const map = ensureKakaoMap(); const c = b.reduce((a, q) => ({ la: a.la + q.getLat() / b.length, ln: a.ln + q.getLng() / b.length }), { la: 0, ln: 0 }); map.panTo(new kakao.maps.LatLng(c.la, c.ln)); }catch(e){}
+  startShrinkOutline();
 }
 function layCardMove(gid){
   const ed = layoutByGroup(gid); if(!ed) return;
