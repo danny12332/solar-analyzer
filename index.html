@@ -778,6 +778,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="run" style="background:#C2148A;color:#fff;" onclick="layoutSave('sheet','png')" title="모듈 배치도 PNG 이미지">배치도 PNG</button>
           <button type="button" class="run" style="background:#1E4F8C;color:#fff;" onclick="layoutSave('side','pdf')" title="배치한 동의 측면도(단면: 지붕·모듈·이격·높이 치수) — A4 가로 PDF">📐 측면도 PDF</button>
           <button type="button" class="run" style="background:#2C6CB5;color:#fff;" onclick="layoutSave('side','png')" title="측면도 PNG 이미지(쪽마다 한 장)">측면도 PNG</button>
+          <button type="button" class="run" style="background:#0B5A2A;color:#fff;" onclick="exportFrameDxf()" title="회사 기본도면(기본도면_건물_2026-09-01)의 배치도 시트·측면도 시트 안에 현재 배치를 1:1(mm)로 넣은 DXF — AutoCAD에서 열어 이어서 작업">📐 회사 도면틀 CAD(DXF)</button>
           <span id="laySaveStatus" class="hint" style="font-size:11px;flex-basis:100%;"></span>
         </div>
         <div class="opt-row">
@@ -887,6 +888,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <div class="export-row">
           <button type="button" class="run" style="background:#0F2A44;color:#fff;font-size:14px;" onclick="exportProposalPdf()" title="표지(위성사진 조감도 + 동지 음영) · 모듈 배치도 · 측면도 · 동별 집계표 · 수익성 분석(발전사업 30년 · 자가소비)을 한 PDF(A4 가로)로">📑 제안서 PDF 자동 생성 (조감도 · 배치도 · 측면도 · 집계표 · 수익성)</button>
           <button type="button" class="run" style="background:var(--sky-deep);color:#fff;" onclick="exportLayoutDxf()" title="지도 위 배치(모듈·테이블 외곽선·경계·라벨)를 m 단위 좌표의 DXF 파일로 저장 — AutoCAD 등에서 열어 수정 가능">📐 CAD(DXF) 저장</button>
+          <button type="button" class="run" style="background:#0B5A2A;color:#fff;" onclick="exportFrameDxf()" title="회사 도면틀(배치도 시트·측면도 시트)에 배치를 넣은 DXF">📐 회사 도면틀 CAD(DXF)</button>
           <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
         </div>
       </div>
@@ -1152,7 +1154,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-10-30b';
+const APP_VERSION = '2026-10-30c';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -1941,6 +1943,7 @@ function switchRailTab(paneId){
   if(paneId === 'railPaneLayout' && typeof autoLayoutPending !== 'undefined' && autoLayoutPending){ autoLayoutPending = false; setTimeout(() => { try{ autoLayoutAfterSearch(); }catch(e){} }, 50); }
   const rail = document.querySelector('.rail'); if(rail) rail.scrollTop = 0;
   if(paneId === 'railPaneProposal'){
+    setTimeout(() => { try{ pptRefreshSnap(); }catch(e){} }, 300);
     const pj = document.getElementById('sheetProject');
     if(pj && !pj.value) pj.placeholder = (typeof lastJibunAddress !== 'undefined' && lastJibunAddress) || (document.getElementById('siteAddress') || {}).value || '공사명';
   }
@@ -4756,6 +4759,7 @@ async function pptMake(){
   const st = document.getElementById('pptStatus');
   if(!pptFile || !pptInfo){ st.style.color = '#b3402a'; st.textContent = '❌ 먼저 제안서 PPT(.pptx)를 넣어 주세요.'; return; }
   st.style.color = 'var(--ink-soft)';
+  try{ if(await pptRefreshSnap()) st.textContent = '배치도·측면도를 현재 배치로 다시 넣었습니다. PPT를 만드는 중…'; }catch(e){}
   const genItems = new Set(); const noteGen = v => { if(String(v).startsWith('gen:') && !(pptSnap[v.slice(4)] && pptSnap[v.slice(4)].url)) genItems.add(v.slice(4)); };
   Object.values(pptOps).forEach(o => { if(o.del) return; Object.values(o.replace || {}).forEach(noteGen); (o.overlays || []).forEach(v => noteGen(v.src)); }); pptNewSlides.forEach(n => n.overlays.forEach(v => noteGen(v.src)));
   const usesGen = genItems.size > 0; // 저장본이 없는 항목만 현재 배치로 새로 만듦
@@ -5424,6 +5428,179 @@ function wrapText(g, text, x, y, maxW, lh){
   if(line) g.fillText(line, x, yy);
 }
 
+// ===== 📐 회사 도면틀 CAD(DXF): 기본도면_건물_2026-09-01.dwg의 배치도 시트·측면도 시트(cad/gs_frame.dxf)에 현재 배치를 1:1(mm)로 넣어 DXF 저장 =====
+// 도면틀은 블록(GS_PLAN_FRAME / GS_SIDE_FRAME)으로 들어 있고, 배치가 빨간 네모보다 크면 도면틀 블록을 키움(배치는 늘 1:1 mm). 표 칸·공사명은 새 글로 채움
+const GS_FRAME_META = {"plan":{"w":151380.00000000093,"h":106920.0,"box":[16611.28192997491,30837.555214704014,125689,69092]},"side":{"w":75690,"h":53460,"box":[3336,4672,69016,46200]},"fields":{"SIDE_TITLE":{"type":"TEXT","layer":"0","style":"굴림체","color":256,"h":447.2160000000001,"x":59334.700303690974,"y":2712.307916373946,"halign":1,"valign":0,"wf":1,"ax":62270.27199599892,"ay":2712.307916373946},"PROJECT":{"type":"MTEXT","layer":"0","style":"굴림체","color":256,"h":1073.318400000001,"x":11948.955082178814,"y":7638.054654571926,"attach":1,"width":18409.09355967232},"COUNT":{"type":"TEXT","layer":"0","style":"굴림체","color":256,"h":2178.0,"x":98752.48928182689,"y":16275.832669273019,"halign":1,"valign":2,"wf":1,"ax":102427.16620490397,"ay":17364.83266927302},"ANGLE":{"type":"TEXT","layer":"0","style":"굴림체","color":256,"h":2178.0,"x":130466.94220172381,"y":16258.20870817802,"halign":1,"valign":2,"wf":1,"ax":134856.44989403198,"ay":17347.20870817802},"KW":{"type":"TEXT","layer":"0","style":"굴림체","color":256,"h":2178.0,"x":111643.97477498092,"y":16258.20870817802,"halign":1,"valign":2,"wf":1,"ax":117775.88246728899,"ay":17347.20870817802},"MODULE":{"type":"MTEXT","layer":"0","style":"굴림체","color":256,"h":2178.0,"x":82650.29112397786,"y":17256.025595565094,"attach":5,"width":26900.52435910108}}};
+let __gsFrameTxt = null;
+async function gsFrameTemplate(){
+  if(__gsFrameTxt) return __gsFrameTxt;
+  const base = location.href.replace(/[?#].*$/, '').replace(/[^/]*$/, '');
+  const r = await fetch(base + 'cad/gs_frame.dxf', { cache: 'no-cache' });
+  if(!r.ok) throw new Error('도면틀 파일(cad/gs_frame.dxf)을 못 읽음: HTTP ' + r.status);
+  __gsFrameTxt = await r.text(); return __gsFrameTxt;
+}
+// 배치(모듈·테이블·경계·통풍로·부속물·이격 치수) → m 좌표 목록
+function layoutDxfItems(){
+  const items = [];
+  const lat0Rad = proposalLayouts().length ? proposalLayouts()[0].lat0Rad : ((lastAreaPolygonPath && lastAreaPolygonPath.length) ? lastAreaPolygonPath.reduce((a, p) => a + p.getLat(), 0) / lastAreaPolygonPath.length * Math.PI / 180 : null);
+  if(lat0Rad === null) return null;
+  const xy = ll => solarToXY(ll, lat0Rad);
+  const pathOf = poly => { const p = poly.getPath(); return (Array.isArray(p) ? p : []).map(xy); };
+  const seenB = []; const addBoundary = (path, layer) => { if(!path || path.length < 3) return; if(seenB.some(b => sameBoundary(b, path))) return; seenB.push(path); items.push({ layer, path: path.map(xy), closed: true }); };
+  proposalLayouts().forEach(ed => addBoundary(ed.boundary, 'GS-BOUNDARY'));
+  let modCount = 0, kwTotal = 0; const labels = [];
+  proposalLayouts().forEach((ed, i) => {
+    const live = ed.modules.filter(m => !m.removed);
+    live.forEach(m => { items.push({ layer: 'GS-MODULE', path: pathOf(m.poly), closed: true }); modCount++; });
+    ed.modules.filter(m => m.vent && m.removed).forEach(m => { const q = pathOf(m.poly); if(q.length === 4) items.push({ layer: 'GS-VENT', path: [q[0], q[2]] }, { layer: 'GS-VENT', path: [q[1], q[3]] }, { layer: 'GS-VENT', path: q, closed: true }); });
+    if(tableOverlaysOn()) (ed.tables || []).forEach(t => { if(t.mods.some(m => !m.removed)) items.push({ layer: 'GS-TABLE', path: pathOf(t.outline), closed: true }); });
+    const kw = live.length * ed.wattPerPanel / 1000; kwTotal += kw;
+    const b = ed.boundary.map(xy); labels.push({ name: ed.bldName || `${i + 1}동`, kw, n: live.length, w: ed.wattPerPanel, cx: b.reduce((a, q) => a + q.x, 0) / b.length, cy: b.reduce((a, q) => a + q.y, 0) / b.length });
+  });
+  proposalLayouts().forEach(ed => layoutEdgeSetbacks(ed, 3.5).slice(0, 6).forEach(dm => { const A = xy(dm.from), Bp = xy(dm.to); items.push({ layer: 'GS-DIM', path: [A, Bp] }); items.push({ layer: 'GS-DIM', text: `${Math.round(dm.d * 1000)}`, x: (A.x + Bp.x) / 2, y: (A.y + Bp.y) / 2, h: 0.35 }); }));
+  annotsForExport().forEach(({ a, path }) => { items.push({ layer: 'GS-ANNOT', path: path.map(xy), closed: true }); const c = xy(a.center); items.push({ layer: 'GS-ANNOT', text: `${a.name} ${a.w}x${a.h}m`, x: c.x, y: c.y, h: 0.5 }); });
+  return { items, labels, modCount, kwTotal };
+}
+// 캔버스처럼 그리면 선·글을 기록하는 펜(측면도 함수를 그대로 써서 DXF로)
+function dxfPen(){
+  const out = []; let M = [1, 0, 0, 1, 0, 0]; const stack = []; let path = [], cur = null;
+  const T = (x, y) => ({ x: M[0] * x + M[2] * y + M[4], y: M[1] * x + M[3] * y + M[5] });
+  const pen = { strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, font: '20px sans-serif', textAlign: 'left', textBaseline: 'alphabetic', globalAlpha: 1, out,
+    save(){ stack.push({ M: M.slice(), s: this.strokeStyle, f: this.fillStyle, font: this.font, ta: this.textAlign, tb: this.textBaseline, lw: this.lineWidth }); },
+    restore(){ const s = stack.pop(); if(s){ M = s.M; this.strokeStyle = s.s; this.fillStyle = s.f; this.font = s.font; this.textAlign = s.ta; this.textBaseline = s.tb; this.lineWidth = s.lw; } },
+    translate(x, y){ M = [M[0], M[1], M[2], M[3], M[0] * x + M[2] * y + M[4], M[1] * x + M[3] * y + M[5]]; },
+    rotate(a){ const c = Math.cos(a), s = Math.sin(a); M = [M[0] * c + M[2] * s, M[1] * c + M[3] * s, -M[0] * s + M[2] * c, -M[1] * s + M[3] * c, M[4], M[5]]; },
+    scale(a, b){ M = [M[0] * a, M[1] * a, M[2] * b, M[3] * b, M[4], M[5]]; },
+    setTransform(){ M = [1, 0, 0, 1, 0, 0]; }, resetTransform(){ M = [1, 0, 0, 1, 0, 0]; },
+    beginPath(){ path = []; cur = null; },
+    moveTo(x, y){ cur = [T(x, y)]; path.push(cur); }, lineTo(x, y){ if(!cur){ cur = []; path.push(cur); } cur.push(T(x, y)); },
+    closePath(){ if(cur && cur.length) cur.closed = true; },
+    rect(x, y, w, h){ const p = [T(x, y), T(x + w, y), T(x + w, y + h), T(x, y + h)]; p.closed = true; path.push(p); cur = null; },
+    arc(x, y, r, a0, a1){ const n = 24; const p = []; for(let i = 0; i <= n; i++){ const a = a0 + (a1 - a0) * i / n; p.push(T(x + r * Math.cos(a), y + r * Math.sin(a))); } path.push(p); cur = p; },
+    stroke(){ path.forEach(p => { if(p.length >= 2) out.push({ kind: 'line', pts: p.slice(), closed: !!p.closed, color: this.strokeStyle }); }); },
+    fill(){ path.forEach(p => { if(p.length >= 3) out.push({ kind: 'line', pts: p.slice(), closed: true, color: this.fillStyle }); }); },
+    strokeRect(x, y, w, h){ const p = [T(x, y), T(x + w, y), T(x + w, y + h), T(x, y + h)]; out.push({ kind: 'line', pts: p, closed: true, color: this.strokeStyle }); },
+    fillRect(){}, clearRect(){}, setLineDash(){}, drawImage(){},
+    measureText(t){ const px = parseFloat((this.font.match(/(\d+(?:\.\d+)?)px/) || [0, 20])[1]); return { width: String(t).length * px * 0.62 }; },
+    fillText(t, x, y){ if(!String(t).trim()) return; const px = parseFloat((this.font.match(/(\d+(?:\.\d+)?)px/) || [0, 20])[1]); const p = T(x, y); const ang = Math.atan2(M[1], M[0]); const sc = Math.hypot(M[0], M[1]); out.push({ kind: 'text', text: String(t), x: p.x, y: p.y, px: px * sc, rot: ang, align: this.textAlign, base: this.textBaseline, color: this.fillStyle }); },
+    strokeText(){}
+  };
+  return pen;
+}
+function aciOf(css){
+  const s = String(css || '#000').trim(); let r = 0, g = 0, b = 0;
+  const m = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i); if(m){ let h = m[1]; if(h.length === 3) h = h.split('').map(c => c + c).join(''); r = parseInt(h.slice(0, 2), 16); g = parseInt(h.slice(2, 4), 16); b = parseInt(h.slice(4, 6), 16); }
+  else { const q = s.match(/rgba?\(([^)]+)\)/); if(q){ [r, g, b] = q[1].split(',').map(v => parseFloat(v)); } }
+  const P = [[7, 0, 0, 0], [1, 255, 0, 0], [2, 255, 255, 0], [3, 0, 255, 0], [4, 0, 255, 255], [5, 0, 0, 255], [6, 255, 0, 255], [8, 128, 128, 128], [30, 255, 127, 0], [5, 28, 79, 216], [6, 192, 0, 192], [1, 224, 0, 0], [8, 68, 68, 68], [5, 26, 47, 214]];
+  let best = 7, bd = Infinity; P.forEach(([c, R, G, B]) => { const d = (R - r) ** 2 + (G - g) ** 2 + (B - b) ** 2; if(d < bd){ bd = d; best = c; } }); return best;
+}
+// 측면도 한 그룹 → mm 단위 기록(그림과 같은 모양, 건물·모듈은 1:1)
+function sideViewDxfGroup(grp, letter){
+  const g0 = id => ((document.getElementById(id) || {}).value || '').trim();
+  const eaveH = parseFloat(g0('sideEaveH')), roofDeg = parseFloat(g0('sideRoofDeg'));
+  const pen = dxfPen(); const box = { x: 0, y: 0, w: 1100, h: 1020 };
+  let res = null;
+  try{ res = drawSideView(pen, box, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, title: `"${letter}"-"${letter}" 측면도 VIEW SCALE 1:1`, sub: `${layoutTypeLabel(grp.ed)} · 적용: ${grp.names.join(', ')}` }); }catch(e){ console.warn('side dxf', e); }
+  if(!res) return null;
+  const totalH = Math.max(res.modTop + 0.5, res.eaveH + 1);
+  const sc = Math.min((box.w - 340) / res.D, (box.h - 200) / totalH); // drawSideView와 같은 축척(px/m)
+  const k = 1000 / sc; // px → mm
+  const ents = pen.out.map(o => o.kind === 'line' ? Object.assign({}, o, { pts: o.pts.map(p => ({ x: p.x * k, y: -p.y * k })) }) : Object.assign({}, o, { x: o.x * k, y: -o.y * k, h: o.px * k * 0.72, rot: -o.rot }));
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  ents.forEach(o => { (o.kind === 'line' ? o.pts : [{ x: o.x, y: o.y }]).forEach(p => { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }); });
+  return { ents, bb: { x0, y0, x1, y1 } };
+}
+// DXF(그룹 코드 쌍) 편집기
+function dxfPairs(txt){ const L = txt.split(/\r?\n/); const P = []; for(let i = 0; i + 1 < L.length; i += 2) P.push([L[i].trim(), L[i + 1]]); return P; }
+async function exportFrameDxf(){
+  const st = document.getElementById('laySaveStatus') || document.getElementById('sheetStatus') || document.getElementById('roadviewStatus');
+  const say = (t, c) => { if(st){ st.style.color = c || 'var(--ink-soft)'; st.textContent = t; } };
+  try{
+    const D = layoutDxfItems(); if(!D || !D.modCount){ say('❌ 넣을 배치가 없습니다. 먼저 배치를 만드세요.', '#b3402a'); return; }
+    say('📐 회사 도면틀에 배치를 넣는 중…');
+    const tpl = await gsFrameTemplate(); const P = dxfPairs(tpl);
+    let seed = 0; const iSeed = P.findIndex((p, i) => p[0] === '9' && p[1].trim() === '$HANDSEED'); if(iSeed >= 0) seed = parseInt(P[iSeed + 1][1].trim(), 16);
+    let msOwner = ''; for(let i = 0; i < P.length; i++){ if(P[i][0] === '0' && P[i][1].trim() === 'BLOCK_RECORD'){ let h = '', nm = ''; for(let j = i + 1; j < P.length && P[j][0] !== '0'; j++){ if(P[j][0] === '5') h = P[j][1].trim(); if(P[j][0] === '2') nm = P[j][1].trim(); } if(/^\*Model_Space$/i.test(nm)){ msOwner = h; break; } } }
+    let iEnt = P.findIndex((p, i) => p[0] === '2' && p[1].trim() === 'ENTITIES' && P[i - 1] && P[i - 1][1].trim() === 'SECTION'); if(iEnt < 0) throw new Error('도면틀 DXF에 ENTITIES가 없음');
+    let iEnd = iEnt; while(iEnd < P.length && !(P[iEnd][0] === '0' && P[iEnd][1].trim() === 'ENDSEC')) iEnd++;
+    const NE = []; const hnd = () => (++seed).toString(16).toUpperCase();
+    const f = v => (Math.round(v * 1000) / 1000).toString();
+    const head = (type, layer, color) => { NE.push(['0', type], ['5', hnd()], ['330', msOwner], ['100', 'AcDbEntity'], ['8', layer]); if(color) NE.push(['62', String(color)]); };
+    const poly = (pts, closed, layer, color) => { head('LWPOLYLINE', layer, color); NE.push(['100', 'AcDbPolyline'], ['90', String(pts.length)], ['70', closed ? '1' : '0']); pts.forEach(p => NE.push(['10', f(p.x)], ['20', f(p.y)])); };
+    const text = (t, x, y, h, opt) => { opt = opt || {}; head('TEXT', opt.layer || 'GS-TEXT', opt.color); const ha = opt.ha || 0, va = opt.va || 0; NE.push(['100', 'AcDbText'], ['10', f(x)], ['20', f(y)], ['30', '0'], ['40', f(h)], ['1', t], ['50', f((opt.rot || 0) * 180 / Math.PI)], ['7', opt.style || '굴림체'], ['72', String(ha)]); if(ha || va) NE.push(['11', f(x)], ['21', f(y)], ['31', '0']); NE.push(['100', 'AcDbText'], ['73', String(va)]); };
+    const mtext = (t, x, y, h, w, attach, opt) => { opt = opt || {}; head('MTEXT', opt.layer || 'GS-FIELD', opt.color); NE.push(['100', 'AcDbMText'], ['10', f(x)], ['20', f(y)], ['30', '0'], ['40', f(h)], ['41', f(w)], ['71', String(attach || 1)], ['72', '5'], ['1', t], ['7', opt.style || '굴림체']); };
+    const insert = (name, x, y, s) => { head('INSERT', '0'); NE.push(['100', 'AcDbBlockReference'], ['2', name], ['10', f(x)], ['20', f(y)], ['30', '0'], ['41', f(s)], ['42', f(s)], ['43', f(s)]); };
+    const fieldTxt = (fd, value, ox, oy, s) => { if(!fd) return; if(fd.type === 'MTEXT') mtext(value, ox + fd.x * s, oy + fd.y * s, fd.h * s, (fd.width || 0) * s, fd.attach, { style: fd.style }); else { const ha = fd.halign || 0, va = fd.valign || 0; const px = (ha || va) && fd.ax != null ? fd.ax : fd.x, py = (ha || va) && fd.ay != null ? fd.ay : fd.y; text(value, ox + px * s, oy + py * s, fd.h * s, { ha, va, style: fd.style, layer: 'GS-FIELD' }); } };
+    // 1) 배치도 시트
+    const MM = 1000; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    D.items.forEach(it => (it.path || [{ x: it.x, y: it.y }]).forEach(q => { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }));
+    const lw = (x1 - x0) * MM, lh = (y1 - y0) * MM; const PM = GS_FRAME_META.plan; const [bx, by, bw, bh] = PM.box;
+    const sP = Math.max(0.3, lw * 1.12 / bw, lh * 1.12 / bh); // 도면틀을 배치 크기에 맞춤(배치는 1:1 mm 그대로)
+    insert('GS_PLAN_FRAME', 0, 0, sP);
+    const cx = (bx + bw / 2) * sP, cy = (by + bh / 2) * sP; const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    const P2 = q => ({ x: cx + (q.x - mx) * MM, y: cy + (q.y - my) * MM });
+    D.items.forEach(it => { if(it.text){ const p = P2(it); text(it.text, p.x, p.y, it.h * MM, { layer: it.layer, ha: 1, va: 2 }); } else poly(it.path.map(P2), !!it.closed, it.layer); });
+    D.labels.forEach(lb => { const p = P2({ x: lb.cx, y: lb.cy }); const h1 = 1848 * sP, h2 = 2772 * sP; text(lb.name, p.x, p.y + h2 * 1.4, h1, { ha: 1, va: 2, layer: 'GS-TEXT' }); text(`${lb.kw.toLocaleString('ko-KR', { maximumFractionDigits: 3 })}KW`, p.x, p.y, h2, { ha: 1, va: 2, layer: 'GS-TEXT', color: 1 }); text(`(${lb.w}W × ${lb.n}EA)`, p.x, p.y - h2 * 1.3, h1, { ha: 1, va: 2, layer: 'GS-TEXT' }); });
+    const g0 = id => ((document.getElementById(id) || {}).value || '').trim();
+    const project = g0('sheetProject') || lastJibunAddress || g0('siteAddress') || '';
+    const modName = g0('sheetModule') || '현대 645Wp(양면)';
+    const pl = parseFloat(g0('panelL')) || 2.465, pw = parseFloat(g0('panelW')) || 1.134;
+    const F = GS_FRAME_META.fields;
+    fieldTxt(F.MODULE, `${modName}\\P${Math.round(pl * 1000).toLocaleString('en-US')} x ${Math.round(pw * 1000).toLocaleString('en-US')}`, 0, 0, sP);
+    fieldTxt(F.COUNT, `${D.modCount.toLocaleString('ko-KR')}장`, 0, 0, sP);
+    fieldTxt(F.KW, `${D.kwTotal.toLocaleString('ko-KR', { maximumFractionDigits: 3 })}kW`, 0, 0, sP);
+    fieldTxt(F.ANGLE, '5~10도', 0, 0, sP);
+    fieldTxt(F.PROJECT, project, 0, 0, sP);
+    // 2) 측면도 시트(한 장에 두 그룹, 모자라면 오른쪽으로 더)
+    const groups = sideViewGroups(); const letters = 'ABCDEFGHIJKLMNOP'; let sheetX = PM.w * sP + 20000 * sP; let nSide = 0;
+    const SM = GS_FRAME_META.side; const [sbx, sby, sbw, sbh] = SM.box;
+    for(let i = 0; i < groups.length; i += 2){
+      const views = groups.slice(i, i + 2).map((grp, k) => sideViewDxfGroup(grp, letters[i + k] || '?')).filter(Boolean); if(!views.length) continue;
+      const gap = 3000; const needW = views.reduce((a, v) => a + (v.bb.x1 - v.bb.x0), 0) + gap * (views.length - 1); const needH = Math.max(...views.map(v => v.bb.y1 - v.bb.y0));
+      const sS = Math.max(0.2, needW * 1.12 / sbw, needH * 1.12 / sbh);
+      insert('GS_SIDE_FRAME', sheetX, 0, sS);
+      let vx = sheetX + (sbx + sbw / 2) * sS - needW / 2; const vyC = (sby + sbh / 2) * sS;
+      views.forEach(v => { const dx = vx - v.bb.x0, dy = vyC - (v.bb.y0 + v.bb.y1) / 2;
+        v.ents.forEach(o => { if(o.kind === 'line') poly(o.pts.map(p => ({ x: p.x + dx, y: p.y + dy })), o.closed, 'GS-SIDE', aciOf(o.color)); else { const ha = o.align === 'center' ? 1 : (o.align === 'right' || o.align === 'end' ? 2 : 0); const va = o.base === 'top' ? 3 : (o.base === 'middle' ? 2 : (o.base === 'bottom' ? 1 : 0)); text(o.text, o.x + dx, o.y + dy, o.h, { ha, va, rot: o.rot, layer: 'GS-SIDE', color: aciOf(o.color) }); } });
+        vx += (v.bb.x1 - v.bb.x0) + gap; });
+      fieldTxt(F.SIDE_TITLE, '모 듈 배 치 측 면 도', sheetX, 0, sS);
+      if(F.PROJECT) fieldTxt(Object.assign({}, F.PROJECT, { x: F.PROJECT.x * 0.5, y: F.PROJECT.y * 0.5, h: F.PROJECT.h * 0.5, width: (F.PROJECT.width || 0) * 0.5 }), project, sheetX, 0, sS);
+      sheetX += SM.w * sS + 20000 * sS; nSide++;
+    }
+    // 3) 끼워 넣고 HANDSEED 갱신
+    const OUT = P.slice(0, iEnd).concat(NE, P.slice(iEnd));
+    const iS = OUT.findIndex(p => p[0] === '9' && p[1].trim() === '$HANDSEED'); if(iS >= 0) OUT[iS + 1] = ['5', (seed + 1).toString(16).toUpperCase()];
+    const dxf = OUT.map(([c, v]) => `${c}\r\n${v}`).join('\r\n') + '\r\n';
+    const name = ((lastJibunAddress || g0('siteAddress') || 'solar-layout').trim().replace(/[\\/:*?"<>|\s]+/g, '_')) + '_도면틀.dxf';
+    const blob = new Blob([dxf], { type: 'application/dxf' });
+    let how = '';
+    if(window.showSaveFilePicker){ try{ const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'DXF', accept: { 'application/dxf': ['.dxf'] } }] }); const w = await h.createWritable(); await w.write(blob); await w.close(); how = `💾 ${h.name || name} 저장`; }catch(e){ if(e && e.name === 'AbortError'){ say('저장을 취소했습니다.'); return; } } }
+    if(!how){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); how = `✅ ${name} 내려받음`; }
+    say(`${how} — 회사 도면틀(기본도면_건물_2026-09-01): 배치도 1장(도면틀 ${sP.toFixed(2)}배) + 측면도 ${nSide}장 · 모듈 ${D.modCount.toLocaleString('ko-KR')}장 ${D.kwTotal.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}kW · 단위 mm(1:1) · 레이어 GS-MODULE/GS-TABLE/GS-BOUNDARY/GS-VENT/GS-DIM/GS-SIDE/GS-FIELD. AutoCAD에서 열어 이어서 작업하세요.`);
+    return dxf;
+  }catch(e){ console.warn('frame dxf', e); say('❌ 도면틀 DXF 실패: ' + (e && e.message ? e.message : e), '#b3402a'); }
+}
+// ===== 📑 배치 → 제안서 자동 반영: 배치가 바뀌면(번호 증가) 제안서 탭을 열거나 제안서를 저장할 때 배치도·측면도 저장본을 현재 배치로 다시 만듦 =====
+var __layoutVer = 0, __pptSnapVer = -1, __pptSnapBusy = null;
+async function pptRefreshSnap(force){
+  if(!layoutRegistry.length) return false;
+  if(!force && __pptSnapVer === __layoutVer) return false;
+  if(__pptSnapBusy) return __pptSnapBusy;
+  __pptSnapBusy = (async () => {
+    const st = document.getElementById('sheetStatus'); const keep = st ? st.textContent : '';
+    const ver = __layoutVer;
+    try{
+      const items = {}; const cv = await exportLayoutSheet('canvas', {}); if(cv) items.sheet = cv;
+      const pages = sideViewPages(); pages.forEach((p, i) => { items['side' + (i + 1)] = p; });
+      Object.keys(pptSnap).filter(k => /^side\d$/.test(k) && !items[k]).forEach(k => { delete pptSnap[k]; });
+      await pptSnapSet(items); __pptSnapVer = ver;
+      const ps = document.getElementById('pptStatus'); if(ps && pptInfo){ ps.style.color = 'var(--ink-soft)'; ps.textContent = `📑 배치도·측면도를 현재 배치로 다시 넣었습니다(배치도 1장, 측면도 ${pages.length}장).`; }
+    }catch(e){ console.warn('auto snap', e); }
+    finally{ if(st) st.textContent = keep; __pptSnapBusy = null; }
+    return true;
+  })();
+  return __pptSnapBusy;
+}
 // ===== CAD(DXF) 내보내기: 지도 위 모든 배치를 m 단위 평면좌표(AutoCAD R12 호환 POLYLINE/TEXT)로 저장 =====
 // 좌표계: 첫 배치 경계의 중심 위도 기준 등장방형 근사(solarToXY) → 전체 도형의 좌하단이 (0,0)이 되게 평행이동. 1 단위 = 1 m. X=동, Y=북.
 function exportLayoutDxf(){
@@ -5686,7 +5863,7 @@ function annotsForExport(){ return annots.map(a => ({ a, path: annotRect(a), K: 
 
 // ===== ④ 배치한 동 목록(왼쪽 배치도 탭): 합계 + 동별 카드 (위치 보기 · 다시 배치 · 삭제 · 끌어서 순서 변경) =====
 let __layCardsT = null;
-function scheduleLayoutCards(){ clearTimeout(__layCardsT); __layCardsT = setTimeout(renderLayoutCards, 40); }
+function scheduleLayoutCards(){ __layoutVer++; clearTimeout(__layCardsT); __layCardsT = setTimeout(renderLayoutCards, 40); }
 function layoutTypeLabel(ed){
   if(ed.preset && LAYOUT_PRESETS[ed.preset] && LAYOUT_PRESETS[ed.preset].mount === ed.mountType) return LAYOUT_PRESETS[ed.preset].label;
   if(ed.type === 'std') return ({ wondan: '원단', wondan_barn: '원단(축사)', insam: '인삼밭', insam_flat: '인삼밭 플랫', zero: '제로솔루션', parking: '주차장' }[ed.kind] || '설치기준') + ((ed.kind === 'wondan' || ed.kind === 'wondan_barn') && ed.frameN ? ' ' + ed.frameN + '단' : '');
