@@ -1218,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02q';
+const APP_VERSION = '2026-11-03a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -1510,6 +1510,9 @@ async function fetchLandInfo(pnu){
 const JIMOK_NAME_TO_CAT = { '전':'farm','답':'farm','과수원':'farm','목장용지':'farm','임야':'forest','대':'misc','공장용지':'misc','창고용지':'misc','잡종지':'misc','주차장':'misc','주유소용지':'misc','학교용지':'misc' };
 const JIMOK_NAME_NOT_DEV = ['도로','철도용지','제방','하천','구거','유지','양어장','수도용지','공원','체육용지','유원지','종교용지','사적지','묘지'];
 const LANDUSE_BLOCKERS = ['농업진흥구역','보전산지','공익용산지','임업용산지','산지전용·일시사용제한지역','개발제한구역','자연공원','국립공원','도립공원','군립공원','상수원보호구역','백두대간보호지역','문화재보호구역','생태·경관보전지역','생태경관보전지역','습지보호지역','수변구역','군사기지 및 군사시설 보호구역','군사시설보호구역'];
+// 이름에 '보전산지'가 들어가도 '준보전산지'는 보전산지가 아님(예전엔 글자 포함으로 판정해 준보전산지를 보전산지(불허)로 잘못 표시했음)
+function isBoJeonSanji(n){ n = String(n || ''); return /공익용산지|임업용산지/.test(n) || /(^|[^준])보전산지/.test(n); }
+function landUseIsBlocker(n){ n = String(n || ''); return LANDUSE_BLOCKERS.some(b => b === '보전산지' ? isBoJeonSanji(n) : n.includes(b)); }
 function escLand(t){ return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ===== 토지이용계획 규제 판정: 조회된 "토지이용계획" 항목 중 태양광 입지에 걸리는 구역을 찾아 판정·설명을 만든다 =====
@@ -1522,12 +1525,13 @@ const LANDUSE_RULES = [
   { match: ['농업진흥구역'], title: '농업진흥구역',
     short: '농업진흥구역 — 노지 태양광 발전시설 설치가 원칙적으로 불허됩니다.',
     desc: '「농지법」 제32조에 따라 농업진흥구역에서는 농업 생산·농지 개량과 직접 관련되지 않은 행위가 제한되어, 발전사업용 노지 태양광은 원칙적으로 설치할 수 없습니다. 농업보호구역이나 진흥지역 밖 농지와 달리 전용 자체가 허용되지 않으므로, 진흥구역 해제 여부나 영농형 등 예외 요건을 관할 농지 담당부서에 확인하세요.' },
-  { match: ['보전산지', '공익용산지', '임업용산지'], title: '보전산지(임업용·공익용)',
+  { match: ['준보전산지'], title: '준보전산지', level: 'info', short: '준보전산지 — 보전산지가 아님. 태양광은 산지일시사용허가 대상', desc: '「산지관리법」상 준보전산지는 보전산지(임업용·공익용)가 아닌 산지입니다. 태양에너지 발전시설은 산지일시사용허가 대상이며(허가기간 만료 후 원상복구), 평균경사도·조례 기준 등을 함께 확인해야 합니다.' },
+  { match: ['보전산지', '공익용산지', '임업용산지'], exclude: ['준보전산지'], title: '보전산지(임업용·공익용)',
     short: '보전산지 — 태양광 발전시설 설치가 원칙적으로 불허됩니다.',
     desc: '「산지관리법」상 보전산지(임업용산지·공익용산지)에서는 태양에너지 발전시설 설치가 허용행위에 포함되지 않아 산지전용·일시사용허가를 받을 수 없습니다(준보전산지에서만 산지일시사용허가 가능). 필지 중 보전산지 부분을 제외한 준보전산지 범위만 검토 대상입니다.' },
   { match: ['자연공원', '국립공원', '도립공원', '군립공원'], title: '자연공원', short: '자연공원구역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '「자연공원법」에 따라 공원구역 안에서는 공원계획에 포함되지 않은 시설 설치가 제한됩니다. 공원관리청에 확인이 필요합니다.' },
   { match: ['상수원보호구역'], title: '상수원보호구역', short: '상수원보호구역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '「수도법」 제7조에 따라 상수원보호구역에서는 건축물·공작물 설치와 토지 형질변경이 제한됩니다. 관할 환경·수도 담당부서에 허용 여부를 확인하세요.' },
-  { match: ['백두대간보호지역'], title: '백두대간보호지역', short: '백두대간보호지역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '「백두대간 보호에 관한 법률」에 따라 보호지역 안의 개발행위가 제한됩니다. 산림청·관할 지자체 확인이 필요합니다.' },
+  { match: ['백두대간'], title: '백두대간보호지역', level: 'check', anyRel: true, short: '백두대간보호지역 — 「백두대간 보호에 관한 법률」 제7조 행위제한 대상(산림청 확인 필요)', desc: '「백두대간 보호에 관한 법률」 제6조에 따라 지정된 보호지역(핵심구역 = 능선 중심으로 특별히 보호하는 지역, 완충구역 = 핵심구역과 맞닿아 그 보호에 필요한 지역)입니다. 같은 법 제7조는 보호지역 안에서 건축물 건축·시설물 설치·토지 형질변경 등을 원칙적으로 금지하고 허용되는 시설을 열거하며, 그 목록에 재생에너지 이용·보급 시설이 들어 있습니다(세부 범위는 시행령). 핵심구역·완충구역에 따라 허용 범위가 다르므로 설치 가능 여부·조건은 관할 지방산림청에 확인해야 합니다. (법령 현행 시행 2026.9.18 기준 조문 요약)' },
   { match: ['군사기지 및 군사시설 보호구역', '군사시설보호구역'], title: '군사시설 보호구역', level: 'check', short: '군사시설 보호구역 — 군부대 협의 필요', desc: '「군사기지 및 군사시설 보호법」에 따라 건축·공작물 설치 시 관할부대 협의(동의)가 필요합니다. 협의 결과에 따라 불허될 수 있습니다.' },
   { match: ['문화재보호구역', '역사문화환경보존지역'], title: '문화재(역사문화환경) 구역', level: 'check', short: '문화재·역사문화환경 구역 — 현상변경 허가/영향 검토 필요', desc: '문화유산 관련 법령에 따라 현상변경 허가 또는 영향검토 대상이 될 수 있습니다. 관할 문화재 담당부서에 확인하세요.' },
   { match: ['생태·경관보전지역', '생태경관보전지역', '습지보호지역', '수변구역'], title: '생태·경관·습지·수변 보전구역', short: '생태·경관보전지역/습지보호지역/수변구역 — 발전시설 설치가 원칙적으로 제한됩니다.', desc: '해당 법령(자연환경보전법·습지보전법·수계 물관리법 등)에 따라 건축물·공작물 설치와 형질변경이 제한됩니다. 관할 환경청·지자체 확인이 필요합니다.' },
@@ -1536,13 +1540,15 @@ function landUseRegulationFlags(){
   const out = [];
   if(!lastLandInfo || !Array.isArray(lastLandInfo.uses)) return out;
   lastLandInfo.uses.forEach(u => {
-    if(!/포함/.test(u.rel || '')) return; // 표시·판정은 "포함"만 (저촉·접함 제외 — 사용자 요청 2026-10-20)
-    const rule = LANDUSE_RULES.find(r => r.match.some(m => u.name.includes(m)));
+    const rule = LANDUSE_RULES.find(r => r.match.some(m => u.name.includes(m)) && !(r.exclude || []).some(x => u.name.includes(x)));
     if(!rule) return;
+    if(!/포함/.test(u.rel || '') && !rule.anyRel) return; // 표시·판정은 "포함"만 (저촉·접함 제외 — 사용자 요청 2026-10-20). 백두대간은 저촉·접함도 표시(2026-11-03 요청)
+    if(rule.level === 'info' && !/포함/.test(u.rel || '')) return;
     const rel = /포함/.test(u.rel) ? 'incl' : (/저촉/.test(u.rel) ? 'part' : 'touch');
     const baseLevel = rule.level || 'block';
     let level, title, desc;
-    if(rel === 'incl'){ level = baseLevel; title = `${u.name} 포함 — ${rule.short.split(' — ')[1] || rule.short}`; desc = rule.desc; }
+    if(rel === 'incl'){ level = baseLevel === 'info' ? 'note' : baseLevel; title = `${u.name} 포함 — ${rule.short.split(' — ')[1] || rule.short}`; desc = rule.desc; }
+    else if(rule.anyRel){ level = 'check'; title = `${u.name} ${rel === 'part' ? '저촉(필지 일부)' : '접함(경계만 닿음)'} — ${rule.short.split(' — ')[1] || rule.short}`; desc = (rel === 'part' ? '필지 일부가 걸립니다(저촉). ' : '필지 경계가 닿아 있습니다(접함). ') + rule.desc; }
     else if(rel === 'part'){ level = baseLevel === 'block' ? 'need' : 'check'; title = `${u.name} 저촉 — 저촉 부분은 ${baseLevel === 'block' ? '설치 불가, 나머지 부분만' : '협의 대상,'} 검토`; desc = `필지 일부가 ${u.name}에 걸립니다(저촉). ` + rule.desc + ' 저촉 범위는 토지이음 도면에서 확인하세요.'; }
     else { level = 'info'; title = `${u.name} 접함 — 경계만 닿음`; desc = `필지 경계가 ${u.name}에 접해 있습니다(필지 자체는 구역 밖). 구역 경계 인접에 따른 협의·이격 요건이 있는지 관할 부서에 확인하세요.`; }
     out.push({ name: u.name, rel, level, title, desc, short: rule.short });
@@ -1552,9 +1558,9 @@ function landUseRegulationFlags(){
 function renderLandInfoPanel(info, pnu){
   const wrap = document.getElementById('landInfoPanel');
   if(!wrap) return;
-  const inclUses = info.uses.filter(u => /포함/.test(u.rel || ''));
+  const inclUses = info.uses.filter(u => /포함/.test(u.rel || '') || /백두대간/.test(u.name || '')); // 백두대간은 저촉·접함도 표시(2026-11-03)
   const rows = inclUses.map(u => {
-    const isBlock = LANDUSE_BLOCKERS.some(b => u.name.includes(b));
+    const isBlock = landUseIsBlocker(u.name);
     const isZone = !!useZoneKeyFromName(u.name);
     const badge = isBlock ? `<span class="li-badge need">주의</span>` : (isZone ? `<span class="li-badge clear">용도지역</span>` : '');
     const relCls = /포함/.test(u.rel) ? 'incl' : (/저촉/.test(u.rel) ? 'part' : 'touch');
@@ -1634,7 +1640,7 @@ function applyLandInfoToForm(info){
   else { const s = document.getElementById('farmZone'); s.value = 'out'; s.dispatchEvent(new Event('change')); }
   collapseSeg('farmZone', true);
   if(/산지전용.?일시사용제한지역/.test(names)){ const s = document.getElementById('forestType'); s.value = 'restrict'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
-  else if(/보전산지|공익용산지|임업용산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'bo'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
+  else if(names.split(' | ').some(isBoJeonSanji)){ const s = document.getElementById('forestType'); s.value = 'bo'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
   else if(/준보전산지/.test(names)){ const s = document.getElementById('forestType'); s.value = 'jun'; s.dispatchEvent(new Event('change')); collapseSeg('forestType', true); }
   const touchRestrict = touchNames.filter(n => /농업진흥구역|농업보호구역|보전산지|준보전산지|공익용산지|임업용산지|산지전용/.test(n));
   if(touchRestrict.length){
@@ -3868,7 +3874,23 @@ async function pptDbGet(key){ try{ const db = await pptDb(); return await new Pr
 async function pptDbDel(key){ try{ const db = await pptDb(); await new Promise(res => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').delete(key); tx.oncomplete = res; }); }catch(e){} }
 function pptStateKey(){ return 'ops:' + (pptFile ? pptFile.name : '') + ':' + (pptInfo ? pptInfo.count : 0); }
 let __pptSaveT = null;
-function pptSaveState(){ clearTimeout(__pptSaveT); __pptSaveT = setTimeout(() => { if(pptFile && pptInfo) pptDbPut(pptStateKey(), { ops: pptOps, news: pptNewSlides, order: pptOrder, edit: Array.from(pptEdit), t: Date.now() }); }, 300); }
+// ===== 되돌리기(Ctrl+Z)·다시 하기(Ctrl+Y / Ctrl+Shift+Z): 편집 상태(ops·새 장·순서·편집 장)를 바뀔 때마다 기록(최대 60단계) =====
+let __pptUndo = [], __pptRedo = [], __pptSnap = null, __pptRestoring = false;
+function pptStateSnap(){ try{ return JSON.stringify({ ops: pptOps, news: pptNewSlides, order: pptOrder, edit: Array.from(pptEdit) }); }catch(e){ return null; } }
+function pptHistReset(){ __pptUndo = []; __pptRedo = []; __pptSnap = pptStateSnap(); }
+function pptHistRecord(){ if(__pptRestoring) return; const cur = pptStateSnap(); if(cur === null) return; if(__pptSnap !== null && cur !== __pptSnap){ __pptUndo.push(__pptSnap); if(__pptUndo.length > 60) __pptUndo.shift(); __pptRedo = []; } __pptSnap = cur; }
+function pptHistApply(str){ const v = JSON.parse(str); __pptRestoring = true; try{ pptOps = v.ops || {}; pptNewSlides = v.news || []; pptOrder = v.order || []; pptEdit = new Set(v.edit || []); __pptSnap = str; pptSel = null; if(!pptOrder.includes(pptCur)) pptCur = pptVisibleOrder()[0] || pptOrder[0] || null; pptSaveState(); renderPptEditor(); } finally { __pptRestoring = false; } }
+function pptUndo(){ if(!__pptUndo.length){ pptToast('더 되돌릴 것이 없습니다'); return; } const cur = pptStateSnap(); if(cur !== null) __pptRedo.push(cur); pptHistApply(__pptUndo.pop()); pptToast('되돌렸습니다 (Ctrl+Y = 다시 하기)'); }
+function pptRedo(){ if(!__pptRedo.length){ pptToast('다시 할 것이 없습니다'); return; } const cur = pptStateSnap(); if(cur !== null) __pptUndo.push(cur); pptHistApply(__pptRedo.pop()); pptToast('다시 했습니다'); }
+function pptToast(t){ const st = document.getElementById('pptStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = t; } }
+document.addEventListener('keydown', e => {
+  if(!pptInfo || !(e.ctrlKey || e.metaKey)) return; const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  const pane = document.getElementById('pptCard'); if(!pane || pane.offsetWidth === 0) return; // 제안서 편집기가 보일 때만(배치도 Ctrl+Z와 겹치지 않게)
+  const k = (e.key || '').toLowerCase();
+  if(k === 'z' && !e.shiftKey){ e.preventDefault(); e.stopImmediatePropagation(); pptUndo(); }
+  else if(k === 'y' || (k === 'z' && e.shiftKey)){ e.preventDefault(); e.stopImmediatePropagation(); pptRedo(); }
+}, true);
+function pptSaveState(){ pptHistRecord(); clearTimeout(__pptSaveT); __pptSaveT = setTimeout(() => { if(pptFile && pptInfo) pptDbPut(pptStateKey(), { ops: pptOps, news: pptNewSlides, order: pptOrder, edit: Array.from(pptEdit), t: Date.now() }); }, 300); }
 async function pptForgetTemplate(){
   if(!confirm('저장된 양식과 편집 내용을 모두 지울까요?')) return;
   await pptDbDel('template'); if(pptFile && pptInfo) await pptDbDel(pptStateKey());
@@ -4096,6 +4118,7 @@ async function pptOpenBuffer(name, buf, handle, restored){
   const valid = new Set(pptInfo.slides.map(s => 's:' + s.no).concat(pptNewSlides.map(n => 'n:' + n.id)));
   pptOrder = pptOrder.filter(k => valid.has(k)); pptInfo.slides.forEach(s => { if(!pptOrder.includes('s:' + s.no)) pptOrder.push('s:' + s.no); }); pptNewSlides.forEach(n => { if(!pptOrder.includes('n:' + n.id)) pptOrder.push('n:' + n.id); });
   pptCur = pptVisibleOrder()[0] || pptOrder[0] || null;
+  pptHistReset();
   st.style.color = 'var(--ink-soft)';
   const nEdit = pptInfo.slides.filter(s => pptEdit.has(s.no)).length;
   st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}. ★ 편집 장 ${nEdit}장(${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no))})은 직접 고치고, 나머지 장은 필요한 장만 두고 필요 없는 장은 띠의 🗑로 한 장씩 지우세요.`;
@@ -4478,6 +4501,7 @@ async function pptDrawSp(ctx, sp, T, level, part){
   const ph = xFind(sp, 'nvSpPr/nvPr/ph');
   if(level !== 'slide' && ph) return; // 마스터·레이아웃의 자리표시자는 슬라이드에 그리지 않음
   let idx = -1; if(level === 'slide'){ ctx.spIdx++; idx = ctx.spIdx; }
+  if(level === 'slide' && ctx.op && ctx.op.hideSp && ctx.op.hideSp[idx]) return; // Delete 키로 지운 도형
   if(xAttr(xFind(sp, 'nvSpPr/cNvPr'), 'hidden', '0') === '1') return;
   const spPr = xChild(sp, 'spPr'); let xf = pptXfrm(spPr); let inherited = null;
   const phL = ph ? pptPhLookup(ph, [ctx.layoutPh]) : null, phM = ph ? pptPhLookup(ph, [ctx.masterPh]) : null; const phSrc = phL || phM;
@@ -4868,7 +4892,7 @@ async function pptDrawStage(){
     const s = it.s, op = pptOpFor(s.no); const boxes = pptShapeBoxes(s, op); const stacks = pptStackGroups(s);
     const hidden = new Set(); Object.entries(op.replace).forEach(([i, v]) => { if(v === 'card:'){ (stacks.find(g => g.includes(+i)) || []).forEach(j => { if(j !== +i) hidden.add(j); }); } }); Object.keys(op.hidePic || {}).forEach(i => { if(op.hidePic[i]) hidden.add(+i); });
     s.picList.forEach((p, i) => { if(hidden.has(i)) return; const b = pptPicBox(s, i, op); const fx = !!p.inGroup; els.push(`<div class="ppt-el pic${fx ? ' fixed' : ''}${pptSel && pptSel.kind === 'pic' && pptSel.i === i ? ' sel' : ''}" data-kind="pic" data-i="${i}" style="${px(b.x, b.y, b.cx, b.cy)}" title="그림 ${i + 1} — ${fx ? '그룹 안 그림: 클릭 선택 · Delete 키로 숨김 · Ctrl+V로 바꾸기' : '끌어서 옮김 · 모서리로 크기 · Delete 키로 숨김 · Ctrl+V로 바꾸기'}" onmousedown="pptElDown(event, 'pic', ${i}, 'move', ${fx})">${fx ? '' : `<div class="ppt-ov-h" onmousedown="pptElDown(event, 'pic', ${i}, 'size')"></div>`}</div>`); });
-    s.shapes.forEach(sh => { const b = boxes[sh.idx]; if(!b) return; const fx = !!sh.inGroup; const txt = op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text; els.push(`<div class="ppt-el sp${fx ? ' fixed' : ''}${pptSel && pptSel.kind === 'sp' && pptSel.i === sh.idx ? ' sel' : ''}${b.ph ? ' ph' : ''}" data-kind="sp" data-i="${sh.idx}" style="${px(b.x, b.y, b.cx, b.cy)}" title="${escLand(txt.slice(0, 60))} — 클릭: 선택 · ${fx ? '그룹 안 글상자(이동 불가)' : '끌기: 이동'} · 더블클릭: 글 고치기 · Ctrl+V: 글 붙여넣기" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'move', ${fx})" ondblclick="pptInlineEdit(${sh.idx})">${fx ? '' : `<div class="ppt-ov-h" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'size')"></div>`}</div>`); });
+    s.shapes.forEach(sh => { const b = boxes[sh.idx]; if(!b) return; if(op.hideSp && op.hideSp[sh.idx]) return; const fx = !!sh.inGroup; const txt = op.texts[sh.idx] !== undefined ? op.texts[sh.idx] : sh.text; els.push(`<div class="ppt-el sp${fx ? ' fixed' : ''}${pptSel && pptSel.kind === 'sp' && pptSel.i === sh.idx ? ' sel' : ''}${b.ph ? ' ph' : ''}" data-kind="sp" data-i="${sh.idx}" style="${px(b.x, b.y, b.cx, b.cy)}" title="${escLand(txt.slice(0, 60))} — 클릭: 선택 · ${fx ? '그룹 안 글상자(이동 불가)' : '끌기: 이동'} · 더블클릭: 글 고치기 · Ctrl+V: 글 붙여넣기" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'move', ${fx})" ondblclick="pptInlineEdit(${sh.idx})">${fx ? '' : `<div class="ppt-ov-h" onmousedown="pptElDown(event, 'sp', ${sh.idx}, 'size')"></div>`}</div>`); });
   }
   const list = pptCurOverlays() || [];
   list.forEach((o, i) => els.push(`<div class="ppt-el ov${pptSel && pptSel.kind === 'ov' && pptSel.i === i ? ' sel' : ''}" data-kind="ov" data-i="${i}" style="${px(o.x, o.y, o.w, o.h)}" title="넣은 그림 — 끌어서 옮김 · 모서리로 크기 · Delete 키로 빼기" onmousedown="pptElDown(event, 'ov', ${i}, 'move')"><div class="ppt-ov-h" onmousedown="pptElDown(event, 'ov', ${i}, 'size')"></div></div>`));
@@ -4919,17 +4943,18 @@ function pptInlineEdit(idx){
   ta.onmousedown = e => e.stopPropagation();
   layer.appendChild(ta); ta.focus(); ta.select();
 }
-// Delete 키: 선택한 그림 숨김 / 넣은 그림 빼기 / 글상자 비우기
+// Delete 키: 선택한 그림·글상자·넣은 그림 지우기 (Ctrl+Z로 되돌리기)
 document.addEventListener('keydown', e => {
   if(!pptSel || !pptInfo) return; const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
   if(e.key !== 'Delete' && e.key !== 'Backspace') return;
+  { const pane = document.getElementById('pptCard'); if(!pane || pane.offsetWidth === 0) return; } // 제안서 편집기가 보일 때만
   const it = pptItemOf(pptCur); if(!it) return; e.preventDefault();
   if(pptSel.kind === 'ov'){ const list = pptCurOverlays(); if(list) list.splice(pptSel.i, 1); }
-  else if(it.kind === 's'){ const op = pptOpFor(it.s.no); if(pptSel.kind === 'pic'){ op.hidePic = op.hidePic || {}; op.hidePic[pptSel.i] = true; } else { op.texts[pptSel.i] = ''; } }
+  else if(it.kind === 's'){ const op = pptOpFor(it.s.no); if(pptSel.kind === 'pic'){ op.hidePic = op.hidePic || {}; op.hidePic[pptSel.i] = true; } else { op.hideSp = op.hideSp || {}; op.hideSp[pptSel.i] = true; } } // PowerPoint처럼 도형째 지움(되돌리기 Ctrl+Z)
   pptSel = null; pptSaveState(); renderPptEditor();
 });
 function pptUnhidePic(no, i){ const op = pptOpFor(no); if(op.hidePic) delete op.hidePic[i]; pptSaveState(); renderPptEditor(); }
-function pptResetBoxes(no){ const op = pptOpFor(no); delete op.spBox; delete op.picBox; delete op.hidePic; pptSaveState(); renderPptEditor(); }
+function pptResetBoxes(no){ const op = pptOpFor(no); delete op.spBox; delete op.picBox; delete op.hidePic; delete op.hideSp; pptSaveState(); renderPptEditor(); }
 function canvasToJpegBlob(cv){ return new Promise(res => cv.toBlob(b => res(b), 'image/jpeg', 0.88)); }
 function dataUrlToBlob(u){ const [h, b] = u.split(','); const mime = (h.match(/data:([^;]+)/) || [])[1] || 'image/jpeg'; const bin = atob(b); const a = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: mime }); }
 function pptPicXml(id, name, rId, x, y, cx, cy){
@@ -5002,7 +5027,7 @@ async function pptMake(){
         removed.push(s.no); continue;
       }
       const hasRep = Object.keys((op && op.replace) || {}).length, hasTxt = Object.keys((op && op.texts) || {}).length, hasOv = ((op && op.overlays) || []).length, hasTbl = tbls.length && D;
-      const hasBox = op && ((op.spBox && Object.keys(op.spBox).length) || (op.picBox && Object.keys(op.picBox).length) || (op.hidePic && Object.values(op.hidePic).some(Boolean)));
+      const hasBox = op && ((op.spBox && Object.keys(op.spBox).length) || (op.picBox && Object.keys(op.picBox).length) || (op.hidePic && Object.values(op.hidePic).some(Boolean)) || (op.hideSp && Object.values(op.hideSp).some(Boolean)));
       if(!hasRep && !hasTxt && !hasOv && !hasTbl && !hasBox) continue;
       let xml = await zip.file(o.path).async('string');
       if(hasTbl){ const frames = pptSlideTables(xml); for(const t of tbls){ const fr = frames.find(f => f.fi === t.fi); if(!fr) continue; try{ xml = pptApplyTableFill(xml, fr, pptFillGrid(t.kind, fr, D)); filled.push(`${s.no}번 ${PPT_TABLE_NAMES[t.kind] || t.kind}`); }catch(e){ console.warn('table fill', e); skipped.push(`${s.no}번 표${t.fi + 1}`); } } }
@@ -5036,6 +5061,8 @@ async function pptMake(){
         return sp.replace(/<p:spPr\b([^>]*)>/, (m0, at) => `<p:spPr${at}>${xf}`); }); }
       // 글
       for(const [idx, t] of Object.entries((op && op.texts) || {})) xml = pptReplaceShapeText(xml, +idx, t);
+      // 지운 글상자·도형: 글 바꾸기까지 끝낸 뒤 지움(지우면 뒤 도형 번호가 당겨지므로 맨 마지막)
+      if(op && op.hideSp && Object.values(op.hideSp).some(Boolean)){ let si = -1; xml = xml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, sp => { si++; return op.hideSp[si] ? '' : sp; }); }
       // 넣은 그림
       for(const ov of ((op && op.overlays) || [])){ const m = await putMedia(ov.src); if(!m){ skipped.push(`${s.no}번 넣은 그림`); continue; } const r = addRel(rels, IMG, '../media/' + m.mn); rels = r.rels; xml = xml.replace('</p:spTree>', pptPicXml(++maxId, ov.src.startsWith('gen:') ? PPT_ITEM_NAME[ov.src.slice(4)] : '사진', r.id, ov.x, ov.y, ov.w, ov.h) + '</p:spTree>'); }
       zip.file(o.path, xml); zip.file(rp, rels); edited.push(s.no);
@@ -8128,10 +8155,16 @@ function shrinkPath(){
   const cutU = c => (a, b) => { const t = (c - a.x) / ((b.x - a.x) || 1e-9); return { x: c, y: a.y + (b.y - a.y) * t }; };
   const cutV = c => (a, b) => { const t = (c - a.y) / ((b.y - a.y) || 1e-9); return { x: a.x + (b.x - a.x) * t, y: c }; };
   const half = (fn, cut) => { fn.cut = cut; return fn; };
-  if(S.L > 0){ const c = bb.u0 + S.L; uv = clipHalf(uv, half(p => p.x >= c, cutU(c))); }
-  if(S.R > 0){ const c = bb.u1 - S.R; uv = clipHalf(uv, half(p => p.x <= c, cutU(c))); }
-  if(S.B > 0){ const c = bb.v0 + S.B; uv = clipHalf(uv, half(p => p.y >= c, cutV(c))); }
-  if(S.T > 0){ const c = bb.v1 - S.T; uv = clipHalf(uv, half(p => p.y <= c, cutV(c))); }
+  // 줄이기(양수): 늘리기와 같은 방식으로 그 옆면 쪽 띠의 꼭짓점을 안쪽으로 평행 이동 → 비스듬한 옆면·계단 모양 유지(2026-11-03, 예전엔 직선으로 잘라 모양이 바뀌었음)
+  //   띠 = 끝에서 max(1.5m, 폭 20%, 줄이는 거리+1m), 폭의 45%까지. 줄이는 거리가 폭의 40%를 넘으면 예전처럼 직선으로 잘라냄
+  const shrinkSideMove = (val, span, isU, low) => {
+    if(!(val > 0)) return;
+    if(val > span * 0.4){ const c = isU ? (low ? bb.u0 + val : bb.u1 - val) : (low ? bb.v0 + val : bb.v1 - val); uv = clipHalf(uv, half(isU ? (low ? p => p.x >= c : p => p.x <= c) : (low ? p => p.y >= c : p => p.y <= c), isU ? cutU(c) : cutV(c))); return; }
+    const band = Math.min(span * 0.45, Math.max(1.5, span * 0.2, val + 1));
+    uv = uv.map(p => { const d = isU ? (low ? p.x - bb.u0 : bb.u1 - p.x) : (low ? p.y - bb.v0 : bb.v1 - p.y); if(d > band) return p; const m = low ? val : -val; return isU ? { x: p.x + m, y: p.y } : { x: p.x, y: p.y + m }; });
+  };
+  shrinkSideMove(S.L, bb.u1 - bb.u0, true, true); shrinkSideMove(S.R, bb.u1 - bb.u0, true, false);
+  shrinkSideMove(S.B, bb.v1 - bb.v0, false, true); shrinkSideMove(S.T, bb.v1 - bb.v0, false, false);
   // 모서리 따내기: 바깥 모서리에서 u·v 방향으로 du×dv 직사각형을 잘라내 ㄱ자 모양으로
   Object.entries(E.notch || {}).forEach(([k, nt]) => { if(nt.du > 0 && nt.dv > 0) uv = notchCorner(uv, k, nt.du, nt.dv, { u0: bb.u0 + Math.max(S.L, 0), u1: bb.u1 - Math.max(S.R, 0), v0: bb.v0 + Math.max(S.B, 0), v1: bb.v1 - Math.max(S.T, 0) }); });
   if(uv.length < 3) uv = F.uv0;
@@ -11746,6 +11779,7 @@ function runAnalysis(){
   // 토지이용계획 규제 항목(개발제한구역 등): 포함 → 불허(⛔), 저촉 → 일부 제외 검토, 접함 → 참고
   landFlags.forEach(f => {
     if(f.level === 'info') return;
+    if(f.level === 'note'){ checklist.push({ tag: 'clear', title: f.title, desc: f.desc, landuse: true }); return; }
     checklist.push({ tag: (f.level === 'block' || f.level === 'need') ? 'need' : 'check', title: f.title, desc: f.desc, landuse: true });
   });
   const touchFlags = landFlags.filter(f => f.level === 'info');
@@ -11854,7 +11888,7 @@ function runAnalysis(){
 // ===== 경사도 자동 측정: 필지 꼭짓점·중심의 표고(Open-Meteo Elevation API, Copernicus DEM GLO-90 · 90m 해상도)로 평면을 맞춰 평균 경사 계산 =====
 let lastSlope = null; // { deg, aspect, zmin, zmax, n, pnu } | { error }
 async function fetchParcelSlope(path){
-  lastSlope = null; refreshSummaryDynamicRows();
+  lastSlope = null; try{ clearSlopeGrid(); slopeGridShown = false; }catch(e){} refreshSummaryDynamicRows();
   if(!path || path.length < 3) return;
   const pnu = lastParcelPnu;
   try{
@@ -11883,6 +11917,64 @@ async function fetchParcelSlope(path){
     lastSlope = { deg, aspect: dirs[Math.round(downAz / 45) % 8], downAz, zmin: Math.min(...z), zmax: Math.max(...z), n, pnu };
   }catch(e){ lastSlope = { error: String(e && e.message || e), pnu }; }
   refreshSummaryDynamicRows();
+  if(lastSlope && !lastSlope.error){ try{ await fetchSlopeGrid(path, pnu); }catch(e){ if(lastSlope && lastSlope.pnu === pnu) lastSlope.gridError = String(e && e.message || e); refreshSummaryDynamicRows(); } }
+}
+// ===== 필지 안 경사 분포: 필지를 덮는 격자 꼭짓점의 표고(같은 DEM)로 칸마다 기울기를 계산 → 구간별 면적 비율·최대/최소·지도 색칠 =====
+//   DEM 원자료가 90m 격자라 그보다 촘촘한 칸의 값은 보간값(참고용). 격자 꼭짓점은 최대 약 300개(100개씩 나눠 조회)
+const SLOPE_BINS = [[0, 5], [5, 10], [10, 15], [15, 20], [20, 25], [25, 90]];
+const SLOPE_COLORS = ['#2E9E4F', '#9BCB3C', '#F2D024', '#F39A1E', '#E2502A', '#9E1B1B'];
+let slopeGridOverlays = [], slopeGridShown = false;
+async function fetchSlopeGrid(path, pnu){
+  const lat0 = path.reduce((a, q) => a + q.getLat(), 0) / path.length * Math.PI / 180;
+  const xy = path.map(q => solarToXY(q, lat0));
+  const x0 = Math.min(...xy.map(q => q.x)), x1 = Math.max(...xy.map(q => q.x)), y0 = Math.min(...xy.map(q => q.y)), y1 = Math.max(...xy.map(q => q.y));
+  const area = Math.max(1, areaXY(xy));
+  let sp = Math.max(5, Math.sqrt(area / 80));
+  let nx, ny;
+  for(let k = 0; k < 6; k++){ nx = Math.max(1, Math.ceil((x1 - x0) / sp)); ny = Math.max(1, Math.ceil((y1 - y0) / sp)); if((nx + 1) * (ny + 1) <= 300) break; sp *= Math.sqrt((nx + 1) * (ny + 1) / 300) * 1.05; }
+  const ox = (x0 + x1) / 2 - nx * sp / 2, oy = (y0 + y1) / 2 - ny * sp / 2;
+  const cells = [];
+  for(let i = 0; i < nx; i++) for(let j = 0; j < ny; j++){ const c = { x: ox + (i + 0.5) * sp, y: oy + (j + 0.5) * sp }; if(pointInPolygonXY(c, xy)) cells.push({ i, j, x: c.x, y: c.y }); }
+  if(!cells.length){ const c = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 }; cells.push({ i: Math.floor(nx / 2), j: Math.floor(ny / 2), x: c.x, y: c.y }); }
+  const need = new Map(); const key = (i, j) => i + ',' + j;
+  cells.forEach(c => [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([di, dj]) => need.set(key(c.i + di, c.j + dj), { i: c.i + di, j: c.j + dj })));
+  const nodes = [...need.values()];
+  const z = new Map();
+  for(let a = 0; a < nodes.length; a += 100){
+    const part = nodes.slice(a, a + 100); const lls = part.map(n => solarToLatLng(ox + n.i * sp, oy + n.j * sp, lat0));
+    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lls.map(l => l.getLat().toFixed(6)).join(',')}&longitude=${lls.map(l => l.getLng().toFixed(6)).join(',')}`;
+    const res = await fetch(url); const data = await res.json();
+    if(!res.ok || !data || !Array.isArray(data.elevation) || data.elevation.length !== part.length) throw new Error(data && data.reason || ('HTTP ' + res.status));
+    part.forEach((n, t) => z.set(key(n.i, n.j), Number(data.elevation[t])));
+    if(pnu !== lastParcelPnu) return;
+  }
+  cells.forEach(c => {
+    const z00 = z.get(key(c.i, c.j)), z10 = z.get(key(c.i + 1, c.j)), z01 = z.get(key(c.i, c.j + 1)), z11 = z.get(key(c.i + 1, c.j + 1));
+    const gx = ((z10 + z11) - (z00 + z01)) / (2 * sp), gy = ((z01 + z11) - (z00 + z10)) / (2 * sp);
+    c.deg = Math.atan(Math.hypot(gx, gy)) * 180 / Math.PI;
+  });
+  const hist = SLOPE_BINS.map(([lo, hi]) => cells.filter(c => c.deg >= lo && c.deg < hi).length / cells.length);
+  if(!lastSlope || lastSlope.pnu !== pnu) return;
+  lastSlope.grid = { sp, cells, hist, max: Math.max(...cells.map(c => c.deg)), min: Math.min(...cells.map(c => c.deg)), over15: cells.filter(c => c.deg >= 15).length / cells.length, lat0 };
+  if(slopeGridShown) drawSlopeGrid();
+  refreshSummaryDynamicRows();
+}
+function clearSlopeGrid(){ slopeGridOverlays.forEach(o => { try{ o.setMap(null); }catch(e){} }); slopeGridOverlays = []; }
+function drawSlopeGrid(){
+  clearSlopeGrid(); const G = lastSlope && lastSlope.grid; if(!G) return; const map = ensureKakaoMap(); const h = G.sp / 2;
+  G.cells.forEach(c => {
+    const bi = SLOPE_BINS.findIndex(([lo, hi]) => c.deg >= lo && c.deg < hi);
+    const path = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([dx, dy]) => solarToLatLng(c.x + dx, c.y + dy, G.lat0));
+    slopeGridOverlays.push(new kakao.maps.Polygon({ map, path, strokeWeight: 0, strokeOpacity: 0, fillColor: SLOPE_COLORS[bi < 0 ? 0 : bi], fillOpacity: 0.45, zIndex: 2 }));
+  });
+}
+function toggleSlopeGrid(){ slopeGridShown = !slopeGridShown; if(slopeGridShown) drawSlopeGrid(); else clearSlopeGrid(); refreshSummaryDynamicRows(); }
+function slopeGridHtml(){
+  const S = lastSlope; if(!S || S.error) return '';
+  if(S.gridError) return `<div class="sum-muted" style="margin-top:3px;">필지 안 경사 분포 조회 실패(${escLand(S.gridError)})</div>`;
+  const G = S.grid; if(!G) return '<div class="sum-muted" style="margin-top:3px;">필지 안 경사 분포 계산 중…</div>';
+  const parts = SLOPE_BINS.map(([lo, hi], k) => G.hist[k] > 0 ? `<span style="white-space:nowrap;"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${SLOPE_COLORS[k]};margin-right:3px;"></i>${hi >= 90 ? lo + '°↑' : lo + '~' + hi + '°'} <b>${Math.round(G.hist[k] * 100)}%</b></span>` : '').filter(Boolean).join(' · ');
+  return `<div style="margin-top:4px;">필지 안 경사 분포: ${parts} · 최소 ${G.min.toFixed(1)}° · 최대 <b${G.max >= 15 ? ' style="color:var(--coral);"' : ''}>${G.max.toFixed(1)}°</b>${G.over15 > 0 ? ` · 15° 이상 <b style="color:var(--coral);">${Math.round(G.over15 * 100)}%</b>` : ''} <button type="button" onclick="toggleSlopeGrid()" style="font-size:11px;padding:1px 7px;margin-left:4px;">${slopeGridShown ? '🗺 경사 지도 끄기' : '🗺 경사 지도 보기'}</button> <span class="sum-muted">(약 ${Math.round(G.sp)}m 칸 ${G.cells.length}개 · 같은 90m DEM을 보간한 값이라 참고용)</span></div>`;
 }
 function slopeRowHtml(){
   const g = id => document.getElementById(id);
@@ -11895,7 +11987,7 @@ function slopeRowHtml(){
   let manual = '';
   if(cat === 'forest'){ const sv = (g('slope') || {}).value || '10'; const lab = { '10': '10° 미만', '20': '10~20°', '30': '20~30°', '99': '30° 이상' }[sv] || sv + '°'; manual = `<div style="margin-top:3px;">입력값 평균 경사도 <b>${lab}</b> <span class="sum-muted">(왼쪽 "평균 경사도")</span>${sv !== '10' ? ' — 산지 태양광은 통상 15° 초과 시 지자체 조례상 불허 사례가 많아 관할청 확인 필요' : ''}</div>`; }
   const warnCls = (lastSlope && !lastSlope.error && lastSlope.deg >= 15) || (cat === 'forest' && ((g('slope') || {}).value || '10') !== '10') ? ' warn' : '';
-  return `<div class="sum-row${warnCls}" id="sumSlopeRow"><span class="sum-k">경사도</span><span class="sum-v">${auto}${manual}</span></div>`;
+  return `<div class="sum-row${warnCls}" id="sumSlopeRow"><span class="sum-k">경사도</span><span class="sum-v">${auto}${slopeGridHtml()}${manual}</span></div>`;
 }
 // 위반(불법)건축물: 건축물대장 조회 결과(동 수·항목에 '위반' 문구)와 필지 안 건물 도형 수를 대조. 위반건축물 표기 자체는 정부24·세움터 대장 열람으로 확인
 function illegalRowHtml(){
@@ -11919,6 +12011,30 @@ function illegalRowHtml(){
   }
   txt += `<span class="sum-muted">위반건축물 표기(대장 상단 노란 표시)와 사용승인 여부는 <a href="https://www.gov.kr" target="_blank">정부24 건축물대장 열람</a> 또는 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a>에서 직접 확인하세요. 이 사이트가 쓰는 건축HUB 오픈API 표제부 항목에 위반건축물 전용 필드가 있는지는 확인되지 않았습니다. 불법건축물(미양성화)은 개발행위 전 양성화·철거가 필요합니다(견적서 참고사항).</span>`;
   return `<div class="sum-row${cls}" id="sumIllegalRow"><span class="sum-k">위반건축물</span><span class="sum-v">${txt}</span></div>`;
+}
+// ===== 토지 측량비용(지적측량수수료) 개략: 국토교통부 고시 제2025-896호(2026.1.1 시행) "개별공시지가 구간별 1필지 기본단가(군지역 기준)" 표 =====
+//   표의 값만 씀. 기준면적 초과분 면적 가산·시·구 지역 계수는 고시 표에 값이 없어 반영하지 않음(실제 수수료는 LX 바로처리센터에서 확인)
+const SURVEY_FEE_2026 = {
+  tiers: [9000, 26000, 51000, 170000, 1710000, 8530000, 17060000], // 구간 상한(원/㎡)
+  tierLabel: ['9,000원 이하', '9,001~26,000원', '26,001~51,000원', '51,001~170,000원', '170,001~1,710,000원', '1,710,001~8,530,000원', '8,530,001~17,060,000원'],
+  boundary: { land: [305000, 371000, 436000, 567000, 654000, 698000, 741000], forest: [379000, 461000, 542000, 705000, 813000, 867000, 921000], base: { land: 300, forest: 3000 } }, // 경계복원측량
+  status:   { land: [180000, 218000, 257000, 334000, 385000, 411000, 437000], forest: [225000, 274000, 322000, 419000, 483000, 515000, 547000], base: { land: 1500, forest: 5000 } }, // 지적현황측량
+  split:    { land: [200000, 243000, 286000, 372000, 429000, 458000, 486000], forest: [251000, 304000, 358000, 465000, 537000, 573000, 609000], base: { land: 1500, forest: 5000 } }  // 분할측량
+};
+function surveyRowHtml(r){
+  const g = id => document.getElementById(id);
+  const price = parseFloat((g('price') || {}).value) || 0;
+  const area = r && r.area ? r.area : (parseFloat((g('area') || {}).value) || 0);
+  const jimok = lastLandInfo && lastLandInfo.jimok ? lastLandInfo.jimok : '';
+  const forest = jimok === '임야' || (!jimok && r && r.cat === 'forest');
+  const T = SURVEY_FEE_2026;
+  if(!(price > 0)) return `<div class="sum-row" id="sumSurveyRow"><span class="sum-k">측량비용</span><span class="sum-v"><span class="sum-muted">개별공시지가가 없어 계산하지 않음</span></span></div>`;
+  const ti = T.tiers.findIndex(t => price <= t);
+  if(ti < 0) return `<div class="sum-row" id="sumSurveyRow"><span class="sum-k">측량비용</span><span class="sum-v"><span class="sum-muted">공시지가 ${price.toLocaleString('ko-KR')}원/㎡ — 고시 표 범위(17,060,000원 이하) 밖이라 계산하지 않음</span></span></div>`;
+  const k = forest ? 'forest' : 'land';
+  const won = n => Math.round(n).toLocaleString('ko-KR') + '원';
+  const item = (name, key) => { const v = T[key][k][ti]; const over = area > T[key].base[k]; return `${name} <b>${won(v * 1.1)}</b>${over ? '<sup title="기준면적 초과 — 면적 가산 별도">＊</sup>' : ''}`; };
+  return `<div class="sum-row" id="sumSurveyRow"><span class="sum-k">측량비용</span><span class="sum-v">${item('경계복원측량', 'boundary')} · ${item('지적현황측량', 'status')} · ${item('분할측량', 'split')} <span class="sum-muted">(1필지 · 부가세 포함 · ${forest ? '임야' : '토지'} · 공시지가 ${T.tierLabel[ti]} 구간 기본단가, 국토교통부 고시 제2025-896호 2026년 군지역 기준. ＊기준면적(경계복원 ${T.boundary.base[k].toLocaleString('ko-KR')}㎡ · 현황·분할 ${T.status.base[k].toLocaleString('ko-KR')}㎡) 초과분 면적 가산·시·구 지역 계수는 미반영 — 정확한 금액은 LX 바로처리센터)</span></span></div>`;
 }
 function refreshSummaryDynamicRows(){
   try{
@@ -12019,6 +12135,7 @@ function buildSummaryHtml(r){
         <div class="sum-row"><span class="sum-k">위치</span><span class="sum-v">${addr}${pnu ? ` <span class="sum-muted">PNU ${pnu}</span>` : ''}</span></div>
         <div class="sum-row"><span class="sum-k">토지</span><span class="sum-v">지목 <b>${jimok}</b> · <b>${r.area.toLocaleString('ko-KR')}㎡</b> (약 ${py.toLocaleString('ko-KR')}평, ${areaSrc}) · <b>${r.zone.label}</b> · 공시지가 ${price.toLocaleString('ko-KR')}원/㎡ (${priceSrc})</span></div>
         ${slopeRowHtml()}
+        ${surveyRowHtml(r)}
         <div class="sum-row${r.absoluteBlock ? ' warn' : ''}"><span class="sum-k">인허가</span><span class="sum-v">개발행위허가 규모 상한 ${fmtArea(r.effectiveLimit)} → <b>${r.area > r.effectiveLimit ? '규모 초과' : '상한 이내'}</b>${r.absoluteBlock ? `<div style="margin-top:4px;"><b style="color:var(--coral);">⛔ 원칙적 불허: ${r.absoluteBlock}</b></div>` : ''}</span></div>
         <div class="sum-row"><span class="sum-k">예상 용량</span><span class="sum-v">${capText} <span class="sum-muted">— 실무 밀도 기준 개략치</span></span></div>
         <div class="sum-row ${gridCls}"><span class="sum-k">계통</span><span class="sum-v">${gridText}</span></div>
