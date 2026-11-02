@@ -673,10 +673,16 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
       <div class="rail-pane" id="railPaneLayout">
       <div class="card" style="padding:16px 16px 14px;">
         <h2 style="margin-bottom:8px;">모듈 배치도</h2>
-        <div style="display:flex;gap:6px;align-items:center;margin:0 0 10px;">
-          <span style="font-size:13px;font-weight:700;white-space:nowrap;">🔍 주소</span>
-          <input type="text" id="layAddress" placeholder="지번·도로명 주소 또는 상호 — Enter" autocomplete="off" style="flex:1;min-width:0;font-size:13px;padding:6px 8px;" onkeydown="if(event.key==='Enter'){ layoutSearch(); }">
-          <button type="button" class="run sun" style="margin:0;padding:6px 10px;font-size:12.5px;white-space:nowrap;" onclick="layoutSearch()" title="컨설팅 탭과 같은 주소 검색 — 위치 확인 후 이 탭에서 바로 자동 배치">위치 확인</button>
+        <div class="lay-addr-box" style="margin:0 0 12px;padding:12px 12px 12px;border:1px solid #EAD9B3;border-radius:var(--r-sm);background:linear-gradient(180deg,#FFFFFF 0%,#FFFDF7 100%);">
+          <h2 style="font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin:0 0 10px;border:0;padding:0;">주소로 위치 확인</h2>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;">
+            <div class="field" style="margin-bottom:0;position:relative;min-width:0;">
+              <label for="layAddress">지번·도로명 주소, 면·리·길 이름, 또는 상호(공장·아파트 등)</label>
+              <input type="text" id="layAddress" placeholder="예: 충남 천안시 동남구 광덕면 대평리 178-1" autocomplete="off">
+              <div id="layAddrSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid var(--card-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
+            </div>
+            <button type="button" class="run sun" style="margin-top:0;padding:12px 22px;white-space:nowrap;" onclick="layoutSearch()" title="컨설팅 탭과 같은 주소 검색 — 위치 확인 후 이 탭에서 바로 자동 배치">위치 확인</button>
+          </div>
         </div>
         <div class="lay-sum" id="laySum"><b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span></div>
         <div id="recoCard" style="display:none;margin:0 0 10px;"></div>
@@ -1198,7 +1204,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02d';
+const APP_VERSION = '2026-11-02e';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12040,16 +12046,22 @@ function renderResults(r){
 // 입력 중 카카오가 찾은 실제 주소 목록과, 아파트·공장·사업장 등 장소명 검색 결과를 함께 보여주고,
 // 선택한 항목의 주소(지번 우선)로 입력칸을 채운 뒤 바로 위치 확인을 실행.
 (function initAddressAutocomplete(){
+  const hiders = [];
+  window.hideAddrSuggest = () => hiders.forEach(f => { try{ f(); }catch(e){} });
   const setup = function(){
-    const input = document.getElementById('siteAddress');
-    const box = document.getElementById('addrSuggest');
+    attach('siteAddress', 'addrSuggest', () => lookupAddress(true));
+    attach('layAddress', 'layAddrSuggest', () => layoutSearch()); // 배치도 탭 주소 칸: 컨설팅과 같은 추천 목록·Enter 동작
+  };
+  const attach = function(inputId, boxId, run){
+    const input = document.getElementById(inputId);
+    const box = document.getElementById(boxId);
     if(!input || !box) return;
     let timer = null, seq = 0, items = [], active = -1;
     const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const hide = () => { box.style.display = 'none'; box.innerHTML = ''; items = []; active = -1; };
     // 목록을 닫고, 아직 진행 중인(늦게 도착할) 검색 결과도 무시 — "위치 확인" 뒤에 목록이 다시 떠오르는 문제 방지
     const cancelAndHide = () => { clearTimeout(timer); seq++; hide(); };
-    window.hideAddrSuggest = cancelAndHide;
+    hiders.push(cancelAndHide);
     const highlight = () => {
       Array.from(box.children).forEach((el, i) => { el.style.background = (i === active) ? 'var(--forest-dim)' : '#fff'; });
       if(active >= 0 && box.children[active]) box.children[active].scrollIntoView({ block:'nearest' });
@@ -12058,7 +12070,7 @@ function renderResults(r){
       const it = items[i]; if(!it) return;
       input.value = it.road || it.jibun;
       hide();
-      lookupAddress(true);
+      run();
     };
     const render = () => {
       if(!items.length){ hide(); return; }
@@ -12134,7 +12146,7 @@ function renderResults(r){
         if(e.key === 'Escape'){ hide(); return; }
         if(e.key === 'Enter' && active >= 0){ e.preventDefault(); choose(active); return; }
       }
-      if(e.key === 'Enter'){ e.preventDefault(); clearTimeout(timer); seq++; hide(); lookupAddress(true); }
+      if(e.key === 'Enter'){ e.preventDefault(); clearTimeout(timer); seq++; hide(); run(); }
     });
     input.addEventListener('blur', () => { setTimeout(cancelAndHide, 150); });
   };
@@ -12195,6 +12207,7 @@ const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역�
       map.setLevel(4);
       const input = document.getElementById('siteAddress');
       if(input && !input.value && saved.addr) input.placeholder = `마지막 검색: ${saved.addr}`;
+      const lin = document.getElementById('layAddress'); if(lin && !lin.value && saved.addr) lin.placeholder = `마지막 검색: ${saved.addr}`;
       // 첫 화면 안내 띠는 띄우지 않음(사용자 요청 2026-10-15)
     } else {
       map.setCenter(new kakao.maps.LatLng(DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng));
