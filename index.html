@@ -900,7 +900,6 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <span style="min-width:150px;">⚙ 한전 통합 자동화 시스템</span>
             <button type="button" onclick="ppRunLocal(false)" style="font-size:12.5px;font-weight:700;background:#0B5A2A;color:#fff;border-color:#0B5A2A;">▶ 바로 실행</button>
             <button type="button" onclick="ppRunLocal(true)" style="font-size:11px;" title="exe·손익계산서를 둘 작업 폴더를 다시 고르고 실행">📁 작업 폴더 바꾸기</button>
-            <button type="button" onclick="ppInstallLauncher()" style="font-size:11px;" title="이 컴퓨터에서 처음 한 번만: 사이트의 ▶ 바로 실행 버튼이 프로그램을 켤 수 있게 연결">🔧 이 컴퓨터 연결(처음 1번)</button>
             <button type="button" onclick="ppToolUpload('pp-exe')" style="font-size:11px;" title="새 버전 exe를 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
             <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
           </div>
@@ -910,7 +909,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <button type="button" onclick="ppToolUpload('pp-xlsx')" style="font-size:11px;" title="exe가 채우는 손익계산서 양식을 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
             <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
           </div>
-          <div class="hint" style="margin-top:6px;">처음 한 번: "🔧 이 컴퓨터 연결"로 받은 <b>GrandSun_PowerPlanner_Setup.cmd</b>를 실행(Windows용). 그 뒤로는 <b>▶ 바로 실행</b> → 브라우저가 "열기"를 물으면 허용("항상 허용" 체크) → 처음엔 작업 폴더를 고름 → 그 폴더에 서버의 최신 exe와 손익계산서 양식이 맞춰지고 exe가 켜짐 → 파워플래너 로그인 창에 아이디·비밀번호 직접 입력 → 채워진 손익계산서를 아래 칸에 끌어다 놓기.</div>
+          <div class="hint" style="margin-top:6px;"><b>▶ 바로 실행</b> → 브라우저가 "열기"를 물으면 허용("항상 허용" 체크) → 처음엔 작업 폴더를 고름 → 그 폴더에 서버의 최신 exe와 손익계산서 양식이 맞춰지고 exe가 켜짐 → 파워플래너 로그인 창에 아이디·비밀번호 직접 입력 → 채워진 손익계산서를 아래 칸에 끌어다 놓기. 이 컴퓨터에서 처음 누를 때는 연결 파일(GrandSun_PowerPlanner_Setup.cmd)이 자동으로 받아지니 한 번 실행한 뒤 ▶를 다시 누르세요(Windows 전용). <a href="#" onclick="ppInstallLauncher();return false;" style="font-size:11px;">연결 파일 다시 받기</a></div>
         </div>
         <div id="ppDrop" onclick="document.getElementById('ppFileInput').click()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 채워진 손익계산서 .xlsx 또는 파워플래너 .xls 파일들을 끌어다 놓거나 클릭해서 열기<input id="ppFileInput" type="file" multiple accept=".xlsx,.xls,.csv,.htm,.html" style="display:none;" onchange="ppLoadFiles(Array.from(this.files)); this.value='';"></div>
         <p id="ppStatus" class="hint" style="margin:6px 0;font-size:12px;"></p>
@@ -1199,7 +1198,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02c';
+const APP_VERSION = '2026-11-02d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3939,10 +3938,14 @@ function ppInstallLauncher(){
 // ▶ 바로 실행: grandsunpp://run (작업 폴더 바꾸기는 grandsunpp://pick) — 연결이 안 된 컴퓨터는 브라우저가 아무 반응이 없음
 function ppRunLocal(pick){
   let blurred = false; const onb = () => { blurred = true; }; window.addEventListener('blur', onb);
+  let known = false; try{ known = localStorage.getItem('ppLauncherOk') === '1'; }catch(e){}
   location.href = 'grandsunpp://' + (pick ? 'pick' : 'run');
   ppToolStat('pp-exe', '실행 요청을 보냈습니다…');
   setTimeout(() => { window.removeEventListener('blur', onb);
-    ppToolStat('pp-exe', blurred ? '실행 요청을 보냈습니다 — 브라우저가 "열기"를 물으면 허용("항상 허용" 체크). 처음엔 작업 폴더를 고르는 창이 뜹니다' : '반응이 없으면 이 컴퓨터는 아직 연결 전입니다 — "🔧 이 컴퓨터 연결(처음 1번)"을 먼저 하세요', blurred ? '#0B5A2A' : '#b3402a'); }, 1800);
+    if(blurred){ try{ localStorage.setItem('ppLauncherOk', '1'); }catch(e){} ppToolStat('pp-exe', '실행 요청을 보냈습니다 — 브라우저가 "열기"를 물으면 허용("항상 허용" 체크). 처음엔 작업 폴더를 고르는 창이 뜹니다', '#0B5A2A'); return; }
+    if(!known){ try{ localStorage.setItem('ppLauncherOk', '1'); }catch(e){} ppInstallLauncher(); ppToolStat('pp-exe', '이 컴퓨터는 처음이라 연결 파일(GrandSun_PowerPlanner_Setup.cmd)을 받았습니다 — 한 번 실행(경고가 나오면 "추가 정보 → 실행")해서 OK가 뜨면 ▶ 바로 실행을 다시 누르세요', '#0B5A2A'); return; }
+    ppToolStat('pp-exe', '브라우저 "열기" 창이 떴으면 허용하세요. 아무 반응이 없으면 아래 "연결 파일 다시 받기"로 받은 파일을 한 번 실행하세요', '#8a5a00');
+  }, 1800);
 }
 // 손익계산서 양식: 저장 위치·이름을 고르는 창으로 저장(크롬·엣지). 그 창을 못 쓰는 브라우저는 보통 다운로드
 var __ppToolMeta = {};
