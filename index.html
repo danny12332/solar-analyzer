@@ -894,6 +894,22 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
       <div class="card" style="padding:16px 16px 14px;">
         <h2 style="margin-bottom:6px;">⚡ 한전 파워플래너 분석 · 설치용량 추천</h2>
         <p class="hint" style="margin:0 0 10px;">① "한전 통합 자동화 시스템"(exe)으로 파워플래너에서 12개월 자료를 받아 채운 <b>손익계산서 .xlsx</b>를 끌어다 놓으면 12개월 요일별 사용패턴·공휴일(기저부하)·조건을 읽습니다. 파워플래너에서 직접 내려받은 "YYYY년 M월 실시간사용량_요일별.xls" 12개와 "최저사용량.xls"를 한꺼번에 넣어도 됩니다. ② 계산은 양식 '자가소비 연간분석표'와 같고(검증함), 용량을 바꿔 가며 잉여율·RE100·절감액을 비교해 추천합니다.</p>
+        <div id="ppToolBar" style="border:1px solid var(--card-line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--surface-2);font-size:12.5px;">
+          <div style="font-weight:700;margin-bottom:6px;">🧰 자동화 프로그램 — 제안서 양식처럼 서버(☁ 양식 서버)에 한 번 올려 두면 어느 컴퓨터에서나 여기서 받아 실행</div>
+          <div class="pp-tool-row" data-slot="pp-exe" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;">
+            <span style="min-width:150px;">⚙ 한전 통합 자동화 시스템(.exe)</span>
+            <button type="button" onclick="ppToolDownload('pp-exe')" style="font-size:12px;font-weight:700;">⬇ 받아서 실행</button>
+            <button type="button" onclick="ppToolUpload('pp-exe')" style="font-size:11px;" title="새 버전 exe를 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
+            <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
+          </div>
+          <div class="pp-tool-row" data-slot="pp-xlsx" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;">
+            <span style="min-width:150px;">📗 손익계산서 양식(.xlsx)</span>
+            <button type="button" onclick="ppToolDownload('pp-xlsx')" style="font-size:12px;">⬇ 받기</button>
+            <button type="button" onclick="ppToolUpload('pp-xlsx')" style="font-size:11px;" title="exe가 채우는 손익계산서 양식을 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
+            <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
+          </div>
+          <div class="hint" style="margin-top:6px;">순서: ① 두 파일을 받아 <b>같은 폴더</b>에 둠 → ② exe 실행 → 파워플래너 로그인 창에 아이디·비밀번호 직접 입력 → 자료를 받아 손익계산서가 채워짐 → ③ 채워진 .xlsx를 아래 칸에 끌어다 놓기. (브라우저는 보안상 exe를 직접 켤 수 없어, 받은 파일을 한 번 눌러 실행해야 합니다. "흔하지 않은 파일" 경고가 나오면 "유지"를 누르세요.)</div>
+        </div>
         <div id="ppDrop" onclick="document.getElementById('ppFileInput').click()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 채워진 손익계산서 .xlsx 또는 파워플래너 .xls 파일들을 끌어다 놓거나 클릭해서 열기<input id="ppFileInput" type="file" multiple accept=".xlsx,.xls,.csv,.htm,.html" style="display:none;" onchange="ppLoadFiles(Array.from(this.files)); this.value='';"></div>
         <p id="ppStatus" class="hint" style="margin:6px 0;font-size:12px;"></p>
         <div class="panel-bar" style="gap:6px;flex-wrap:wrap;">
@@ -1181,7 +1197,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02a';
+const APP_VERSION = '2026-11-02b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -1970,6 +1986,7 @@ function switchRailTab(paneId){
   if(paneId === 'railPaneLayout' && typeof autoLayoutPending !== 'undefined' && autoLayoutPending){ autoLayoutPending = false; setTimeout(() => { try{ autoLayoutAfterSearch(); }catch(e){} }, 50); }
   const rail = document.querySelector('.rail'); if(rail) rail.scrollTop = 0;
   if(paneId === 'railPaneProposal'){ setTimeout(() => { try{ pptRefreshSnap(); }catch(e){} }, 300); }
+  if(paneId === 'railPanePP'){ try{ ppToolRefresh(); }catch(e){} }
   if(paneId === 'railPaneLayout' || paneId === 'railPaneProposal'){
     const pj = document.getElementById('sheetProject');
     if(pj && !pj.value) pj.placeholder = (typeof lastJibunAddress !== 'undefined' && lastJibunAddress) || (document.getElementById('siteAddress') || {}).value || '공사명';
@@ -3883,6 +3900,44 @@ async function pptServerPush(){
     await pptDbPut('template', { name: pptFile.name, buf, etag: done.etag, t: Date.now() });
     pptSrvStat(`서버에 올렸음 — ${pptFile.name} (${(size / 1048576).toFixed(1)}MB). 다른 컴퓨터는 사이트를 열면 자동으로 받습니다.`, '#0B5A2A');
   }catch(e){ console.warn('ppt push', e); if(uploadId){ try{ await fetch(base + '/template/mpu/abort?uploadId=' + encodeURIComponent(uploadId), { method: 'POST', headers: H }); }catch(x){} } pptSrvStat('올리기 실패: ' + (e && e.message ? e.message : e) + (/bad key/.test(String(e && e.message)) ? ' — 비밀번호가 다릅니다' : ''), '#b3402a'); }
+}
+// ===== 🧰 파일 보관함(양식 서버 /file/<slot>): 파워플래너 자동화 exe·손익계산서 양식을 서버에 올려 두고 어느 컴퓨터에서나 받기 =====
+async function srvFileMeta(slot){ const r = await fetch(pptServerUrl() + '/file/' + slot + '/meta', { cache: 'no-store' }); if(!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+function ppToolStat(slot, t, color){ const row = document.querySelector('.pp-tool-row[data-slot="' + slot + '"]'); const el = row && row.querySelector('.pp-tool-stat'); if(el){ el.textContent = t; el.style.color = color || 'var(--ink-soft)'; } }
+async function ppToolRefresh(){
+  for(const slot of ['pp-exe', 'pp-xlsx']){
+    try{ const m = await srvFileMeta(slot); if(!m || !m.ok){ ppToolStat(slot, '서버에 아직 없음 — "⬆ 올리기"로 한 번 올려 주세요'); continue; }
+      const d = m.uploaded ? new Date(m.uploaded) : null; const w = d ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : '';
+      ppToolStat(slot, `${m.name} (${(m.size / 1048576).toFixed(1)}MB, ${w} 올림)`, '#0B5A2A');
+    }catch(e){ ppToolStat(slot, '서버 확인 실패(' + (e && e.message ? e.message : e) + ') — Worker 코드를 새 버전으로 바꿔야 할 수 있음', '#b3402a'); }
+  }
+}
+async function ppToolDownload(slot){
+  try{ const m = await srvFileMeta(slot); if(!m || !m.ok){ alert('서버에 아직 올린 파일이 없습니다. "⬆ 올리기"로 먼저 올려 주세요.'); return; } }
+  catch(e){ alert('서버 확인 실패: ' + (e && e.message ? e.message : e)); return; }
+  const a = document.createElement('a'); a.href = pptServerUrl() + '/file/' + slot + '?t=' + Date.now(); a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
+  ppToolStat(slot, '받는 중… 브라우저 아래(또는 위) 다운로드 목록에서 파일을 눌러 여세요', '#0B5A2A');
+  setTimeout(ppToolRefresh, 8000);
+}
+function ppToolUpload(slot){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = slot === 'pp-exe' ? '.exe,.zip' : '.xlsx,.xlsm,.xls';
+  inp.onchange = async () => { const f = inp.files && inp.files[0]; if(!f) return;
+    const base = pptServerUrl(); let key = ''; try{ key = localStorage.getItem('pptUploadKey') || ''; }catch(e){}
+    key = prompt('서버 올리기 비밀번호(Worker의 UPLOAD_KEY — 제안서 양식 올릴 때와 같음)', key); if(key === null) return; key = key.trim(); if(!key) return; try{ localStorage.setItem('pptUploadKey', key); }catch(e){}
+    const H = { 'X-Upload-Key': key }, P = '/file/' + slot, PART = 20 * 1048576, size = f.size;
+    const call = async (path, opt) => { const r = await fetch(base + path, Object.assign({ cache: 'no-store' }, opt)); const j = await r.json().catch(() => ({})); if(!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status)); return j; };
+    let id = null;
+    try{
+      ppToolStat(slot, '올리는 중… 0%');
+      id = (await call(P + '/mpu/create', { method: 'POST', headers: H })).uploadId;
+      const parts = []; let n = 0;
+      for(let off = 0; off < size || (size === 0 && n === 0); off += PART){ n++; const j = await call(`${P}/mpu/part?uploadId=${encodeURIComponent(id)}&part=${n}`, { method: 'PUT', headers: H, body: f.slice(off, Math.min(size, off + PART)) }); parts.push({ partNumber: n, etag: j.etag }); ppToolStat(slot, `올리는 중… ${size ? Math.round(Math.min(size, off + PART) / size * 100) : 100}%`); if(size === 0) break; }
+      await call(`${P}/mpu/complete?uploadId=${encodeURIComponent(id)}`, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, H), body: JSON.stringify({ parts, name: f.name }) });
+      await ppToolRefresh();
+    }catch(e){ if(id){ try{ await fetch(`${base}${P}/mpu/abort?uploadId=${encodeURIComponent(id)}`, { method: 'POST', headers: H }); }catch(x){} }
+      const msg = String(e && e.message || e); ppToolStat(slot, '올리기 실패: ' + msg + (/bad key/.test(msg) ? ' — 비밀번호가 다릅니다' : (/not found|404/.test(msg) ? ' — Worker 코드를 새 버전으로 바꿔 주세요' : '')), '#b3402a'); }
+  };
+  inp.click();
 }
 let __pptCardHome = null;
 function pptToggleWide(){
