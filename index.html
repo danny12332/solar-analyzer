@@ -1218,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02m';
+const APP_VERSION = '2026-11-02n';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2760,7 +2760,9 @@ function refreshAlignEdgeOptions(){
   sel.value = Array.from(sel.options).some(o => o.value === cur) ? cur : 'auto';
 }
 // 선택한 변의 방향각(도, x=동쪽 기준 반시계, -90~90로 정규화). 자동이거나 변이 없으면 null
+var layoutAxisLockDeg = null; // 줄이기·늘리기 중 다시 배치할 때 원래 배치 각도를 그대로 쓰기(경계 모양이 바뀌어도 모듈이 비스듬히 돌아가지 않게)
 function alignEdgeAngleDeg(path){
+  if(layoutAxisLockDeg !== null && isFinite(layoutAxisLockDeg)){ let d = layoutAxisLockDeg; while(d > 90) d -= 180; while(d <= -90) d += 180; return d; }
   const sel = document.getElementById('alignEdge');
   if(!sel || !/^e:\d+$/.test(sel.value) || !path || path.length < 3) return null;
   const i = parseInt(sel.value.slice(2), 10);
@@ -8057,7 +8059,7 @@ function startShrinkOutline(){
     }
     if(xy.length >= 3 && xy.length < from.length) from = xy.map(q => solarToLatLng(q.x, q.y, la));
   }
-  shrinkEdit = { base: from, lat0: from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180, d: from.map(() => 0), name: currentBoundaryName, preset: ed ? (ed.preset || ed.genPreset) : null, overlays: [] };
+  shrinkEdit = { base: from, lat0: from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180, d: from.map(() => 0), name: currentBoundaryName, preset: ed ? (ed.preset || ed.genPreset) : null, overlays: [], axTarget: (ed && typeof ed.azRad === 'number') ? ed.azRad * 180 / Math.PI : null, rotDeg: 0 };
   drawShrinkOverlays();
   if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⇲ 경계 줄이기: 옆면마다 노란 화살표 = 안쪽으로 한 칸(줄이기), 흰 화살표 = 바깥으로 한 칸(늘리기). 분홍은 ㄱ자 안쪽 변. 위 막대에서 한 칸 크기(단위)·전체 −/+·↺ 처음으로. 바꿀 때마다 배치가 같은 유형으로 다시 만들어집니다. 끝나면 "완료".'; }
 }
@@ -8115,10 +8117,13 @@ function shrinkPath(){
   if(E.d.some(v => v)) uv = insetPathXY(uv, E.d.map((v, i) => shrinkEdgeMovable(F, i) ? v : 0));
   const S = E.side, tol = 0.3, bb = F.bb;
   // 늘리기(음수): 그 옆면 끝에 있는 꼭짓점들을 바깥으로 평행 이동
-  if(S.L < 0) uv = uv.map(p => (p.x - bb.u0 < tol ? { x: p.x + S.L, y: p.y } : p));
-  if(S.R < 0) uv = uv.map(p => (bb.u1 - p.x < tol ? { x: p.x - S.R, y: p.y } : p));
-  if(S.B < 0) uv = uv.map(p => (p.y - bb.v0 < tol ? { x: p.x, y: p.y + S.B } : p));
-  if(S.T < 0) uv = uv.map(p => (bb.v1 - p.y < tol ? { x: p.x, y: p.y - S.T } : p));
+  // 늘리기(음수): 그 옆면 쪽 띠(끝에서 폭의 20%, 최소 1.5m) 안의 꼭짓점을 모두 같은 거리만큼 바깥으로 평행 이동 → 비스듬한 옆면도 기울기 그대로 밀려나가 모양·각도 유지
+  //   (예전: 끝에서 0.3m 안 꼭짓점만 옮겨 옆면이 대각선으로 꺾이고 배치가 비스듬해졌음)
+  void tol; const bu = Math.max(1.5, (bb.u1 - bb.u0) * 0.2), bv = Math.max(1.5, (bb.v1 - bb.v0) * 0.2);
+  if(S.L < 0) uv = uv.map(p => (p.x - bb.u0 <= bu ? { x: p.x + S.L, y: p.y } : p));
+  if(S.R < 0) uv = uv.map(p => (bb.u1 - p.x <= bu ? { x: p.x - S.R, y: p.y } : p));
+  if(S.B < 0) uv = uv.map(p => (p.y - bb.v0 <= bv ? { x: p.x, y: p.y + S.B } : p));
+  if(S.T < 0) uv = uv.map(p => (bb.v1 - p.y <= bv ? { x: p.x, y: p.y - S.T } : p));
   // 줄이기(양수): 옆면과 나란한 직선으로 잘라냄
   const cutU = c => (a, b) => { const t = (c - a.x) / ((b.x - a.x) || 1e-9); return { x: c, y: a.y + (b.y - a.y) * t }; };
   const cutV = c => (a, b) => { const t = (c - a.y) / ((b.y - a.y) || 1e-9); return { x: a.x + (b.x - a.x) * t, y: c }; };
@@ -8167,17 +8172,19 @@ function drawShrinkOverlays(){
     <b>⇲ ${Math.round(area).toLocaleString('ko-KR')}㎡</b><span style="opacity:.5;">|</span>
     <span title="화살표 한 번에 움직이는 거리">단위</span><select id="shrinkStep" onmousedown="event.stopPropagation();kakao.maps.event.preventMap();" onchange="shrinkStepVal()" style="font-size:11px;padding:0 1px;border-radius:4px;border:none;"><option value="0.1">0.1m</option><option value="0.5">0.5m</option><option value="1">1m</option></select><span style="opacity:.5;">|</span>
     <span>전체</span>${sb('−', 'shrinkAll(1)', '네 옆면을 모두 안쪽으로 한 칸')}${sb('+', 'shrinkAll(-1)', '네 옆면을 모두 바깥으로 한 칸')}<span style="opacity:.5;">|</span>
-    ${sb('↺', 'shrinkReset()', '모두 0으로(줄이기 전 경계)')}<span style="opacity:.5;">|</span>
+    <span title="모듈 배치 각도(원래 각도 유지, 안 맞으면 직접 돌리기)">각도</span>${sb('⟲', 'shrinkRotate(0.5)', '배치를 반시계로 0.5°')}<span style="min-width:30px;text-align:center;font-weight:800;">${E.rotDeg ? (E.rotDeg > 0 ? '+' : '') + E.rotDeg + '°' : '0°'}</span>${sb('⟳', 'shrinkRotate(-0.5)', '배치를 시계로 0.5°')}<span style="opacity:.5;">|</span>
+    ${sb('↺', 'shrinkReset()', '모두 0으로(줄이기 전 경계·각도)')}<span style="opacity:.5;">|</span>
     <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(true)" style="border:none;background:#FFD23F;color:#5A3A00;font-weight:800;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;">완료</button>
     <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(false)" style="border:none;background:transparent;color:#fff;opacity:.85;border-radius:4px;padding:3px 4px;cursor:pointer;font-size:12px;" title="줄이기 전으로">취소</button></div>`);
   const sel = document.getElementById('shrinkStep'); if(sel) sel.value = E.stepVal || '0.5';
 }
-function shrinkReset(){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); E.side = { L: 0, R: 0, B: 0, T: 0 }; E.d = E.d.map(() => 0); applyShrink(); }
+function shrinkReset(){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); E.side = { L: 0, R: 0, B: 0, T: 0 }; E.d = E.d.map(() => 0); E.rotDeg = 0; applyShrink(); }
 function shrinkStepVal(){ const v = parseFloat((document.getElementById('shrinkStep') || {}).value); if(shrinkEdit && isFinite(v)) shrinkEdit.stepVal = String(v); return isFinite(v) ? v : 0.5; }
 function shrinkNotchOpen(k){ const E = shrinkEdit; if(!E) return; E.notchOpen = k; const st = shrinkStepVal(); const nt = E.notch[k]; if(!(nt.du > 0)) nt.du = Math.max(st, 1); if(!(nt.dv > 0)) nt.dv = Math.max(st, 1); applyShrink(); }
 function shrinkNotch(k, which, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); const nt = E.notch[k]; nt[which] = Math.max(0, Math.round((nt[which] + dir * st) * 100) / 100); if(!(nt.du > 0) || !(nt.dv > 0)){ nt.du = 0; nt.dv = 0; if(E.notchOpen === k) E.notchOpen = null; } applyShrink(); }
 function shrinkSide(k, dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; applyShrink(); }
 function shrinkEdge(i, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); E.d[i] = Math.round((E.d[i] + dir * st) * 100) / 100; applyShrink(); }
+function shrinkRotate(deg){ const E = shrinkEdit; if(!E) return; if(E.axTarget === null){ const ed = layoutRegistry.find(e => e.__shrinkOf === E); if(ed && typeof ed.azRad === 'number') E.axTarget = ed.azRad * 180 / Math.PI - (E.rotDeg || 0); } if(E.axTarget === null) return; E.rotDeg = Math.round(((E.rotDeg || 0) + deg) * 10) / 10; applyShrink(); }
 function shrinkAll(dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); ['L', 'R', 'B', 'T'].forEach(k => { E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; }); applyShrink(); }
 function applyShrink(){
   const E = shrinkEdit; if(!E) return;
@@ -8190,7 +8197,14 @@ function applyShrink(){
   currentBoundaryOfficial = false; // 사용자가 정한 경계 → 대장 면적 자동 보정 안 함
   if(E.preset && LAYOUT_PRESETS[E.preset]){
     const was = histMuted; histMuted = true;
-    try{ applyLayoutPreset(E.preset); onGenerateLayoutClickInner(); } catch(x){ console.warn('shrink relayout', x); } finally { histMuted = was; }
+    // 원래 배치 각도(+ 사용자가 돌린 각도)를 고정해서 다시 배치. 생성기에 따라 90° 돌려 적용되는 경우가 있어 결과 각도가 다르면 90° 바꿔 한 번 더
+    const target = E.axTarget !== null ? E.axTarget + (E.rotDeg || 0) : null;
+    const angOff = (a, b) => { let d = ((a - b) % 180 + 180) % 180; return Math.min(d, 180 - d); };
+    const gen = lock => { layoutAxisLockDeg = lock; try{ applyLayoutPreset(E.preset); onGenerateLayoutClickInner(); } finally { layoutAxisLockDeg = null; } };
+    try{
+      gen(target);
+      if(target !== null){ const ne = layoutRegistry[layoutRegistry.length - 1]; if(ne && typeof ne.azRad === 'number' && angOff(ne.azRad * 180 / Math.PI, target) > 1){ try{ removeMeasureGroup(ne.groupId); }catch(x){} layoutRegistry.splice(layoutRegistry.length - 1, 1); gen(target - 90); } }
+    } catch(x){ console.warn('shrink relayout', x); } finally { histMuted = was; layoutAxisLockDeg = null; }
     const ed = layoutRegistry[layoutRegistry.length - 1]; if(ed && sameBoundary(ed.boundary, path)) ed.__shrinkOf = E;
   }
   scheduleLayoutCards();
@@ -8907,7 +8921,7 @@ function startBuildingEdit(){
     poly.setPath(path);
     bldEdit.path = path; lastAreaPolygonPath = path.slice();
     bldEdit.edgeLabels.forEach(o => o.setMap(null)); bldEdit.edgeLabels = [];
-    for(let i = 0; i < P.length; i++){
+    for(let i = 0; i < (bldEdit.showLen ? P.length : 0); i++){ // 변 길이는 "📏 길이"를 켰을 때만(화면 단순화)
       const A = P[i], B = P[(i + 1) % P.length], len = Math.hypot(B.x - A.x, B.y - A.y);
       if(len < 1.0) continue;
       const ov = new kakao.maps.CustomOverlay({ position: toLL({ x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 }), content: `<div style="pointer-events:none;transform:translateY(-14px);background:rgba(255,255,255,.92);color:#C2148A;border:1px solid #C2148A;padding:0 4px;border-radius:3px;font-size:11px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${len.toFixed(2)}m</div>`, xAnchor: 0.5, yAnchor: 0.5, zIndex: 12 });
@@ -8921,11 +8935,12 @@ function startBuildingEdit(){
     label.setPosition(topPt);
     const btn = (txt, js, title, strong) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" title="${title}" style="border:none;background:${strong ? '#fff' : 'rgba(255,255,255,.18)'};color:${strong ? '#C2148A' : '#fff'};font-weight:700;border-radius:3px;padding:2px 7px;cursor:pointer;font-size:11.5px;">${txt}</button>`;
     label.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:520px;background:#C2148A;color:#fff;padding:5px 8px;border-radius:5px;font-size:11.5px;box-shadow:0 2px 8px rgba(0,0,0,.25);">
-      <span style="white-space:nowrap;margin-right:4px;">↔ ${P.length}각형 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평)</span>
-      ${btn('⟲ 1°', 'editRotate(1)', '반시계 1° 회전')}${btn('⟳ 1°', 'editRotate(-1)', '시계 1° 회전')}${btn('⟲ 0.2°', 'editRotate(0.2)', '반시계 0.2°')}${btn('⟳ 0.2°', 'editRotate(-0.2)', '시계 0.2°')}
-      ${btn(bldEdit.addMode ? '➕ 추가 중' : '➕ 꼭짓점', 'editToggleAdd()', '켠 뒤 변 근처를 클릭하면 그 자리에 꼭짓점 추가')}
-      ${btn('▭ 사각형으로', 'editToRect()', '복잡한 외곽선을 가장 긴 변 기준의 최소 사각형으로 바꿈')}${btn('⊾ 직각 보정', 'editOrtho()', '거의 직각인 모서리를 정확히 90°로')}
-      ${btn('되돌리기', 'editReset()', '조정 전 경계로')}${btn('취소', 'cancelBuildingEdit()', '조정을 버리고 원래 경계로')}${btn('완료', 'finishBuildingEdit()', '이 경계로 확정', true)}
+      <span style="white-space:nowrap;margin-right:2px;">↔ ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평)</span>
+      <span style="opacity:.6;">회전</span>${btn('⟲', `editRotate(${bldEdit.rotStep || 1})`, '반시계로 회전')}${btn('⟳', `editRotate(-${bldEdit.rotStep || 1})`, '시계로 회전')}${btn((bldEdit.rotStep || 1) + '°', 'editRotStep()', '회전 한 번에 돌리는 각도(1° ↔ 0.2°)')}
+      ${btn('▭ 사각형', 'editToRect()', '복잡한 외곽선을 가장 긴 변 기준의 사각형으로')}
+      ${btn(bldEdit.more ? '▴ 접기' : '⋯ 더보기', 'editMore()', '꼭짓점 추가·직각 보정·변 길이')}
+      ${bldEdit.more ? btn(bldEdit.addMode ? '➕ 추가 중' : '➕ 꼭짓점', 'editToggleAdd()', '켠 뒤 변 근처를 클릭하면 꼭짓점 추가(꼭짓점 오른쪽 클릭 = 삭제)') + btn('⊾ 직각', 'editOrtho()', '거의 직각인 모서리를 정확히 90°로') + btn(bldEdit.showLen ? '📏 길이 끄기' : '📏 길이', 'editToggleLen()', '변 길이 표시') : ''}
+      <span style="flex:1"></span>${btn('되돌리기', 'editReset()', '조정 전 경계로')}${btn('취소', 'cancelBuildingEdit()', '조정을 버리고 원래 경계로')}${btn('완료', 'finishBuildingEdit()', '이 경계로 확정', true)}
     </div>`);
   };
   const rebuild = () => {
@@ -8942,6 +8957,7 @@ function startBuildingEdit(){
     bldEdit.edgeHandles = P.map((q, i) => {
       const A = P[i], B = P[(i + 1) % P.length];
       const h = mk(toLL({ x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 }), EDGE_IMG, 14, 10);
+      if(Math.hypot(B.x - A.x, B.y - A.y) < 3) h.setMap(null); // 짧은 변은 변 손잡이 숨김(화면 단순화)
       let start = null;
       kakao.maps.event.addListener(h, 'dragstart', () => { start = { a: Object.assign({}, P[i]), b: Object.assign({}, P[(i + 1) % P.length]), m: toXY(h.getPosition()) }; });
       const upd = () => {
@@ -8971,7 +8987,7 @@ function startBuildingEdit(){
   rebuild();
   const st = document.getElementById('roadviewStatus');
   st.style.color = 'var(--ink-soft)';
-  st.textContent = '↔ 경계 조정: 흰 점 = 꼭짓점 끌기(오른쪽 클릭하면 삭제) · 노란 네모 = 변을 끌어 평행 이동(직각 유지) · 가운데 분홍 손잡이 = 전체 이동 · 라벨의 ⟲⟳로 회전, "➕ 꼭짓점"을 켜고 변 근처를 클릭하면 꼭짓점 추가, "▭ 사각형으로"는 복잡한 외곽선을 사각형으로 단순화. 위성사진 지붕에 맞춘 뒤 "완료".';
+  st.textContent = '↔ 경계 조정: 흰 점 = 꼭짓점 끌기 · 노란 네모 = 변 평행 이동 · 가운데 손잡이 = 전체 이동 · 라벨의 ⟲⟳ = 회전. 다 맞으면 "완료".';
 }
 function editRotate(deg){
   if(!bldEdit) return;
@@ -8979,6 +8995,9 @@ function editRotate(deg){
   const a = deg * Math.PI / 180;
   bldEdit.setP(P.map(q => { const r = rotateXY(q.x - c.x, q.y - c.y, a); return { x: c.x + r.x, y: c.y + r.y }; }));
 }
+function editRotStep(){ if(!bldEdit) return; bldEdit.rotStep = (bldEdit.rotStep || 1) === 1 ? 0.2 : 1; bldEdit.setP(bldEdit.P()); }
+function editMore(){ if(!bldEdit) return; bldEdit.more = !bldEdit.more; if(!bldEdit.more && bldEdit.addMode) editToggleAdd(); bldEdit.setP(bldEdit.P()); }
+function editToggleLen(){ if(!bldEdit) return; bldEdit.showLen = !bldEdit.showLen; bldEdit.setP(bldEdit.P()); }
 function editOrtho(){ if(bldEdit) bldEdit.setP(orthogonalizeXY(bldEdit.P().map(q => ({ x: q.x, y: q.y })))); }
 function editReset(){ if(bldEdit) bldEdit.setP(bldEdit.original.map(bldEdit.toXY)); }
 // 가장 긴 변 방향으로 돌린 좌표에서 감싸는 최소 사각형
