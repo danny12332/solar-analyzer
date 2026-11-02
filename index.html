@@ -474,11 +474,26 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
     </span>
   </a>
   <div class="meta">
-    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button><br>
+    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button><br>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
 </header>
+<div id="newWorkModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(10,20,30,.45);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:var(--surface,#fff);color:var(--ink,#1b2a3a);border-radius:12px;max-width:440px;width:100%;padding:18px 20px;box-shadow:0 12px 40px rgba(0,0,0,.25);font-size:14px;">
+    <h3 style="margin:0 0 8px;font-size:17px;">🆕 새 작업 시작</h3>
+    <p style="margin:0 0 10px;color:var(--ink-soft,#556);font-size:13px;">지금 하던 작업을 비우고 새 주소로 처음부터 시작합니다. 지울 것을 고르세요.</p>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;"><input type="checkbox" id="nwSite" checked disabled style="margin-top:3px;"> <span>주소·지도 위치·컨설팅 결과·배치도·측면도·도면 설정·견적 입력 <small style="color:var(--ink-soft,#556);">(항상)</small></span></label>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;"><input type="checkbox" id="nwPpt" checked style="margin-top:3px;"> <span>제안서 편집 내용(글자·사진·삭제한 장) <small style="color:var(--ink-soft,#556);">— 양식 파일은 그대로 둠</small></span></label>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;"><input type="checkbox" id="nwPP" checked style="margin-top:3px;"> <span>⚡ 파워플래너 분석 자료·결과</span></label>
+    <p style="margin:10px 0 0;color:var(--ink-soft,#556);font-size:12px;">그대로 남는 것: 제안서 양식·양식 서버 주소·비밀번호, 보기 배율, 자동 배치 같은 설정. 지운 작업은 되돌릴 수 없으니 필요한 파일은 먼저 저장하세요.</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+      <button type="button" onclick="newWorkClose()" style="padding:8px 14px;">취소</button>
+      <button type="button" onclick="newWorkRun()" style="padding:8px 14px;font-weight:700;background:#b3402a;color:#fff;border:0;border-radius:6px;">비우고 새로 시작</button>
+    </div>
+  </div>
+</div>
+
 <div id="verBanner">🔄 서버에 새 버전 <b></b>이 있습니다. 이 화면은 <span id="verCur"></span>입니다. <button type="button" onclick="reloadLatest()">지금 새로 고침</button> <small>(새로 고쳐도 안 바뀌면 Ctrl+F5)</small></div>
 
 <div class="shell">
@@ -905,7 +920,6 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <div class="pp-tool-row" data-slot="pp-exe" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;">
             <span style="min-width:150px;">⚙ 한전 통합 자동화 시스템</span>
             <button type="button" onclick="ppRunLocal(false)" style="font-size:12.5px;font-weight:700;background:#0B5A2A;color:#fff;border-color:#0B5A2A;">▶ 바로 실행</button>
-            <button type="button" onclick="ppRunLocal(true)" style="font-size:11px;" title="exe·손익계산서를 둘 작업 폴더를 다시 고르고 실행">📁 작업 폴더 바꾸기</button>
             <button type="button" onclick="ppToolUpload('pp-exe')" style="font-size:11px;" title="새 버전 exe를 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
             <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
           </div>
@@ -915,7 +929,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <button type="button" onclick="ppToolUpload('pp-xlsx')" style="font-size:11px;" title="exe가 채우는 손익계산서 양식을 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
             <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
           </div>
-          <div class="hint" style="margin-top:6px;"><b>▶ 바로 실행</b> → 브라우저가 "열기"를 물으면 허용("항상 허용" 체크) → 처음엔 작업 폴더를 고름 → 그 폴더에 서버의 최신 exe와 손익계산서 양식이 맞춰지고 exe가 켜짐 → 파워플래너 로그인 창에 아이디·비밀번호 직접 입력 → 채워진 손익계산서를 아래 칸에 끌어다 놓기. 이 컴퓨터에서 처음 누를 때는 연결 파일(GrandSun_PowerPlanner_Setup.cmd)이 자동으로 받아지니 한 번 실행한 뒤 ▶를 다시 누르세요(Windows 전용). <a href="#" onclick="ppInstallLauncher();return false;" style="font-size:11px;">연결 파일 다시 받기</a></div>
+          <div class="hint" style="margin-top:6px;"><b>▶ 바로 실행</b> → 브라우저가 "열기"를 물으면 허용("항상 허용" 체크) → <b>손익계산서를 저장할 폴더를 고름</b>(사업장마다 새 폴더 가능, 지난번 폴더가 기본) → 그 폴더에 손익계산서 양식이 저장되고(이미 있으면 그대로 둠) exe가 그 폴더에서 켜짐 → 파워플래너 로그인 창에 아이디·비밀번호 직접 입력 → 채워진 손익계산서를 아래 칸에 끌어다 놓기. 이 컴퓨터에서 처음 누를 때는 연결 파일(GrandSun_PowerPlanner_Setup.cmd)이 자동으로 받아지니 한 번 실행한 뒤 ▶를 다시 누르세요(Windows 전용). <a href="#" onclick="ppInstallLauncher();return false;" style="font-size:11px;">연결 파일 다시 받기</a></div>
         </div>
         <div id="ppDrop" onclick="document.getElementById('ppFileInput').click()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 채워진 손익계산서 .xlsx 또는 파워플래너 .xls 파일들을 끌어다 놓거나 클릭해서 열기<input id="ppFileInput" type="file" multiple accept=".xlsx,.xls,.csv,.htm,.html" style="display:none;" onchange="ppLoadFiles(Array.from(this.files)); this.value='';"></div>
         <p id="ppStatus" class="hint" style="margin:6px 0;font-size:12px;"></p>
@@ -1204,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02e';
+const APP_VERSION = '2026-11-02f';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3908,6 +3922,24 @@ async function pptServerPush(){
     pptSrvStat(`서버에 올렸음 — ${pptFile.name} (${(size / 1048576).toFixed(1)}MB). 다른 컴퓨터는 사이트를 열면 자동으로 받습니다.`, '#0B5A2A');
   }catch(e){ console.warn('ppt push', e); if(uploadId){ try{ await fetch(base + '/template/mpu/abort?uploadId=' + encodeURIComponent(uploadId), { method: 'POST', headers: H }); }catch(x){} } pptSrvStat('올리기 실패: ' + (e && e.message ? e.message : e) + (/bad key/.test(String(e && e.message)) ? ' — 비밀번호가 다릅니다' : ''), '#b3402a'); }
 }
+// ===== 🆕 새 작업(리셋): 작업 상태만 지우고 페이지를 새로 엶 — 설정(양식·서버 주소·비밀번호·배율·자동 배치 등)은 유지 =====
+function newWorkOpen(){ const m = document.getElementById('newWorkModal'); if(m) m.style.display = 'flex'; }
+function newWorkClose(){ const m = document.getElementById('newWorkModal'); if(m) m.style.display = 'none'; }
+async function newWorkKeys(){ try{ const db = await pptDb(); return await new Promise(res => { const tx = db.transaction('files', 'readonly'); const rq = tx.objectStore('files').getAllKeys(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => res([]); }); }catch(e){ return []; } }
+async function newWorkRun(){
+  const wipePpt = (document.getElementById('nwPpt') || {}).checked, wipePP = (document.getElementById('nwPP') || {}).checked;
+  try{ localStorage.removeItem('solarLastSite'); }catch(e){}
+  try{ sessionStorage.clear(); }catch(e){}
+  const keys = await newWorkKeys();
+  for(const k of keys){ const ks = String(k);
+    if(ks === 'template') continue;
+    if(ks === 'snap' || ks === 'cards'){ await pptDbDel(k); continue; }
+    if(ks.startsWith('ops:')){ if(wipePpt) await pptDbDel(k); continue; }
+    if(ks.startsWith('pp:')){ if(wipePP) await pptDbDel(k); continue; }
+  }
+  location.replace(location.pathname + '?new=' + Date.now()); // 폼 입력이 되살아나지 않게 새 주소로 다시 엶
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const m = document.getElementById('newWorkModal'); if(m && m.style.display === 'flex') newWorkClose(); } });
 // ===== 🧰 파일 보관함(양식 서버 /file/<slot>): 파워플래너 자동화 exe·손익계산서 양식을 서버에 올려 두고 어느 컴퓨터에서나 받기 =====
 async function srvFileMeta(slot){ const r = await fetch(pptServerUrl() + '/file/' + slot + '/meta', { cache: 'no-store' }); if(!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
 function ppToolStat(slot, t, color){ const row = document.querySelector('.pp-tool-row[data-slot="' + slot + '"]'); const el = row && row.querySelector('.pp-tool-stat'); if(el){ el.textContent = t; el.style.color = color || 'var(--ink-soft)'; } }
@@ -3926,7 +3958,7 @@ async function ppToolDownload(slot){
   ppToolStat(slot, '받는 중… 브라우저 아래(또는 위) 다운로드 목록에서 파일을 눌러 여세요', '#0B5A2A');
   setTimeout(ppToolRefresh, 8000);
 }
-const PP_LAUNCH_PS1 = "# 그랜드썬 태양광분석기 → 한전 통합 자동화 시스템 실행기 (grandsunpp:// 주소로 실행됨)\n# 하는 일: 작업 폴더(처음 한 번 고름)에 서버의 최신 exe와 손익계산서 양식을 맞춰 둔 뒤 exe를 그 폴더에서 실행\nparam([string]$u = '')\n$ErrorActionPreference = 'Stop'\nAdd-Type -AssemblyName System.Windows.Forms\n$base = '__BASE__'\n$cfgDir = Join-Path $env:LOCALAPPDATA 'GrandSun\\PP'\nNew-Item -ItemType Directory -Force -Path $cfgDir | Out-Null\n$cfg = Join-Path $cfgDir 'folder.txt'\nfunction Say([string]$t, [string]$icon = 'Information') { [System.Windows.Forms.MessageBox]::Show($t, '그랜드썬 파워플래너', 'OK', $icon) | Out-Null }\ntry {\n  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\n  $dir = ''\n  if (Test-Path $cfg) { $dir = (Get-Content -LiteralPath $cfg -Raw -Encoding UTF8).Trim() }\n  if ($u -match 'pick' -or -not $dir -or -not (Test-Path -LiteralPath $dir)) {\n    $dlg = New-Object System.Windows.Forms.FolderBrowserDialog\n    $dlg.Description = '자동화 프로그램과 손익계산서를 둘 작업 폴더를 고르세요 (다음부터는 이 폴더를 그대로 씁니다)'\n    if ($dir -and (Test-Path -LiteralPath $dir)) { $dlg.SelectedPath = $dir }\n    if ($dlg.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { exit 0 }\n    $dir = $dlg.SelectedPath\n    Set-Content -LiteralPath $cfg -Value $dir -Encoding UTF8\n  }\n  function Sync([string]$slot, [bool]$update) {\n    $m = Invoke-RestMethod -Uri \"$base/file/$slot/meta\" -UseBasicParsing\n    if (-not $m.ok) { throw \"서버에 $slot 파일이 아직 없습니다. 분석기 ⚡파워플래너 탭에서 먼저 올려 주세요.\" }\n    $dst = Join-Path $dir $m.name\n    $tag = Join-Path $cfgDir \"$slot.etag\"\n    $old = ''; if (Test-Path $tag) { $old = (Get-Content -LiteralPath $tag -Raw).Trim() }\n    if (-not (Test-Path -LiteralPath $dst) -or ($update -and $old -ne $m.etag)) {\n      $tmp = \"$dst.download\"\n      Invoke-WebRequest -Uri \"$base/file/$slot\" -OutFile $tmp -UseBasicParsing\n      Move-Item -LiteralPath $tmp -Destination $dst -Force\n      try { Unblock-File -LiteralPath $dst } catch {}\n      Set-Content -LiteralPath $tag -Value $m.etag\n    }\n    return $dst\n  }\n  $exe = Sync 'pp-exe' $true\n  $null = Sync 'pp-xlsx' $false\n  Start-Process -FilePath $exe -WorkingDirectory $dir\n} catch {\n  Say (\"실행하지 못했습니다.`n\" + $_.Exception.Message) 'Error'\n}\n";
+const PP_LAUNCH_PS1 = "# 그랜드썬 태양광분석기 → 한전 통합 자동화 시스템 실행기 (grandsunpp:// 주소로 실행됨)\n# 하는 일: 실행할 때마다 폴더를 고르게 하고(지난번 폴더가 기본), 그 폴더에 서버의 손익계산서 양식(없을 때만)과 최신 exe를 둔 뒤 exe를 그 폴더에서 실행\nparam([string]$u = '')\n$ErrorActionPreference = 'Stop'\nAdd-Type -AssemblyName System.Windows.Forms\nAdd-Type -AssemblyName System.Drawing\n$base = '__BASE__'\n$cfgDir = Join-Path $env:LOCALAPPDATA 'GrandSun\\PP'\nNew-Item -ItemType Directory -Force -Path $cfgDir | Out-Null\n$cfg = Join-Path $cfgDir 'folder.txt'\nfunction Say([string]$t, [string]$icon = 'Information') { [System.Windows.Forms.MessageBox]::Show($t, '그랜드썬 파워플래너', 'OK', $icon) | Out-Null }\ntry {\n  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\n  $dir = ''\n  if (Test-Path $cfg) { $dir = (Get-Content -LiteralPath $cfg -Raw -Encoding UTF8).Trim() }\n  # 매번 저장할 폴더를 고름(지난번 폴더가 기본) — 사업장마다 다른 폴더에 손익계산서를 둘 수 있게\n  $owner = New-Object System.Windows.Forms.Form\n  $owner.TopMost = $true; $owner.ShowInTaskbar = $false; $owner.StartPosition = 'CenterScreen'; $owner.Size = New-Object System.Drawing.Size(1, 1); $owner.Show(); $owner.Activate()\n  $dlg = New-Object System.Windows.Forms.FolderBrowserDialog\n  $dlg.Description = '손익계산서를 저장할 폴더를 고르세요 (사업장마다 새 폴더를 만들어 고르면 됩니다)'\n  $dlg.ShowNewFolderButton = $true\n  if ($dir -and (Test-Path -LiteralPath $dir)) { $dlg.SelectedPath = $dir }\n  $res = $dlg.ShowDialog($owner); $owner.Close()\n  if ($res -ne [System.Windows.Forms.DialogResult]::OK) { exit 0 }\n  $dir = $dlg.SelectedPath\n  Set-Content -LiteralPath $cfg -Value $dir -Encoding UTF8\n  $binDir = Join-Path $cfgDir 'bin'\n  New-Item -ItemType Directory -Force -Path $binDir | Out-Null\n  # 서버 파일을 받아 둠: pp-exe는 실행기 보관 폴더(bin)에 두고 서버에 새 버전이 오면 갱신, 손익계산서는 고른 폴더에 없을 때만 받음(작업 중인 파일은 덮어쓰지 않음)\n  function Sync([string]$slot, [string]$toDir, [bool]$update) {\n    $m = Invoke-RestMethod -Uri \"$base/file/$slot/meta\" -UseBasicParsing\n    if (-not $m.ok) { throw \"서버에 $slot 파일이 아직 없습니다. 분석기 ⚡파워플래너 탭에서 먼저 올려 주세요.\" }\n    $dst = Join-Path $toDir $m.name\n    $tag = Join-Path $cfgDir \"$slot.etag\"\n    $old = ''; if (Test-Path $tag) { $old = (Get-Content -LiteralPath $tag -Raw).Trim() }\n    if (-not (Test-Path -LiteralPath $dst) -or ($update -and $old -ne $m.etag)) {\n      $tmp = \"$dst.download\"\n      Invoke-WebRequest -Uri \"$base/file/$slot\" -OutFile $tmp -UseBasicParsing\n      Move-Item -LiteralPath $tmp -Destination $dst -Force\n      try { Unblock-File -LiteralPath $dst } catch {}\n      if ($update) { Set-Content -LiteralPath $tag -Value $m.etag }\n    }\n    return $dst\n  }\n  $exeSrc = Sync 'pp-exe' $binDir $true\n  $xlsx = Sync 'pp-xlsx' $dir $false\n  # exe도 고른 폴더에 복사해서 그 폴더에서 실행(exe가 손익계산서를 자기 폴더·현재 폴더 중 어디서 찾는지 확인되지 않아 둘을 같은 폴더에 둠)\n  $exe = Join-Path $dir (Split-Path $exeSrc -Leaf)\n  if (-not (Test-Path -LiteralPath $exe) -or (Get-Item -LiteralPath $exe).Length -ne (Get-Item -LiteralPath $exeSrc).Length) { Copy-Item -LiteralPath $exeSrc -Destination $exe -Force }\n  Start-Process -FilePath $exe -WorkingDirectory $dir\n} catch {\n  Say (\"실행하지 못했습니다.`n\" + $_.Exception.Message) 'Error'\n}\n";
 // 이 컴퓨터 연결(처음 1번): 실행기(pp-launch.ps1)를 %LOCALAPPDATA%\GrandSun\PP에 두고 grandsunpp:// 주소를 등록하는 .cmd를 만들어 줌(관리자 권한 불필요, 현재 사용자에만 등록)
 function ppInstallLauncher(){
   const ps = '\ufeff' + PP_LAUNCH_PS1.replace('__BASE__', pptServerUrl()).replace(/\r?\n/g, '\r\n');
@@ -3944,12 +3976,12 @@ function ppInstallLauncher(){
 // ▶ 바로 실행: grandsunpp://run (작업 폴더 바꾸기는 grandsunpp://pick) — 연결이 안 된 컴퓨터는 브라우저가 아무 반응이 없음
 function ppRunLocal(pick){
   let blurred = false; const onb = () => { blurred = true; }; window.addEventListener('blur', onb);
-  let known = false; try{ known = localStorage.getItem('ppLauncherOk') === '1'; }catch(e){}
+  let known = false; try{ known = localStorage.getItem('ppLauncherOk2') === '1'; }catch(e){}
   location.href = 'grandsunpp://' + (pick ? 'pick' : 'run');
   ppToolStat('pp-exe', '실행 요청을 보냈습니다…');
   setTimeout(() => { window.removeEventListener('blur', onb);
-    if(blurred){ try{ localStorage.setItem('ppLauncherOk', '1'); }catch(e){} ppToolStat('pp-exe', '실행 요청을 보냈습니다 — 브라우저가 "열기"를 물으면 허용("항상 허용" 체크). 처음엔 작업 폴더를 고르는 창이 뜹니다', '#0B5A2A'); return; }
-    if(!known){ try{ localStorage.setItem('ppLauncherOk', '1'); }catch(e){} ppInstallLauncher(); ppToolStat('pp-exe', '이 컴퓨터는 처음이라 연결 파일(GrandSun_PowerPlanner_Setup.cmd)을 받았습니다 — 한 번 실행(경고가 나오면 "추가 정보 → 실행")해서 OK가 뜨면 ▶ 바로 실행을 다시 누르세요', '#0B5A2A'); return; }
+    if(blurred){ try{ localStorage.setItem('ppLauncherOk2', '1'); }catch(e){} ppToolStat('pp-exe', '실행 요청을 보냈습니다 — 브라우저가 "열기"를 물으면 허용("항상 허용" 체크). 손익계산서를 저장할 폴더를 고르는 창이 뜹니다', '#0B5A2A'); return; }
+    if(!known){ try{ localStorage.setItem('ppLauncherOk2', '1'); }catch(e){} ppInstallLauncher(); ppToolStat('pp-exe', '이 컴퓨터는 처음이라 연결 파일(GrandSun_PowerPlanner_Setup.cmd)을 받았습니다 — 한 번 실행(경고가 나오면 "추가 정보 → 실행")해서 OK가 뜨면 ▶ 바로 실행을 다시 누르세요', '#0B5A2A'); return; }
     ppToolStat('pp-exe', '브라우저 "열기" 창이 떴으면 허용하세요. 아무 반응이 없으면 아래 "연결 파일 다시 받기"로 받은 파일을 한 번 실행하세요', '#8a5a00');
   }, 1800);
 }
