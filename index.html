@@ -154,6 +154,18 @@
   .ppt-s-del{position:absolute;top:1px;right:1px;border:none;background:rgba(255,255,255,.9);border-radius:3px;font-size:10px;line-height:1;padding:2px 3px;cursor:pointer;display:none;}
   .ppt-s:hover .ppt-s-del,.ppt-s.del .ppt-s-del{display:block;}
   .ppt-el.fixed{cursor:default;}
+  .pp-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;}
+  .pp-sum div{background:var(--surface-2);border:1px solid var(--card-line);border-radius:8px;padding:6px 8px;font-size:12px;}
+  .pp-sum small{display:block;color:var(--ink-soft);font-size:10.5px;}
+  .pp-sum b{font-size:13px;}
+  .pp-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:6px;}
+  .pp-tbl th,.pp-tbl td{border:1px solid var(--card-line);padding:3px 4px;text-align:right;white-space:nowrap;}
+  .pp-tbl th{background:var(--surface-2);font-weight:700;text-align:center;}
+  .pp-tbl td:first-child{text-align:left;}
+  .pp-tbl tr.cur td{background:#FFF8E1;}
+  .pp-rec{background:#EAF6EE;border:1px solid #0B5A2A;border-radius:8px;padding:8px 10px;font-size:12.5px;margin:6px 0;}
+  .pp-rec button{font-size:11px;margin-left:4px;}
+  #ppDrop.over{background:#FFF8E1;}
   .ppt-ov{position:absolute;border:2px solid #B7472A;cursor:move;box-sizing:border-box;}
   .ppt-el{position:absolute;box-sizing:border-box;border:1px dashed transparent;cursor:move;}
   .ppt-el:hover{border-color:rgba(26,95,180,.7);}
@@ -479,6 +491,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <button type="button" class="rail-tab-btn active" data-pane="railPaneConsult" onclick="switchRailTab('railPaneConsult')">컨설팅</button>
         <button type="button" class="rail-tab-btn" data-pane="railPaneLayout" onclick="switchRailTab('railPaneLayout')">배치도</button>
         <button type="button" class="rail-tab-btn" data-pane="railPaneProposal" onclick="switchRailTab('railPaneProposal')">제안서</button>
+        <button type="button" class="rail-tab-btn" data-pane="railPanePP" onclick="switchRailTab('railPanePP')" title="한전 파워플래너 자료로 자가소비 분석 · 설치용량 추천">⚡ 파워플래너</button>
       </div>
 
       <!-- ▣ 컨설팅: 주소 검색 + 부지 조건 -->
@@ -876,6 +889,28 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
       </div><!-- /railPaneLayout -->
 
       <!-- ▣ 제안서: 배치도 이미지·PDF·CAD 출력 -->
+      <!-- ▣ 한전 파워플래너 분석: 손익계산서 양식의 '자가소비 연간분석표' 계산을 그대로 옮겨 월별 자가소비·잉여·절감액과 용량별 비교·추천 -->
+      <div class="rail-pane" id="railPanePP">
+      <div class="card" style="padding:16px 16px 14px;">
+        <h2 style="margin-bottom:6px;">⚡ 한전 파워플래너 분석 · 설치용량 추천</h2>
+        <p class="hint" style="margin:0 0 10px;">① "한전 통합 자동화 시스템"(exe)으로 파워플래너에서 12개월 자료를 받아 채운 <b>손익계산서 .xlsx</b>를 끌어다 놓으면 12개월 요일별 사용패턴·공휴일(기저부하)·조건을 읽습니다. 파워플래너에서 직접 내려받은 "YYYY년 M월 실시간사용량_요일별.xls" 12개와 "최저사용량.xls"를 한꺼번에 넣어도 됩니다. ② 계산은 양식 '자가소비 연간분석표'와 같고(검증함), 용량을 바꿔 가며 잉여율·RE100·절감액을 비교해 추천합니다.</p>
+        <div id="ppDrop" onclick="document.getElementById('ppFileInput').click()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 채워진 손익계산서 .xlsx 또는 파워플래너 .xls 파일들을 끌어다 놓거나 클릭해서 열기<input id="ppFileInput" type="file" multiple accept=".xlsx,.xls,.csv,.htm,.html" style="display:none;" onchange="ppLoadFiles(Array.from(this.files)); this.value='';"></div>
+        <p id="ppStatus" class="hint" style="margin:6px 0;font-size:12px;"></p>
+        <div class="panel-bar" style="gap:6px;flex-wrap:wrap;">
+          <span>조건</span>
+          <label>설비용량(kW) <input id="ppKw" type="number" min="0" step="1" value="100" style="width:70px;" onchange="ppRun()"></label>
+          <label>발전시간(h) <input id="ppHours" type="number" min="1" max="6" step="0.1" value="3.6" style="width:56px;" onchange="ppRun()"></label>
+          <label>요금제 <select id="ppTariff" onchange="ppRun()" style="max-width:190px;"></select></label>
+          <label>계약방식 <select id="ppMode" onchange="ppRun()"><option>단순병렬</option><option>상계거래</option><option>자가PPA</option></select></label>
+          <label title="양식의 작성날짜(C24): 15일 넘으면 11개월 전 달부터, 아니면 12개월 전부터 12개월">기준일 <input id="ppAsOf" type="date" style="width:130px;" onchange="ppRun()"></label>
+          <label title="자가PPA일 때 잉여 발전량 단가">SMP <input id="ppSmp" type="number" value="100" step="1" style="width:56px;" onchange="ppRun()"></label>
+          <label>REC <input id="ppRec" type="number" value="50" step="1" style="width:56px;" onchange="ppRun()"></label>
+          <label title="주말 제외 공휴일(YYYY-MM-DD, 띄어쓰기로 구분). 양식의 base data 공휴일 목록과 같은 역할 — 비우면 공휴일 0일" style="flex-basis:100%;">공휴일 <input id="ppHolidays" type="text" placeholder="예: 2026-01-01 2026-03-01 (비우면 양식과 같이 0일)" style="width:100%;" onchange="ppRun()"></label>
+          <span id="ppContract" class="hint" style="font-size:11px;"></span>
+        </div>
+        <div id="ppResult" style="margin-top:8px;"><p class="hint">위에 자료를 넣으면 여기에 월별 분석과 용량 추천이 나옵니다.</p></div>
+      </div>
+      </div>
       <div class="rail-pane" id="railPaneProposal">
       <!-- ▣ 제안서 편집기(한 장씩): 양식 PPT를 한 슬라이드씩 크게 보며 그림·사진 넣기, 글 고치기, 삭제/추가 → .pptx 저장 -->
       <div class="card" style="padding:16px 16px 14px;" id="pptCard">
@@ -1146,7 +1181,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-10-30f';
+const APP_VERSION = '2026-11-02a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -4875,6 +4910,162 @@ async function pptMake(){
     return { edited, removed, addedN: addedN.length, skipped, outName, blob, count: idXmls.length };
   }catch(e){ console.warn('ppt make', e); st.style.color = '#b3402a'; st.textContent = '❌ PPT 만들기 실패: ' + (e && e.message ? e.message : e); }
 }
+// ===== ⚡ 한전 파워플래너 자가소비 분석 모델 — "손익계산서_자가사용_한전파워플래너 있을때 사용.xlsx"(2026-10-13)의 '자가소비 연간분석표' 계산을 그대로 옮김 =====
+// 입력: 12개월 요일별 사용패턴(월별 24시간×7요일 합계 kWh, 파워플래너 "실시간사용량_요일별"), 공휴일(기저부하) 24시간, 설비용량 kW, 발전시간 h, 요금제, 계약방식, 기준일, SMP·REC
+// 엑셀과 다른 점(의도된 것 아님, 엑셀 쪽 특이점): 엑셀의 금요일 공휴일 차감은 목요일 공휴일 수(Z306)를 참조하고, 토·일요일 차감은 빈 칸(0)을 참조함. 여기서는 요일마다 자기 공휴일 수를 씀. 양식의 공휴일 목록(base data 94~98행)이 비어 있어 공휴일이 0이면 두 계산은 같음.
+const PP_STATIC = {"profile":[[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0.0001,0.0007,0.0013,0.0005,0.0006,0,0,0,0,0],[0,0.0002,0.0009,0.002,0.0031,0.0017,0.0013,0.0009,0.0007,0.0004,0,0],[0.0013,0.0018,0.0033,0.0043,0.0071,0.0035,0.003,0.0023,0.0023,0.0019,0.0013,0.0003],[0.0035,0.0042,0.0068,0.0076,0.0101,0.0061,0.0048,0.0044,0.0052,0.0052,0.0038,0.0022],[0.0067,0.0071,0.0107,0.0103,0.0131,0.0088,0.0078,0.0071,0.0085,0.0091,0.007,0.005],[0.0086,0.0093,0.0131,0.0127,0.0154,0.0115,0.0098,0.0097,0.0109,0.012,0.0096,0.0078],[0.0103,0.01,0.0137,0.0133,0.0164,0.0129,0.0111,0.0105,0.0122,0.0139,0.0108,0.0104],[0.0105,0.0092,0.0144,0.0133,0.0159,0.0133,0.0117,0.0106,0.0127,0.0136,0.0113,0.011],[0.0093,0.0082,0.0129,0.0121,0.0146,0.0131,0.012,0.0102,0.012,0.0126,0.0101,0.0101],[0.0057,0.006,0.0099,0.0094,0.0123,0.0115,0.0109,0.0092,0.0107,0.0103,0.007,0.0068],[0.0022,0.0028,0.0061,0.006,0.0086,0.0097,0.0086,0.0071,0.0074,0.0068,0.0032,0.0032],[0.0002,0.0006,0.0019,0.0024,0.0042,0.006,0.0063,0.0043,0.0042,0.0021,0.0004,0.0005],[0,0,0.0001,0.0003,0.0012,0.0038,0.004,0.0026,0.0009,0.0001,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]],"season":["겨울","겨울","봄가을","봄가을","봄가을","여름","여름","여름","봄가을","봄가을","겨울","겨울"],"load":[["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하"],["최대부하","최대부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","최대부하","최대부하"],["최대부하","최대부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","최대부하","최대부하"],["최대부하","최대부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","최대부하","최대부하"],["중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하"],["중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하"],["중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하"],["중간부하","중간부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","중간부하","중간부하"],["최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하"],["최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하"],["최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하"],["중간부하","중간부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","중간부하","중간부하"],["중간부하","중간부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","최대부하","중간부하","중간부하"],["중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하","중간부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"],["경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하","경부하"]],"tariff":{"일반용(갑)Ⅰ저압":[132.4,132.4,132.4,91.9,91.9,91.9,119,119,119],"일반용(갑)Ⅰ고압A선택1":[142.6,142.6,142.6,98.6,98.6,98.6,130.3,130.3,130.3],"일반용(갑)Ⅰ고압A선택2":[138.6,138.6,138.6,94.3,94.3,94.3,125,125,125],"일반용(갑)Ⅰ고압B선택1":[140.5,140.5,140.5,97.5,97.5,97.5,127.3,127.3,127.3],"일반용(갑)Ⅰ고압B선택2":[135.2,135.2,135.2,92.2,92.2,92.2,122,122,122],"일반용(갑)II고압A선택1":[89.4,140.6,163.1,89.4,96.8,108.1,98.1,128.5,143.3],"일반용(갑)II고압A선택2":[84.1,135.3,157.8,84.1,91.5,102.8,92.8,123.2,138],"일반용(갑)II고압B선택1":[88.8,137.4,153.8,88.8,94.7,100.1,97.8,125.1,139.3],"일반용(갑)II고압B선택2":[83.5,132.1,148.5,83.5,89.4,94.8,92.5,119.8,134],"일반용전력(을)고압A선택1":[92.8,145.7,227.8,92.8,115.3,146,99.8,145.9,203.4],"일반용전력(을)고압A선택2":[87.3,140.2,222.3,87.3,109.8,140.5,94.3,140.4,197.9],"일반용전력(을)고압A선택3":[86.4,139.6,209.9,86.4,108.5,132.2,93.7,139.8,186.7],"일반용전력(을)고압B선택1":[95.9,148.2,229.4,95.9,118.2,148.5,102.9,148.2,204.4],"일반용전력(을)고압B선택2":[92.1,144.4,225.6,92.1,114.4,144.7,99.1,144.4,200.6],"일반용전력(을)고압B선택3":[90.4,142.7,224,90.4,112.8,143.1,97.5,142.7,198.9],"산업용(갑)Ⅰ 저압":[116.2,116.2,116.2,94.4,94.4,94.4,114.5,114.5,114.5],"산업용(갑)Ⅰ고압A선택1":[124.8,124.8,124.8,101.1,101.1,101.1,124.7,124.7,124.7],"산업용(갑)Ⅰ고압A선택2":[120,120,120,96.5,96.5,96.5,118.2,118.2,118.2],"산업용(갑)Ⅰ고압B선택1":[123.6,123.6,123.6,100,100,100,123.2,123.2,123.2],"산업용(갑)Ⅰ고압B선택2":[118.9,118.9,118.9,95.4,95.4,95.4,117.1,117.1,117.1],"산업용(갑)Ⅱ고압A선택1":[95.7,121.5,155,95.7,100.5,119.7,103.1,120,149.4],"산업용(갑)Ⅱ고압A선택2":[90.8,116.6,150.1,90.8,95.6,114.8,98.2,115.1,144.5],"산업용(갑)Ⅱ고압B선택1":[92.5,120.1,153.9,92.5,99.1,117.9,99.7,117.7,146.4],"산업용(갑)Ⅱ고압B선택2":[88,115.6,149.4,88,94.6,113.4,95.2,113.2,141.9],"산업용전력(을)고압A선택1":[121.5,169.3,234.5,121.5,138.9,156.4,128.5,169.5,210.1],"산업용전력(을)고압A선택2":[116,163.8,229,116,133.4,150.9,123,164,204.6],"산업용전력(을)고압A선택3":[115.1,163.2,216.6,115.1,132.1,142.6,122.4,163.4,193.4],"산업용전력(을)고압B선택1":[131.4,178.6,242.9,131.4,148.6,165.7,138.4,178.6,217.9],"산업용전력(을)고압B선택2":[127.6,174.8,239.1,127.6,144.8,161.9,134.6,174.8,214.1],"산업용전력(을)고압B선택3":[125.9,173.1,237.5,125.9,143.2,160.3,133,173.1,212.4],"산업용전력(을)고압C선택1":[130.9,178.7,242.7,130.9,148.7,165.9,137.8,178.3,217.9],"산업용전력(을)고압C선택2":[126.2,174,238,126.2,144,161.2,133.1,173.6,213.3],"산업용전력(을)고압C선택3":[125.1,172.9,236.9,125.1,142.9,160.1,132,172.5,212.2],"농사용 갑":[48.3,48.3,48.3,48.3,48.3,48.3,48.3,48.3,48.3],"농사용(을)저압":[65.9,65.9,65.9,65.9,65.9,65.9,65.9,65.9,65.9],"농사용(을)고압 A,B":[68.6,68.6,68.6,66.6,66.6,66.6,68.6,68.6,68.6],"교육용(갑)저압":[123.6,123.6,123.6,86.4,86.4,86.4,110.8,110.8,110.8],"교육용(갑)고압A선택1":[123.3,123.3,123.3,86.5,86.5,86.5,109.3,109.3,109.3],"교육용(갑)고압A선택2":[118.8,118.8,118.8,82.1,82.1,82.1,104.8,104.8,104.8],"교육용(갑)고압B선택1":[122.6,122.6,122.6,86.1,86.1,86.1,108.5,108.5,108.5],"교육용(갑)고압B선택2":[118.1,118.1,118.1,81.6,81.6,81.6,104,104,104],"교육용(을)고압A선택1":[76.5,121.2,187.1,76.5,90.9,111.4,80.5,119.7,158.4],"교육용(을)고압A선택2":[72,116.7,182.6,72,86.4,106.9,76,115.2,153.9],"교육용(을)고압B선택1":[75,118.5,181.4,75,89.2,109,78.8,116.8,154.1],"교육용(을)고압B선택2":[70.5,114,176.9,70.5,84.7,104.5,74.3,112.3,149.6]},"co2":0.4173,"days":[31,28,31,30,31,30,31,31,30,31,30,31]};
+const PP_TARIFFS = Object.keys(PP_STATIC.tariff);
+const PP_SEASON_OFF = { '여름': 0, '봄가을': 3, '겨울': 6 }, PP_LOAD_OFF = { '경부하': 0, '중간부하': 1, '최대부하': 2 };
+// 기준일(C24) → 시작월(C25): 15일 넘으면 11개월 전 달의 1일, 아니면 12개월 전(같은 날)
+function ppStartMonth(asOf){ const d = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate()); if(d.getDate() > 15){ const e = new Date(d.getFullYear(), d.getMonth() - 11, 1); return { y: e.getFullYear(), m: e.getMonth() + 1 }; } const e = new Date(d.getFullYear() - 1, d.getMonth(), 1); return { y: e.getFullYear(), m: e.getMonth() + 1 }; }
+// 12개월 목록 [{y, m}] — 엑셀 K4/AO4 방식(시작월부터 1씩, 12 넘으면 1월; 연도는 시작월 이하면 시작연도, 아니면 +1)
+function ppMonths(start){ const out = []; for(let i = 0; i < 12; i++){ const m = ((start.m - 1 + i) % 12) + 1; out.push({ y: start.m <= m ? start.y : start.y + 1, m }); } return out; }
+function ppWeekdayCount(y, m, wd){ let n = 0; const d = new Date(y, m - 1, 1); while(d.getMonth() === m - 1){ if(d.getDay() === wd) n++; d.setDate(d.getDate() + 1); } return n; } // wd: 0=일 … 6=토
+// 요금제 단가표 [월][시] (원/kWh): 계절(월) × 부하(시·월)
+function ppTariffGrid(name){ const t = PP_STATIC.tariff[name]; if(!t) return null; const g = []; for(let m = 0; m < 12; m++){ g[m] = []; for(let h = 0; h < 24; h++){ g[m][h] = t[PP_SEASON_OFF[PP_STATIC.season[m]] + PP_LOAD_OFF[PP_STATIC.load[h][m]]]; } } return g; }
+// 핵심 계산. in: { blocks:[12][24][7] (일,월,화,수,목,금,토 순 = 입력 시트 B~H), hol:[24], kW, hours, tariff, mode('단순병렬'|'상계거래'|'자가PPA'), asOf:Date, smp, rec, climate(9), fuel(5), holidays:{ 'YYYY-MM-DD':1 } (주말 제외 공휴일) }
+function ppCompute(inp){
+  const kW = +inp.kW || 0, hours = +inp.hours || 3.6, climate = inp.climate == null ? 9 : +inp.climate, fuel = inp.fuel == null ? 5 : +inp.fuel, smp = +inp.smp || 0, rec = +inp.rec || 0;
+  const start = ppStartMonth(inp.asOf || new Date()); const months = ppMonths(start); const grid = ppTariffGrid(inp.tariff) || ppTariffGrid(PP_TARIFFS[0]);
+  const hol = (inp.hol || []).map(v => +v || 0); const H = inp.holidays || {};
+  const rows = [];
+  months.forEach((mo, i) => {
+    const mi = mo.m - 1, days = PP_STATIC.days[mi];
+    // 발전량(시간별, 하루 기준): 발전비율 × 발전시간 × 365 × kW / 그 달 일수 (엑셀 K5)
+    const G = []; for(let h = 0; h < 24; h++) G[h] = PP_STATIC.profile[h][mi] * hours * 365 * kW / days;
+    // 요일별 일수·공휴일 수(주말 제외 공휴일 목록에서)
+    const holCnt = [0, 0, 0, 0, 0, 0, 0]; let holTotal = 0;
+    Object.keys(H).forEach(k => { const d = new Date(k); if(isNaN(d) || d.getFullYear() !== mo.y || d.getMonth() !== mi) return; const wd = d.getDay(); if(wd === 0 || wd === 6) return; holCnt[wd]++; holTotal++; });
+    const nDays = []; for(let wd = 0; wd < 7; wd++) nDays[wd] = ppWeekdayCount(mo.y, mo.m, wd) - (wd >= 1 && wd <= 5 ? holCnt[wd] : 0);
+    const blk = (inp.blocks && inp.blocks[i]) || [];
+    const useH = [], selfH = [], surH = []; let usageIn = 0;
+    for(let h = 0; h < 24; h++){
+      let use = 0, self = 0, sur = 0;
+      for(let wd = 0; wd < 7; wd++){ const raw = +((blk[h] || [])[wd]) || 0; usageIn += raw; const n = nDays[wd]; if(!(n > 0)) continue; const u = (raw - (wd >= 1 && wd <= 5 ? hol[h] * holCnt[wd] : 0)) / n; const s = u - G[h] < 0 ? G[h] - u : 0; use += u * n; sur += s * n; self += (G[h] - s) * n; }
+      if(holTotal > 0){ const u = hol[h] || 0; const s = u - G[h] < 0 ? G[h] - u : 0; use += u * holTotal; sur += s * holTotal; self += (G[h] - s) * holTotal; }
+      useH[h] = use; selfH[h] = self; surH[h] = sur;
+    }
+    let saving = 0, surSaving = 0, bill = 0;
+    for(let h = 0; h < 24; h++){ const t = grid[mi][h]; saving += (t + climate + fuel) * selfH[h]; bill += (useH[h] - selfH[h]) * t; if(inp.mode === '상계거래') surSaving += t * surH[h]; }
+    if(inp.mode === '자가PPA') surSaving = surH.reduce((a, b) => a + b, 0) * (smp + rec);
+    const selfSum = selfH.reduce((a, b) => a + b, 0), surSum = surH.reduce((a, b) => a + b, 0), genSum = selfSum + surSum;
+    rows.push({ y: mo.y, m: mo.m, usage: usageIn, self: selfSum, surplus: surSum, gen: genSum, saving, surSaving, total: saving + surSaving, bill, nDays, holTotal, useH, selfH, surH, G });
+  });
+  const S = k => rows.reduce((a, r) => a + r[k], 0);
+  const usage = S('usage'), self = S('self'), surplus = S('surplus'), saving = S('saving'), surSaving = S('surSaving'), total = S('total');
+  const re100 = usage > 0 ? (inp.mode === '상계거래' ? (self + surplus) / usage : self / usage) : 0;
+  const co2 = (inp.mode === '자가PPA' ? self : self + surplus) * PP_STATIC.co2 / 1000;
+  const surRate = (self + surplus) > 0 ? surplus / (self + surplus) : 0;
+  return { start, months, rows, usage, self, surplus, gen: self + surplus, saving, surSaving, total, re100, co2, surRate, unit: self > 0 ? saving / self : 0 };
+}
+// 용량 훑기: kW 후보마다 잉여율·절감액 — 추천 규칙은 사용자가 정한 잉여율 한도(기본 10%) 안에서 가장 큰 용량
+function ppSweep(inp, list){ return list.map(kW => { const r = ppCompute(Object.assign({}, inp, { kW })); return { kW, surRate: r.surRate, re100: r.re100, total: r.total, saving: r.saving, surplus: r.surplus, self: r.self, gen: r.gen }; }); }
+function ppRecommend(sweep, maxSurRate){ let best = null; sweep.forEach(s => { if(s.surRate <= maxSurRate + 1e-9 && (!best || s.kW > best.kW)) best = s; }); return best; }
+// ===== ⚡ 파워플래너 탭: 자료 읽기(채워진 손익계산서 xlsx 또는 파워플래너 .xls 파일들) → 자가소비 분석 → 용량 추천 → 제안서 자가소비 표에 연결 =====
+let ppData = null;   // { blocks:[12][24][7], hol:[24], src:{}, tariff, mode, asOf, kW, months:['2025-10',…] }
+let ppResult = null; // ppCompute 결과(현재 조건)
+let __sheetJsP = null;
+function loadSheetJS(){ if(window.XLSX) return Promise.resolve(); if(__sheetJsP) return __sheetJsP; __sheetJsP = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = () => res(); sc.onerror = () => { __sheetJsP = null; rej(new Error('엑셀 읽기 라이브러리(SheetJS) 로드 실패 — 인터넷 연결 확인')); }; document.head.appendChild(sc); }); return __sheetJsP; }
+function ppDropInit(){ const z = document.getElementById('ppDrop'); if(!z || z.__init) return; z.__init = true; ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); })); ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.remove('over'); })); z.addEventListener('drop', e => { const fs = e.dataTransfer && e.dataTransfer.files; if(fs && fs.length) ppLoadFiles(Array.from(fs)); }); }
+function ppSay(t, color){ const el = document.getElementById('ppStatus'); if(el){ el.style.color = color || 'var(--ink-soft)'; el.textContent = t; } }
+const PP_NUM = v => { if(v === null || v === undefined || v === '') return null; const n = parseFloat(String(v).replace(/,/g, '').trim()); return isFinite(n) ? n : null; };
+const PP_HOUR = v => { const s = String(v == null ? '' : v).trim(); const m = s.match(/^(\d{1,2})\s*(시)?$/); if(!m) return null; const h = +m[1]; return h >= 1 && h <= 24 ? h : (h === 0 ? 24 : null); };
+// 2차원 배열(sheet_to_json header:1)에서 "시간 1~24가 세로로 이어지는 블록"을 찾아 그 오른쪽 값 열들을 가져옴 → [24][nCols]
+function ppFindHourBlock(A, minCols){
+  for(let r = 0; r < A.length; r++){ for(let c = 0; c < (A[r] || []).length; c++){ if(PP_HOUR(A[r][c]) !== 1) continue; let ok = true; for(let h = 2; h <= 24; h++){ if(!A[r + h - 1] || PP_HOUR(A[r + h - 1][c]) !== h){ ok = false; break; } } if(!ok) continue;
+      // 값 열: 그 다음 열부터 24줄 모두 숫자인 열을 이어서 모음
+      const cols = []; for(let cc = c + 1; cc < c + 12; cc++){ let n = 0; for(let h = 0; h < 24; h++){ if(PP_NUM((A[r + h] || [])[cc]) !== null) n++; } if(n >= 20) cols.push(cc); else if(cols.length) break; }
+      if(cols.length >= (minCols || 1)) return { r, c, cols, rows: Array.from({ length: 24 }, (_, h) => cols.map(cc => PP_NUM((A[r + h] || [])[cc]) || 0)) }; } }
+  return null;
+}
+async function ppLoadFiles(files){
+  try{
+    await loadSheetJS();
+    ppData = ppData || { blocks: [], hol: null, src: {}, months: [] };
+    let nWeek = 0, nMin = 0, fromTpl = false, notes = [];
+    for(const f of files){
+      const buf = await f.arrayBuffer(); let wb; try{ wb = XLSX.read(buf, { type: 'array' }); }catch(e){ notes.push(`${f.name}: 읽지 못함(${e.message})`); continue; }
+      const sheetNames = wb.SheetNames;
+      if(sheetNames.includes('요일별 사용패턴 (입력)')){ // 채워진 손익계산서
+        const ws = wb.Sheets['요일별 사용패턴 (입력)']; const A = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+        const blocks = [], months = [];
+        for(let b = 0; b < 12; b++){ const r0 = 3 + 27 * b; const blk = []; for(let h = 0; h < 24; h++){ const row = A[r0 + h] || []; blk.push([1, 2, 3, 4, 5, 6, 7].map(c => PP_NUM(row[c]) || 0)); } blocks.push(blk); const lab = (A[r0 - 1] || [])[0]; months.push(lab instanceof Date ? `${lab.getFullYear()}-${String(lab.getMonth() + 1).padStart(2, '0')}` : (typeof lab === 'number' ? XLSX.SSF.format('yyyy-mm', lab) : String(lab || ''))); }
+        const hol = []; for(let h = 0; h < 24; h++) hol.push(PP_NUM((A[3 + h] || [])[11]) || 0);
+        ppData.blocks = blocks; ppData.hol = hol; ppData.months = months; ppData.src.template = f.name; fromTpl = true;
+        const ms = wb.Sheets['자가소비 연간분석표']; if(ms){ const g = a => { const c = ms[a]; return c ? c.v : null; }; const asOf = g('C24'); if(typeof asOf === 'number'){ const d = XLSX.SSF.parse_date_code(asOf); ppData.asOf = new Date(d.y, d.m - 1, d.d); } else if(asOf instanceof Date) ppData.asOf = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate()); const kW = PP_NUM(g('B3')); if(kW) ppData.kW = kW; const hrs = PP_NUM(g('C3')); if(hrs) ppData.hours = hrs; const mode = g('D3'); if(mode) ppData.mode = String(mode).trim(); const tf = g('E3'); if(tf) ppData.tariff = String(tf).replace(/\s/g, ''); const smp = PP_NUM(g('H27')); if(smp != null) ppData.smp = smp; const rec = PP_NUM(g('H28')); if(rec != null) ppData.rec = rec; const ct = g('F21'); if(ct) ppData.contract = String(ct); }
+        continue;
+      }
+      // 파워플래너 내려받기 파일: 요일별(24시간 × 7요일) 또는 시간대별(최저사용량)
+      let got = false;
+      for(const sn of sheetNames){ const A = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null }); const blk = ppFindHourBlock(A, 7);
+        if(blk && /요일/.test(f.name + sn + JSON.stringify(A.slice(0, 5)))){ const mm = f.name.match(/(\d{4})\s*년\s*(\d{1,2})\s*월/); const key = mm ? `${mm[1]}-${mm[2].padStart(2, '0')}` : null; if(!key){ notes.push(`${f.name}: 파일 이름에서 연·월을 못 읽음("2025년 10월 …" 형식 필요)`); got = true; break; }
+          ppData.src[key] = { name: f.name, rows: blk.rows.map(r => r.slice(0, 7)) }; nWeek++; got = true; break; }
+        if(blk && blk.cols.length >= 1 && /최저|시간대별/.test(f.name)){ ppData.hol = blk.rows.map(r => r[0]); ppData.src.min = f.name; nMin++; got = true; break; }
+        if(blk && blk.cols.length >= 1 && !got){ // 시간이 두 단(1~12, 13~24)으로 나뉜 시간대별 표
+          ppData.hol = blk.rows.map(r => r[0]); ppData.src.min = f.name; nMin++; got = true; break; }
+      }
+      if(!got) notes.push(`${f.name}: 24시간 표를 찾지 못함`);
+    }
+    if(nWeek){ // 월별 파일 → 기준일 순서로 12개 블록(가장 최근 달이 마지막)
+      const keys = Object.keys(ppData.src).filter(k => /^\d{4}-\d{2}$/.test(k)).sort(); const last = keys[keys.length - 1]; const [ly, lm] = last.split('-').map(Number);
+      const asOf = new Date(ly, lm, 16); // 그 다음 달 16일 → 시작월이 11개월 전(= 첫 파일 달)
+      ppData.asOf = asOf; const start = ppStartMonth(asOf); const months = ppMonths(start);
+      ppData.blocks = months.map(mo => { const k = `${mo.y}-${String(mo.m).padStart(2, '0')}`; const s = ppData.src[k]; return s ? s.rows : Array.from({ length: 24 }, () => [0, 0, 0, 0, 0, 0, 0]); });
+      ppData.months = months.map(mo => `${mo.y}-${String(mo.m).padStart(2, '0')}`);
+      const missing = ppData.months.filter(k => !ppData.src[k]); if(missing.length) notes.push(`없는 달(0으로 둠): ${missing.join(', ')}`);
+    }
+    if(!ppData.hol) ppData.hol = Array(24).fill(0);
+    ppSaveLast();
+    ppSay(`${fromTpl ? `📗 ${ppData.src.template}에서 12개월·공휴일 자료를 읽었습니다.` : ''}${nWeek ? ` 요일별 파일 ${nWeek}개` : ''}${nMin ? ` · 최저사용량 파일 ${nMin}개` : ''}${notes.length ? ' · ' + notes.join(' · ') : ''}`, notes.length ? '#8a5a00' : '#0B5A2A');
+    ppFillForm(); ppRun();
+  }catch(e){ console.warn('pp load', e); ppSay('❌ 읽기 실패: ' + (e && e.message ? e.message : e), '#b3402a'); }
+}
+function ppSaveLast(){ try{ pptDbPut('pp:last', { data: ppData, t: Date.now() }); }catch(e){} }
+async function ppRestoreLast(){ try{ const v = await pptDbGet('pp:last'); if(v && v.data){ ppData = v.data; if(ppData.asOf) ppData.asOf = new Date(ppData.asOf); ppFillForm(); ppRun(); ppSay('💾 지난번 읽어 둔 자료입니다. 새 자료를 넣으면 바뀝니다.'); } }catch(e){} }
+function ppFillForm(){
+  const g = id => document.getElementById(id); if(!ppData) return;
+  if(ppData.asOf && g('ppAsOf')) g('ppAsOf').value = `${ppData.asOf.getFullYear()}-${String(ppData.asOf.getMonth() + 1).padStart(2, '0')}-${String(ppData.asOf.getDate()).padStart(2, '0')}`;
+  if(ppData.kW && g('ppKw')) g('ppKw').value = ppData.kW; if(ppData.hours && g('ppHours')) g('ppHours').value = ppData.hours;
+  if(ppData.tariff && g('ppTariff')){ const opt = Array.from(g('ppTariff').options).find(o => o.value.replace(/\s/g, '') === ppData.tariff); if(opt) g('ppTariff').value = opt.value; }
+  if(ppData.mode && g('ppMode')) g('ppMode').value = ppData.mode; if(ppData.smp != null && g('ppSmp')) g('ppSmp').value = ppData.smp; if(ppData.rec != null && g('ppRec')) g('ppRec').value = ppData.rec;
+  if(ppData.contract && g('ppContract')) g('ppContract').textContent = ppData.contract;
+}
+function ppInputs(){
+  const g = id => (document.getElementById(id) || {}).value;
+  const asOf = g('ppAsOf') ? new Date(g('ppAsOf') + 'T00:00:00') : new Date();
+  const holidays = {}; String(g('ppHolidays') || '').split(/[\s,;]+/).forEach(s => { const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/); if(m) holidays[`${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`] = 1; });
+  return { blocks: ppData ? ppData.blocks : [], hol: ppData ? ppData.hol : [], kW: parseFloat(g('ppKw')) || 0, hours: parseFloat(g('ppHours')) || 3.6, tariff: g('ppTariff') || PP_TARIFFS[0], mode: g('ppMode') || '단순병렬', asOf: isNaN(asOf) ? new Date() : asOf, smp: parseFloat(g('ppSmp')) || 0, rec: parseFloat(g('ppRec')) || 0, holidays };
+}
+function ppRun(){
+  const box = document.getElementById('ppResult'); if(!box) return;
+  if(!ppData || !ppData.blocks || !ppData.blocks.length){ box.innerHTML = '<p class="hint">위에 자료를 넣으면 여기에 월별 분석과 용량 추천이 나옵니다.</p>'; return; }
+  const inp = ppInputs(); const R = ppCompute(inp); ppResult = R;
+  const won = v => Math.round(v).toLocaleString('ko-KR'), kwh = v => Math.round(v).toLocaleString('ko-KR'), pct = v => (v * 100).toFixed(1) + '%';
+  const rows = R.rows.map(r => `<tr><td>${r.y}년 ${r.m}월</td><td>${kwh(r.usage)}</td><td>${kwh(r.gen)}</td><td>${kwh(r.self)}</td><td>${kwh(r.surplus)}</td><td>${won(r.saving)}</td><td>${won(r.surSaving)}</td><td><b>${won(r.total)}</b></td></tr>`).join('');
+  // 용량 훑기: 10kW ~ 상한(계약전력 또는 사용량 기준), 사용자 잉여율 한도
+  const maxSur = (parseFloat((document.getElementById('ppMaxSur') || {}).value) || 10) / 100;
+  const peakDay = Math.max(...R.rows.map(r => Math.max(...r.useH.map((u, h) => u / Math.max(1, r.nDays.reduce((a, b) => a + b, 0) + r.holTotal)))));
+  const cap = Math.max(50, Math.ceil(peakDay * 1.5 / 10) * 10);
+  const step = cap > 1000 ? 50 : (cap > 300 ? 20 : 10); const list = []; for(let k = step; k <= cap; k += step) list.push(k); if(inp.kW && !list.includes(inp.kW)) list.push(inp.kW); list.sort((a, b) => a - b);
+  const sweep = ppSweep(inp, list); const rec = ppRecommend(sweep, maxSur);
+  const sweepRows = sweep.map(s => `<tr${rec && s.kW === rec.kW ? ' style="background:#EAF6EE;font-weight:700;"' : ''}${s.kW === inp.kW ? ' class="cur"' : ''}><td>${s.kW}</td><td>${kwh(s.gen)}</td><td>${kwh(s.self)}</td><td>${kwh(s.surplus)}</td><td>${pct(s.surRate)}</td><td>${pct(s.re100)}</td><td>${won(s.total)}</td><td><button type="button" onclick="ppSetKw(${s.kW})" style="font-size:10.5px;">이 용량으로</button></td></tr>`).join('');
+  const minH = ppData.hol && ppData.hol.some(v => v > 0) ? Math.min(...ppData.hol.filter(v => v > 0)) : null; const dayMin = Math.min(...R.rows.map(r => Math.min(...r.useH.slice(9, 16).map((u, i) => u / Math.max(1, r.nDays.reduce((a, b) => a + b, 0) + r.holTotal)))));
+  box.innerHTML = `
+    <div class="pp-sum"><div><small>설비용량</small><b>${inp.kW.toLocaleString('ko-KR')} kW</b></div><div><small>연 전기사용량</small><b>${kwh(R.usage)} kWh</b></div><div><small>연 발전량</small><b>${kwh(R.gen)} kWh</b></div><div><small>재생E 사용량</small><b>${kwh(R.self)} kWh</b></div><div><small>잉여 발전량</small><b>${kwh(R.surplus)} kWh (${pct(R.surRate)})</b></div><div><small>RE100 달성률</small><b>${pct(R.re100)}</b></div><div><small>${inp.mode === '자가PPA' ? '연 예상수익' : '연 예상절감액'}</small><b>${won(R.total)} 원</b></div><div><small>절감 단가</small><b>${R.unit.toFixed(1)} 원/kWh</b></div><div><small>온실가스 감축</small><b>${R.co2.toFixed(2)} tCO₂-eq/년</b></div></div>
+    <p class="hint" style="margin:6px 0;">#최근 1년간 전기사용량 대비 잉여량 산정, 잉여량 ${(R.surRate * 100).toFixed(1)} % · 예상절감액 = 전력량요금 + 기후환경요금 9원 + 연료비조정요금 5원 (양식 '자가소비 연간분석표'와 같은 계산)</p>
+    <table class="pp-tbl"><thead><tr><th>월</th><th>전기사용량(kWh)</th><th>발전량(kWh)</th><th>재생E 사용량(kWh)</th><th>잉여 발전량(kWh)</th><th>전기요금 절감액(원)</th><th>${inp.mode === '자가PPA' ? 'SMP+REC(원)' : '잉여절감액(원)'}</th><th>합계(원)</th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td>합계</td><td>${kwh(R.usage)}</td><td>${kwh(R.gen)}</td><td>${kwh(R.self)}</td><td>${kwh(R.surplus)}</td><td>${won(R.saving)}</td><td>${won(R.surSaving)}</td><td><b>${won(R.total)}</b></td></tr></tfoot></table>
+    <h3 style="margin:14px 0 4px;font-size:14px;">용량별 비교 · 추천</h3>
+    <p class="hint" style="margin:0 0 6px;">잉여율 한도 <input id="ppMaxSur" type="number" value="${(maxSur * 100).toFixed(0)}" min="0" max="100" step="1" style="width:52px;" onchange="ppRun()">% 이하에서 가장 큰 용량을 추천으로 표시합니다(규칙은 바꿀 수 있음). 참고: 낮(10~15시) 평균 사용량 최저 ${Math.round(dayMin).toLocaleString('ko-KR')} kWh/h${minH != null ? ` · 공휴일(기저부하) 최저 ${Math.round(minH).toLocaleString('ko-KR')} kWh/h` : ''}${ppData.contract ? ` · ${escLand(ppData.contract)}` : ''}</p>
+    ${rec ? `<div class="pp-rec">✅ 추천 설치용량 <b>${rec.kW} kW</b> — 잉여율 ${pct(rec.surRate)}, RE100 ${pct(rec.re100)}, ${inp.mode === '자가PPA' ? '연 수익' : '연 절감'} ${won(rec.total)}원 <button type="button" onclick="ppSetKw(${rec.kW})">이 용량으로 계산</button> <button type="button" onclick="ppApplyToQuote(${rec.kW})" title="제안서 탭 견적·수익성의 모듈 장수를 이 용량에 맞춰 넣음">견적·수익성에 적용</button></div>` : `<div class="pp-rec" style="background:#FDECEA;">잉여율 ${(maxSur * 100).toFixed(0)}% 이하인 용량이 없습니다 — 한도를 올리거나 자료를 확인하세요.</div>`}
+    <table class="pp-tbl"><thead><tr><th>kW</th><th>발전량</th><th>재생E 사용</th><th>잉여</th><th>잉여율</th><th>RE100</th><th>연 ${inp.mode === '자가PPA' ? '수익' : '절감'}(원)</th><th></th></tr></thead><tbody>${sweepRows}</tbody></table>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;"><button type="button" onclick="ppExportCsv()" style="font-size:11.5px;">📄 월별 표 CSV 저장</button><button type="button" onclick="ppApplyToQuote(${inp.kW})" style="font-size:11.5px;">견적·수익성에 ${inp.kW}kW 적용</button><span class="hint" style="font-size:11px;">제안서 43·44쪽 자가소비 표는 이 결과(전기사용량·재생E·잉여·절감액·RE100)로 채워집니다.</span></div>`;
+}
+function ppSetKw(kW){ const el = document.getElementById('ppKw'); if(el) el.value = kW; ppRun(); }
+function ppApplyToQuote(kW){ try{ const Q = typeof computeQuote === 'function' ? computeQuote() : null; const wp = Q && Q.q && Q.q.mod ? Q.q.mod.wp : 645; const n = Math.round(kW * 1000 / wp); const el = document.getElementById('qCount'); if(el){ el.value = n; } if(typeof renderQuotePanel === 'function') renderQuotePanel(); window.__pptD = null; ppSay(`견적·수익성 모듈 장수를 ${n}장(${wp}W × ${n} = ${(n * wp / 1000).toFixed(2)}kW)으로 넣었습니다 — 제안서 탭에서 확인`, '#0B5A2A'); }catch(e){ console.warn(e); } }
+function ppExportCsv(){ if(!ppResult) return; const R = ppResult; const L = [['월', '전기사용량(kWh)', '발전량(kWh)', '재생E 사용량(kWh)', '잉여 발전량(kWh)', '전기요금 절감액(원)', '잉여절감액(원)', '합계(원)']]; R.rows.forEach(r => L.push([`${r.y}-${String(r.m).padStart(2, '0')}`, r.usage, r.gen, r.self, r.surplus, r.saving, r.surSaving, r.total].map(v => typeof v === 'number' ? Math.round(v) : v))); L.push(['합계', R.usage, R.gen, R.self, R.surplus, R.saving, R.surSaving, R.total].map(v => typeof v === 'number' ? Math.round(v) : v)); const csv = '﻿' + L.map(r => r.join(',')).join('\r\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = '파워플래너_자가소비분석.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+function ppInit(){ const sel = document.getElementById('ppTariff'); if(sel && !sel.options.length){ PP_TARIFFS.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); }); sel.value = PP_TARIFFS.includes('산업용전력(을)고압A선택2') ? '산업용전력(을)고압A선택2' : PP_TARIFFS[0]; } const d = document.getElementById('ppAsOf'); if(d && !d.value){ const t = new Date(); d.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; } ppDropInit(); ppRestoreLast(); }
+document.addEventListener('DOMContentLoaded', () => { try{ ppInit(); }catch(e){ console.warn('pp init', e); } });
 // ===== 📊 제안서 표 자동 채우기: 양식의 수익성 표(a:tbl)를 견적·수익 모델 값으로 채움(서식 유지) =====
 // 표 종류는 머리글 글로 알아봄. 슬라이드별 "표 채우기" 체크로 끄고 켤 수 있음(기본 켬).
 function pptSlideTables(xml){
@@ -5004,13 +5195,17 @@ function pptFillGrid(kind, fr, D){
       else if(/^현물$/.test(k)) v = f3(D.spot);
       if(v !== null) grid[ri] = [null, v]; });
   } else if(kind === 'selfMonthly'){
+    const PP = (typeof ppResult !== 'undefined' && ppResult && ppResult.rows && ppResult.rows.length === 12) ? ppResult : null; // ⚡ 파워플래너 분석 결과가 있으면 그 값(전기사용량·재생E·잉여·절감액)
     const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; let sg = 0, si = 0;
-    R.forEach((r, ri) => { const t = r.cells[0].text; const m = t.match(/(\d{1,2})\s*월/); if(m && ri >= 1){ const mi = +m[1] - 1; const gen = D.kW * D.hours * (days[mi] || 30); const inc = gen * D.unit; sg += gen; si += inc; grid[ri] = [null, '', n0(gen), '0', n0(inc), '0', n0(inc)].slice(0, r.cells.length); }
-      else if(/합\s*계/.test(t)) grid[ri] = [null, '', n0(sg), '0', n0(si), '0', n0(si)].slice(0, r.cells.length); });
+    R.forEach((r, ri) => { const t = r.cells[0].text; const m = t.match(/(\d{1,2})\s*월/); if(m && ri >= 1){ const mi = +m[1] - 1;
+        if(PP){ const pr = PP.rows[(ri - 1) % 12]; grid[ri] = [`${pr.y}년 ${pr.m}월`, n0(pr.usage), n0(pr.self), n0(pr.surplus), n0(pr.saving), n0(pr.surSaving), n0(pr.total)].slice(0, r.cells.length); return; }
+        const gen = D.kW * D.hours * (days[mi] || 30); const inc = gen * D.unit; sg += gen; si += inc; grid[ri] = [null, '', n0(gen), '0', n0(inc), '0', n0(inc)].slice(0, r.cells.length); }
+      else if(/합\s*계/.test(t)) grid[ri] = PP ? [null, n0(PP.usage), n0(PP.self), n0(PP.surplus), n0(PP.saving), n0(PP.surSaving), n0(PP.total)].slice(0, r.cells.length) : [null, '', n0(sg), '0', n0(si), '0', n0(si)].slice(0, r.cells.length); });
   } else if(kind === 'selfSummary'){
-    if(R[1]) grid[1] = [kw2(D.kW) + 'kW', String(D.hours), null, null, D.self.co2.toFixed(2), '', n0(D.self.yearIncome)].slice(0, R[1].cells.length);
+    const PP = (typeof ppResult !== 'undefined' && ppResult && ppResult.rows) ? ppResult : null; const PI = PP && typeof ppInputs === 'function' ? ppInputs() : null;
+    if(R[1]) grid[1] = PP ? [kw2(PI.kW) + 'kW', String(PI.hours), PI.mode, PI.tariff, PP.co2.toFixed(2), (PP.re100 * 100).toFixed(2) + '%', n0(PP.total)].slice(0, R[1].cells.length) : [kw2(D.kW) + 'kW', String(D.hours), null, null, D.self.co2.toFixed(2), '', n0(D.self.yearIncome)].slice(0, R[1].cells.length);
   } else if(kind === 'selfUnit'){
-    if(R[1]) grid[1] = [f3(D.unit)];
+    if(R[1]) grid[1] = [f3((typeof ppResult !== 'undefined' && ppResult && ppResult.self > 0) ? ppResult.unit : D.unit)];
   }
   return grid;
 }
