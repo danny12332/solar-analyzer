@@ -895,20 +895,22 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <h2 style="margin-bottom:6px;">⚡ 한전 파워플래너 분석 · 설치용량 추천</h2>
         <p class="hint" style="margin:0 0 10px;">① "한전 통합 자동화 시스템"(exe)으로 파워플래너에서 12개월 자료를 받아 채운 <b>손익계산서 .xlsx</b>를 끌어다 놓으면 12개월 요일별 사용패턴·공휴일(기저부하)·조건을 읽습니다. 파워플래너에서 직접 내려받은 "YYYY년 M월 실시간사용량_요일별.xls" 12개와 "최저사용량.xls"를 한꺼번에 넣어도 됩니다. ② 계산은 양식 '자가소비 연간분석표'와 같고(검증함), 용량을 바꿔 가며 잉여율·RE100·절감액을 비교해 추천합니다.</p>
         <div id="ppToolBar" style="border:1px solid var(--card-line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--surface-2);font-size:12.5px;">
-          <div style="font-weight:700;margin-bottom:6px;">🧰 자동화 프로그램 — 제안서 양식처럼 서버(☁ 양식 서버)에 한 번 올려 두면 어느 컴퓨터에서나 여기서 받아 실행</div>
+          <div style="font-weight:700;margin-bottom:6px;">🧰 자동화 프로그램 — 사이트에서 바로 실행 (프로그램·양식은 ☁ 양식 서버에 한 번 올려 두면 모든 컴퓨터가 같은 것을 씀)</div>
           <div class="pp-tool-row" data-slot="pp-exe" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;">
-            <span style="min-width:150px;">⚙ 한전 통합 자동화 시스템(.exe)</span>
-            <button type="button" onclick="ppToolDownload('pp-exe')" style="font-size:12px;font-weight:700;">⬇ 받아서 실행</button>
+            <span style="min-width:150px;">⚙ 한전 통합 자동화 시스템</span>
+            <button type="button" onclick="ppRunLocal(false)" style="font-size:12.5px;font-weight:700;background:#0B5A2A;color:#fff;border-color:#0B5A2A;">▶ 바로 실행</button>
+            <button type="button" onclick="ppRunLocal(true)" style="font-size:11px;" title="exe·손익계산서를 둘 작업 폴더를 다시 고르고 실행">📁 작업 폴더 바꾸기</button>
+            <button type="button" onclick="ppInstallLauncher()" style="font-size:11px;" title="이 컴퓨터에서 처음 한 번만: 사이트의 ▶ 바로 실행 버튼이 프로그램을 켤 수 있게 연결">🔧 이 컴퓨터 연결(처음 1번)</button>
             <button type="button" onclick="ppToolUpload('pp-exe')" style="font-size:11px;" title="새 버전 exe를 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
             <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
           </div>
           <div class="pp-tool-row" data-slot="pp-xlsx" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;">
             <span style="min-width:150px;">📗 손익계산서 양식(.xlsx)</span>
-            <button type="button" onclick="ppToolDownload('pp-xlsx')" style="font-size:12px;">⬇ 받기</button>
+            <button type="button" onclick="ppToolSaveAs('pp-xlsx')" style="font-size:12px;">💾 원하는 곳에 저장</button>
             <button type="button" onclick="ppToolUpload('pp-xlsx')" style="font-size:11px;" title="exe가 채우는 손익계산서 양식을 서버에 올림(양식 서버 비밀번호 필요)">⬆ 올리기</button>
             <small class="pp-tool-stat" style="color:var(--ink-soft);">확인 중…</small>
           </div>
-          <div class="hint" style="margin-top:6px;">순서: ① 두 파일을 받아 <b>같은 폴더</b>에 둠 → ② exe 실행 → 파워플래너 로그인 창에 아이디·비밀번호 직접 입력 → 자료를 받아 손익계산서가 채워짐 → ③ 채워진 .xlsx를 아래 칸에 끌어다 놓기. (브라우저는 보안상 exe를 직접 켤 수 없어, 받은 파일을 한 번 눌러 실행해야 합니다. "흔하지 않은 파일" 경고가 나오면 "유지"를 누르세요.)</div>
+          <div class="hint" style="margin-top:6px;">처음 한 번: "🔧 이 컴퓨터 연결"로 받은 <b>GrandSun_PowerPlanner_Setup.cmd</b>를 실행(Windows용). 그 뒤로는 <b>▶ 바로 실행</b> → 브라우저가 "열기"를 물으면 허용("항상 허용" 체크) → 처음엔 작업 폴더를 고름 → 그 폴더에 서버의 최신 exe와 손익계산서 양식이 맞춰지고 exe가 켜짐 → 파워플래너 로그인 창에 아이디·비밀번호 직접 입력 → 채워진 손익계산서를 아래 칸에 끌어다 놓기.</div>
         </div>
         <div id="ppDrop" onclick="document.getElementById('ppFileInput').click()" style="border:2px dashed var(--sky-deep);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:var(--surface-2);font-size:13px;color:var(--ink-soft);">📂 채워진 손익계산서 .xlsx 또는 파워플래너 .xls 파일들을 끌어다 놓거나 클릭해서 열기<input id="ppFileInput" type="file" multiple accept=".xlsx,.xls,.csv,.htm,.html" style="display:none;" onchange="ppLoadFiles(Array.from(this.files)); this.value='';"></div>
         <p id="ppStatus" class="hint" style="margin:6px 0;font-size:12px;"></p>
@@ -1197,7 +1199,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02b';
+const APP_VERSION = '2026-11-02c';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3906,7 +3908,7 @@ async function srvFileMeta(slot){ const r = await fetch(pptServerUrl() + '/file/
 function ppToolStat(slot, t, color){ const row = document.querySelector('.pp-tool-row[data-slot="' + slot + '"]'); const el = row && row.querySelector('.pp-tool-stat'); if(el){ el.textContent = t; el.style.color = color || 'var(--ink-soft)'; } }
 async function ppToolRefresh(){
   for(const slot of ['pp-exe', 'pp-xlsx']){
-    try{ const m = await srvFileMeta(slot); if(!m || !m.ok){ ppToolStat(slot, '서버에 아직 없음 — "⬆ 올리기"로 한 번 올려 주세요'); continue; }
+    try{ const m = await srvFileMeta(slot); __ppToolMeta[slot] = (m && m.ok) ? m : null; if(!m || !m.ok){ ppToolStat(slot, '서버에 아직 없음 — "⬆ 올리기"로 한 번 올려 주세요'); continue; }
       const d = m.uploaded ? new Date(m.uploaded) : null; const w = d ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : '';
       ppToolStat(slot, `${m.name} (${(m.size / 1048576).toFixed(1)}MB, ${w} 올림)`, '#0B5A2A');
     }catch(e){ ppToolStat(slot, '서버 확인 실패(' + (e && e.message ? e.message : e) + ') — Worker 코드를 새 버전으로 바꿔야 할 수 있음', '#b3402a'); }
@@ -3918,6 +3920,47 @@ async function ppToolDownload(slot){
   const a = document.createElement('a'); a.href = pptServerUrl() + '/file/' + slot + '?t=' + Date.now(); a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
   ppToolStat(slot, '받는 중… 브라우저 아래(또는 위) 다운로드 목록에서 파일을 눌러 여세요', '#0B5A2A');
   setTimeout(ppToolRefresh, 8000);
+}
+const PP_LAUNCH_PS1 = "# 그랜드썬 태양광분석기 → 한전 통합 자동화 시스템 실행기 (grandsunpp:// 주소로 실행됨)\n# 하는 일: 작업 폴더(처음 한 번 고름)에 서버의 최신 exe와 손익계산서 양식을 맞춰 둔 뒤 exe를 그 폴더에서 실행\nparam([string]$u = '')\n$ErrorActionPreference = 'Stop'\nAdd-Type -AssemblyName System.Windows.Forms\n$base = '__BASE__'\n$cfgDir = Join-Path $env:LOCALAPPDATA 'GrandSun\\PP'\nNew-Item -ItemType Directory -Force -Path $cfgDir | Out-Null\n$cfg = Join-Path $cfgDir 'folder.txt'\nfunction Say([string]$t, [string]$icon = 'Information') { [System.Windows.Forms.MessageBox]::Show($t, '그랜드썬 파워플래너', 'OK', $icon) | Out-Null }\ntry {\n  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\n  $dir = ''\n  if (Test-Path $cfg) { $dir = (Get-Content -LiteralPath $cfg -Raw -Encoding UTF8).Trim() }\n  if ($u -match 'pick' -or -not $dir -or -not (Test-Path -LiteralPath $dir)) {\n    $dlg = New-Object System.Windows.Forms.FolderBrowserDialog\n    $dlg.Description = '자동화 프로그램과 손익계산서를 둘 작업 폴더를 고르세요 (다음부터는 이 폴더를 그대로 씁니다)'\n    if ($dir -and (Test-Path -LiteralPath $dir)) { $dlg.SelectedPath = $dir }\n    if ($dlg.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { exit 0 }\n    $dir = $dlg.SelectedPath\n    Set-Content -LiteralPath $cfg -Value $dir -Encoding UTF8\n  }\n  function Sync([string]$slot, [bool]$update) {\n    $m = Invoke-RestMethod -Uri \"$base/file/$slot/meta\" -UseBasicParsing\n    if (-not $m.ok) { throw \"서버에 $slot 파일이 아직 없습니다. 분석기 ⚡파워플래너 탭에서 먼저 올려 주세요.\" }\n    $dst = Join-Path $dir $m.name\n    $tag = Join-Path $cfgDir \"$slot.etag\"\n    $old = ''; if (Test-Path $tag) { $old = (Get-Content -LiteralPath $tag -Raw).Trim() }\n    if (-not (Test-Path -LiteralPath $dst) -or ($update -and $old -ne $m.etag)) {\n      $tmp = \"$dst.download\"\n      Invoke-WebRequest -Uri \"$base/file/$slot\" -OutFile $tmp -UseBasicParsing\n      Move-Item -LiteralPath $tmp -Destination $dst -Force\n      try { Unblock-File -LiteralPath $dst } catch {}\n      Set-Content -LiteralPath $tag -Value $m.etag\n    }\n    return $dst\n  }\n  $exe = Sync 'pp-exe' $true\n  $null = Sync 'pp-xlsx' $false\n  Start-Process -FilePath $exe -WorkingDirectory $dir\n} catch {\n  Say (\"실행하지 못했습니다.`n\" + $_.Exception.Message) 'Error'\n}\n";
+// 이 컴퓨터 연결(처음 1번): 실행기(pp-launch.ps1)를 %LOCALAPPDATA%\GrandSun\PP에 두고 grandsunpp:// 주소를 등록하는 .cmd를 만들어 줌(관리자 권한 불필요, 현재 사용자에만 등록)
+function ppInstallLauncher(){
+  const ps = '\ufeff' + PP_LAUNCH_PS1.replace('__BASE__', pptServerUrl()).replace(/\r?\n/g, '\r\n');
+  const bytes = new TextEncoder().encode(ps); let bin = ''; for(let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]); const b64 = btoa(bin);
+  const cmd = ['@echo off', 'set "D=%LOCALAPPDATA%\\GrandSun\\PP"', 'if not exist "%D%" mkdir "%D%"',
+    `powershell -NoProfile -ExecutionPolicy Bypass -Command "[IO.File]::WriteAllBytes($env:LOCALAPPDATA+'\\GrandSun\\PP\\pp-launch.ps1',[Convert]::FromBase64String('${b64}'))"`,
+    'reg add "HKCU\\Software\\Classes\\grandsunpp" /ve /d "URL:GrandSun PowerPlanner" /f >nul',
+    'reg add "HKCU\\Software\\Classes\\grandsunpp" /v "URL Protocol" /d "" /f >nul',
+    'reg add "HKCU\\Software\\Classes\\grandsunpp\\shell\\open\\command" /ve /d "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \\"%D%\\pp-launch.ps1\\" \\"%%1\\"" /f >nul',
+    'if exist "%D%\\pp-launch.ps1" (echo OK - GrandSun PowerPlanner launcher is installed. Go back to the site and press Run.) else (echo FAILED - launcher file was not created.)',
+    'pause', ''].join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([cmd], { type: 'application/octet-stream' })); a.download = 'GrandSun_PowerPlanner_Setup.cmd'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  ppToolStat('pp-exe', '받은 "GrandSun_PowerPlanner_Setup.cmd"를 실행하세요(경고가 나오면 "추가 정보 → 실행"). OK가 뜨면 ▶ 바로 실행', '#0B5A2A');
+}
+// ▶ 바로 실행: grandsunpp://run (작업 폴더 바꾸기는 grandsunpp://pick) — 연결이 안 된 컴퓨터는 브라우저가 아무 반응이 없음
+function ppRunLocal(pick){
+  let blurred = false; const onb = () => { blurred = true; }; window.addEventListener('blur', onb);
+  location.href = 'grandsunpp://' + (pick ? 'pick' : 'run');
+  ppToolStat('pp-exe', '실행 요청을 보냈습니다…');
+  setTimeout(() => { window.removeEventListener('blur', onb);
+    ppToolStat('pp-exe', blurred ? '실행 요청을 보냈습니다 — 브라우저가 "열기"를 물으면 허용("항상 허용" 체크). 처음엔 작업 폴더를 고르는 창이 뜹니다' : '반응이 없으면 이 컴퓨터는 아직 연결 전입니다 — "🔧 이 컴퓨터 연결(처음 1번)"을 먼저 하세요', blurred ? '#0B5A2A' : '#b3402a'); }, 1800);
+}
+// 손익계산서 양식: 저장 위치·이름을 고르는 창으로 저장(크롬·엣지). 그 창을 못 쓰는 브라우저는 보통 다운로드
+var __ppToolMeta = {};
+async function ppToolSaveAs(slot){
+  let m = __ppToolMeta[slot]; let handle = null;
+  if(m && window.showSaveFilePicker){
+    const ext = (m.name.match(/\.[^.]+$/) || ['.xlsx'])[0].toLowerCase();
+    try{ handle = await window.showSaveFilePicker({ suggestedName: m.name, types: [{ description: 'Excel 파일', accept: { 'application/octet-stream': [ext] } }] }); }
+    catch(e){ if(e && e.name === 'AbortError') return; handle = null; }
+  }
+  try{
+    if(!m){ m = await srvFileMeta(slot); if(!m || !m.ok){ alert('서버에 아직 올린 파일이 없습니다. "⬆ 올리기"로 먼저 올려 주세요.'); return; } __ppToolMeta[slot] = m; }
+    ppToolStat(slot, '받는 중…');
+    const r = await fetch(pptServerUrl() + '/file/' + slot + '?t=' + Date.now(), { cache: 'no-store' }); if(!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    if(handle){ const w = await handle.createWritable(); await w.write(blob); await w.close(); ppToolStat(slot, `저장했습니다 — ${handle.name}`, '#0B5A2A'); }
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = m.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); ppToolStat(slot, `다운로드 폴더에 받았습니다 — ${m.name} (저장 위치를 고르려면 크롬·엣지에서 여세요)`, '#0B5A2A'); }
+  }catch(e){ ppToolStat(slot, '저장 실패: ' + (e && e.message ? e.message : e), '#b3402a'); }
 }
 function ppToolUpload(slot){
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = slot === 'pp-exe' ? '.exe,.zip' : '.xlsx,.xlsm,.xls';
