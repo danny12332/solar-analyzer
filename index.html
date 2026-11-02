@@ -1218,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02o';
+const APP_VERSION = '2026-11-02p';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -10901,37 +10901,12 @@ async function startEaisAutomation(){
   let copied = false;
   try{ if(navigator.clipboard){ await navigator.clipboard.writeText(addr); copied = true; } }catch(e){}
   if(!copied){ try{ fallbackCopy(addr); copied = true; }catch(e){} }
-  const road = typed && typed !== jibun && /(로|길)\s*\d/.test(typed) ? typed : '';
-  const esc = v => escLand(v).replace(/'/g, '&#39;');
+  // 안내 창 없이 짧은 알림만(사용자 요청 2026-11-02: 자동화가 아니면 발급 방법 안내는 필요 없음)
   const old = document.getElementById('eaisModal'); if(old) old.remove();
-  const modal = document.createElement('div');
-  modal.id = 'eaisModal'; modal.className = 'eais-modal';
-  const cbtn = (label, val) => `<button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12.5px;background:var(--surface-2);color:var(--ink);" onclick="eaisCopy(this.dataset.v, this)" data-v="${esc(val)}">${label}</button>`;
-  modal.innerHTML = `
-    <div class="eais-box">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <h3>📄 건축물대장 · 현황도 발급</h3>
-        <button type="button" class="li-close" onclick="document.getElementById('eaisModal').remove()" aria-label="닫기">✕</button>
-      </div>
-      <div style="margin:10px 0 0;padding:12px 14px;border:1px solid #F0C36D;background:#FFF4DC;border-radius:8px;font-size:14px;line-height:1.7;">
-        <div>${tab ? '✅ 세움터 <b>아이디 로그인 화면</b>을 새 탭으로 열었습니다.' : '⚠ 새 탭이 팝업 차단으로 열리지 않았습니다 — 주소창 오른쪽 차단 아이콘에서 이 사이트의 팝업을 허용하세요.'}</div>
-        <div>${copied ? '✅ 주소를 복사했습니다' : '⚠ 주소 복사에 실패했습니다 — 아래 버튼으로 복사하세요'}: <b>${escLand(addr)}</b></div>
-        <ol style="margin:8px 0 0;padding-left:20px;">
-          <li>아이디·비밀번호를 넣고 <b>로그인</b></li>
-          <li>상단 <b>민원서비스 → 건축물대장발급</b> (현황도는 <b>건축물현황도 발급</b>)</li>
-          <li>소재지 칸에 <b>Ctrl+V</b> → 나오는 목록에서 주소 선택 → <b>검색</b> → 발급</li>
-        </ol>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center;">
-        ${cbtn('지번 주소 복사', addr)}${road ? cbtn('도로명 주소 복사', road) : ''}
-        <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12.5px;background:var(--surface-2);color:var(--ink);" onclick="eaisOpenTab(EAIS_LOGIN_URL,'gsEaisLogin')">세움터 다시 열기</button>
-        <span style="flex:1"></span>
-        <button type="button" class="run sun" style="width:auto;margin:0;padding:8px 18px;" onclick="document.getElementById('eaisModal').remove()">닫기</button>
-      </div>
-      <p class="hint" style="margin:8px 0 0;">목록에 안 나오면 시·도를 빼고(예: "강서구 지사동 1517") 붙여넣거나 도로명 주소로 해 보세요. 정부24에서는 건축물대장만 발급되며 현황도는 세움터에서만 발급됩니다.</p>
-    </div>`;
-  modal.addEventListener('click', e => { if(e.target === modal) modal.remove(); });
-  document.body.appendChild(modal);
+  const t = document.createElement('div'); t.id = 'eaisModal';
+  t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;background:#1b2a3a;color:#fff;padding:10px 16px;border-radius:10px;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:92vw;';
+  t.innerHTML = (tab ? '세움터를 열었습니다' : '<span style="color:#FFB4A0;">팝업 차단으로 세움터가 열리지 않았습니다</span> — <a href="#" style="color:#FFD23F;" onclick="eaisOpenTab(EAIS_LOGIN_URL,\'gsEaisLogin\');this.parentNode.remove();return false;">여기서 열기</a>') + ' · ' + (copied ? '주소 복사됨: <b>' + escLand(addr) + '</b>' : '주소 복사 실패: <b>' + escLand(addr) + '</b>');
+  document.body.appendChild(t); setTimeout(() => { if(t.parentNode) t.remove(); }, tab ? 4000 : 12000);
 }
 // 정부24 정식 발급: 대상 지번 주소를 클립보드에 복사한 뒤 정부24를 새 탭으로 연다 (정부24에서 '건축물대장' 검색 → 발급하기 → 소재지에 붙여넣기)
 async function openGov24ForBldrgst(){
