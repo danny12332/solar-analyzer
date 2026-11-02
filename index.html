@@ -1218,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-02j';
+const APP_VERSION = '2026-11-02k';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -10848,15 +10848,32 @@ function bldrgstFormatDate(d){
 
 // 세움터 발급 보조: 세움터는 자동화 프로그램(매크로·스크래핑) 사용을 제재한다고 공지(2026.10.01 확인)하고 있으므로
 // 페이지가 대신 클릭·입력하는 기능은 두지 않는다. 대상 주소를 복사하고 세움터를 열어 직접 발급하는 순서만 안내한다.
+// 📄 건축물대장 발급(설치 없음): ① 세움터 아이디 로그인 화면을 새 탭으로 바로 엶 → 사람이 로그인 → ② 버튼으로 이 주소의 건축물대장 발급 화면을 엶
+//   세움터 첫 화면 스크립트와 같은 주소 방식: https://www.eais.go.kr/awp/AWPAAA01R98?q=Base64(UTF8(발급주소 + "||I"))
+//   로그인 전 이 주소를 부르면 401 "자동 로그아웃" 응답(2026-11-02 확인) → 로그인 여부는 세움터 쪽 세션으로 판단됨
+const EAIS_LOGIN_URL = 'https://www.eais.go.kr/moct/awp/abb01/AWPABB01F13'; // 아이디 로그인 화면(아이디·비밀번호 칸), 2026-11-02 직접 열어 확인
+function eaisOpenTab(url, name, feat){ const w = window.open(url, name, feat || ''); if(w){ try{ w.opener = null; }catch(e){} } return w; }
+function eaisIssueUrl(kind){
+  const base = 'https://issue.eais.go.kr/eais/bldrgst/bldrgstCurdiRead.do?actionFlag=' + (kind === 'map' ? 'bldrgstCurdiReadInfo' : 'bldrgstCurdiRead');
+  let act = base; const k = lastBldrgst && lastBldrgst.key;
+  if(kind !== 'map' && k && k.code && String(k.code).length === 10){ const pad = v => String(v || '0').replace(/\D/g, '').padStart(4, '0'); act += '&sigunguCd=' + String(k.code).slice(0, 5) + '&bjdongCd=' + String(k.code).slice(5) + '&platGbCd=' + (k.mt ? 1 : 0) + '&bun=' + pad(k.bun) + '&ji=' + pad(k.ji); }
+  const b = new TextEncoder().encode(act + '||I'); let bin = ''; b.forEach(x => bin += String.fromCharCode(x));
+  return 'https://www.eais.go.kr/awp/AWPAAA01R98?q=' + btoa(bin);
+}
+function eaisOpenIssue(kind){
+  const w = eaisOpenTab(eaisIssueUrl(kind), 'issueRead', 'resizable=yes,status=no,width=1200,height=850,top=0,left=0,scrollbars=yes');
+  const st = document.getElementById('eaisStat');
+  if(st){ st.textContent = w ? (kind === 'map' ? '건축물현황도 발급 화면을 새 창으로 열었습니다.' : '건축물대장 발급 화면을 새 창으로 열었습니다. "자동 로그아웃" 같은 글이 보이면 ① 로그인을 먼저 하세요.') : '새 창이 팝업 차단으로 열리지 않았습니다 — 주소창 오른쪽 차단 아이콘에서 이 사이트의 팝업을 허용하세요.'; st.style.color = w ? '#0B5A2A' : 'var(--coral)'; }
+}
 async function startEaisAutomation(){
   const addr = (lastBldrgst && lastBldrgst.addr) || lastJibunAddress || document.getElementById('siteAddress').value.trim();
   if(!addr){ alert('먼저 주소를 검색해 주세요.'); return; }
-  // 새 탭은 클릭 직후(비동기 대기 전)에 열어야 팝업 차단에 걸리지 않음
-  const tab = window.open('https://cloud.eais.go.kr/', '_blank', 'noopener');
+  // 새 탭은 클릭 직후(비동기 대기 전)에 열어야 팝업 차단에 걸리지 않음. 'noopener'를 주면 열려도 null이 돌아와 "차단됨"으로 잘못 보였던 문제 수정
+  const tab = eaisOpenTab(EAIS_LOGIN_URL, 'gsEaisLogin');
   let copied = false;
   try{ if(navigator.clipboard){ await navigator.clipboard.writeText(addr); copied = true; } }catch(e){}
+  const k = lastBldrgst && lastBldrgst.key;
   const bld = (lastBldrgst && lastBldrgst.items && lastBldrgst.items.length) ? lastBldrgst.items : null;
-  const bldLine = bld ? `<li>동이 여러 개면 목록에서 고릅니다. 건축HUB 조회 결과: ${bld.map(it => escLand(it.bldNm || it.dongNm || '동')).filter(Boolean).slice(0,6).join(', ')}${bld.length > 6 ? ' 외' : ''} (${bld.length}개 동)</li>` : '';
   const old = document.getElementById('eaisModal'); if(old) old.remove();
   const modal = document.createElement('div');
   modal.id = 'eaisModal'; modal.className = 'eais-modal';
@@ -10866,33 +10883,24 @@ async function startEaisAutomation(){
         <h3>📄 건축물대장 및 현황도 발급 — ${escLand(addr)}</h3>
         <button type="button" class="li-close" onclick="document.getElementById('eaisModal').remove()" aria-label="닫기">✕</button>
       </div>
-      <p style="margin:0;font-size:13px;color:var(--ink-soft);">세움터 탭이 새로 열렸습니다. ${copied ? '<b>주소를 클립보드에 복사했으니</b> 소재지 칸에 붙여넣기(Ctrl+V)만 하면 됩니다.' : '주소 복사에 실패했습니다. 위 주소를 직접 입력하세요.'}</p>
-      <div style="margin:10px 0 4px;padding:10px 12px;border:1px solid #F0C36D;background:#FFF4DC;border-radius:8px;">
-        <button type="button" class="run sun" style="width:auto;margin:0;padding:9px 16px;font-weight:700;" onclick="eaisAutoRun()">▶ 세움터 자동 발급 실행</button>
-        <div id="eaisAutoStat" class="hint" style="margin-top:6px;">누르면 저장 폴더(검색 주소 이름의 현장 폴더) 확인 → 세움터 전용 크롬 창이 <b>아이디 로그인 화면</b>까지 자동으로 열림 → <b>아이디·비밀번호 직접 입력</b> → 로그인되면 이 주소의 건축물대장 발급 화면이 열림 → 발급 후 도우미 창의 "PDF로 저장". 한전 파워플래너 프로그램과는 별개 프로그램이며 Windows 전용, 처음엔 연결 파일(GrandSun_EAIS_Setup.cmd)을 한 번 실행합니다. <a href="#" onclick="eaisInstallLauncher();return false;">연결 파일 다시 받기</a></div>
+      <div style="margin:10px 0 0;padding:10px 12px;border:1px solid #F0C36D;background:#FFF4DC;border-radius:8px;font-size:13.5px;line-height:1.55;">
+        <div><b>① 로그인</b> — ${tab ? '세움터 <b>아이디 로그인 화면</b>을 새 탭으로 열었습니다.' : '<span style="color:var(--coral);">새 탭이 팝업 차단으로 열리지 않았습니다.</span>'} 아이디·비밀번호를 넣고 로그인하세요. <a href="#" onclick="eaisOpenTab(EAIS_LOGIN_URL,'gsEaisLogin');return false;">로그인 화면 다시 열기</a></div>
+        <div style="margin-top:8px;"><b>② 로그인했으면</b> 이 버튼 →
+          <button type="button" class="run sun" style="width:auto;margin:4px 0 0;padding:9px 16px;font-weight:700;" onclick="eaisOpenIssue('rgst')">📄 이 주소 건축물대장 발급 화면 열기</button>
+          <button type="button" class="run" style="width:auto;margin:4px 0 0;padding:9px 14px;font-size:12.5px;background:var(--surface-2);color:var(--ink);" onclick="eaisOpenIssue('map')">🗺 건축물현황도 발급 화면 열기</button>
+        </div>
+        <div id="eaisStat" class="hint" style="margin-top:6px;">${k ? '건축물대장 조회에서 확인된 필지(법정동코드 ' + escLand(String(k.code)) + ', ' + (k.mt ? '산 ' : '') + escLand(String(k.bun)) + (k.ji && k.ji !== '0' ? '-' + escLand(String(k.ji)) : '') + ')로 발급 화면을 엽니다.' : '이 주소는 건축물대장 조회 결과가 없어 발급 화면에서 주소로 검색해야 합니다.'} ${copied ? '주소는 클립보드에 복사돼 있어 소재지 칸에 Ctrl+V로 붙여넣을 수 있습니다.' : ''}</div>
+        ${bld ? `<div class="hint" style="margin-top:4px;">건축HUB 조회 동: ${bld.map(it => escLand(it.bldNm || it.dongNm || '동')).filter(Boolean).slice(0,6).join(', ')}${bld.length > 6 ? ' 외' : ''} (${bld.length}개 동)</div>` : ''}
+        <div style="margin-top:8px;"><b>③ 발급</b> — 열린 화면에서 대장 종류를 고르고 발급한 뒤 세움터의 인쇄/저장으로 PDF를 저장합니다.</div>
       </div>
-      <p style="margin:8px 0 0;font-size:12px;color:var(--ink-soft);">직접 할 때 순서:</p>
-      <ol>
-        <li>세움터에서 <b>로그인</b>(간편인증)합니다.</li>
-        <li>상단 <b>민원서비스</b> 메뉴에서 <b>건축물대장 발급</b>으로 들어갑니다.</li>
-        <li>소재지 칸에 <b>Ctrl+V</b>로 주소를 붙여넣고 검색합니다.</li>
-        ${bldLine}
-        <li>대장 종류(일반건축물대장 갑/을)를 고르고 <b>발급 → PDF 저장</b>합니다.</li>
-        <li>이어서 <b>건축물현황도</b> 발급 메뉴에서 같은 건물의 배치도·평면도를 선택해 PDF로 저장합니다.</li>
-      </ol>
-      <p class="hint" style="margin:10px 0 0;">⚠ 세움터는 매크로·스크래핑 등 자동화 프로그램 사용을 제재한다고 공지하고 있습니다(정보통신망법·형법 업무방해·이용약관 제16조). 세움터 자동 발급 프로그램은 로그인은 사람이 하고 화면 이동·발급 화면 열기·저장을 하는 방식이지만, 이 제한에 해당할 수 있습니다(위험을 알고 쓰기로 결정, 2026-11-02). 정부24에서는 건축물대장만 발급되며 현황도는 세움터에서만 발급됩니다.</p>
+      <p class="hint" style="margin:10px 0 0;">컴퓨터에 아무것도 설치하지 않는 방식입니다. 웹페이지는 브라우저 보안상 다른 사이트(세움터) 안의 버튼을 대신 누를 수 없어, 로그인과 발급 단계의 클릭은 직접 합니다. 발급 화면이 그 필지로 바로 열리는지는 로그인 상태에서 확인하지 못했습니다(지번은 4자리로 보냄). 정부24에서는 건축물대장만 발급되며 현황도는 세움터에서만 발급됩니다.</p>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button type="button" class="run" style="width:auto;padding:8px 14px;font-size:12.5px;background:var(--surface-2);color:var(--ink);" onclick="navigator.clipboard && navigator.clipboard.writeText('${escLand(addr).replace(/'/g, "\\'")}').then(()=>{this.textContent='주소 복사됨 ✓';})">주소 다시 복사</button>
-        <button type="button" class="run sun" style="width:auto;padding:8px 16px;" onclick="document.getElementById('eaisModal').remove()">확인</button>
+        <button type="button" class="run sun" style="width:auto;padding:8px 16px;" onclick="document.getElementById('eaisModal').remove()">닫기</button>
       </div>
     </div>`;
   modal.addEventListener('click', e => { if(e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
-  if(tab === null){
-    const warn = document.createElement('p'); warn.className = 'hint'; warn.style.cssText = 'color:var(--coral);margin:6px 0 0;';
-    warn.innerHTML = '⚠ 새 탭이 팝업 차단으로 열리지 않았습니다. 주소창 오른쪽 차단 아이콘에서 이 사이트의 팝업을 허용하거나, <a href="https://cloud.eais.go.kr/" target="_blank" rel="noopener">여기</a>를 눌러 세움터를 여세요.';
-    modal.querySelector('.eais-box ol').after(warn);
-  }
 }
 // 정부24 정식 발급: 대상 지번 주소를 클립보드에 복사한 뒤 정부24를 새 탭으로 연다 (정부24에서 '건축물대장' 검색 → 발급하기 → 소재지에 붙여넣기)
 async function openGov24ForBldrgst(){
