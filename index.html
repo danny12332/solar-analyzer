@@ -502,7 +502,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
     </span>
   </a>
   <div class="meta">
-    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button><button type="button" class="hdr-btn" id="tasteBtn" onclick="toggleTaste()" title="디자인 다듬기(그림자·그라데이션 정리, 보조 글 대비 높임) 켜기/끄기 — 화면 배치는 그대로" style="margin-right:6px;background:#fff;color:#1b2a3a;">🎨 디자인</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
+    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
@@ -1082,7 +1082,6 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <button type="button" class="run" id="areaBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleAreaMode()">📐 면적재기</button>
             <button type="button" class="run" id="radiusBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRadiusMode()">📍 반경재기</button>
             <button type="button" class="run" style="background:var(--surface-2);color:var(--ink-soft);" onclick="clearMeasurements()">🧹 측정 지우기</button>
-            <span class="mapzoom-grp" title="카카오 위성사진 최대 확대(레벨 1)보다 더 크게 봅니다. 사진은 늘려서 보여주는 것이라 선명도는 그대로입니다.">🔍 화면 확대 <button type="button" class="mapzoom-btn on" data-k="1" onclick="setMapZoom(1)">×1</button><button type="button" class="mapzoom-btn" data-k="1.5" onclick="setMapZoom(1.5)">×1.5</button><button type="button" class="mapzoom-btn" data-k="2" onclick="setMapZoom(2)">×2</button><button type="button" class="mapzoom-btn" data-k="3" onclick="setMapZoom(3)">×3</button></span>
           </div>
         </div>
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
@@ -1250,7 +1249,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03r';
+const APP_VERSION = '2026-11-03s';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12775,9 +12774,7 @@ const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역�
 </script>
 <script>
 // 디자인 다듬기 켜기/끄기(기본 켜짐) — 이 브라우저에만 기억
-function applyTaste(on){ document.body.classList.toggle('taste', on); const b = document.getElementById('tasteBtn'); if(b){ b.textContent = on ? '🎨 디자인: 다듬음' : '🎨 디자인: 원래'; } }
-function toggleTaste(){ const on = !document.body.classList.contains('taste'); applyTaste(on); try{ localStorage.setItem('gsTaste', on ? '1' : '0'); }catch(e){} }
-(function(){ let v = null; try{ v = localStorage.getItem('gsTaste'); }catch(e){} applyTaste(v !== '0'); })();
+document.body.classList.add('taste'); // 디자인 다듬기 항상 켬(2026-11-03 사용자: 버튼 제거)
 </script>
 </body>
 </html>
