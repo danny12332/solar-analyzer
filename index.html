@@ -474,7 +474,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
     </span>
   </a>
   <div class="meta">
-    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button><br>
+    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
@@ -485,7 +485,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
     <p style="margin:0 0 10px;color:var(--ink-soft,#556);font-size:13px;">지금 하던 작업을 비우고 새 주소로 처음부터 시작합니다. 지울 것을 고르세요.</p>
     <label style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;"><input type="checkbox" id="nwSite" checked disabled style="margin-top:3px;"> <span>주소·지도 위치·컨설팅 결과·배치도·측면도·도면 설정·견적 입력 <small style="color:var(--ink-soft,#556);">(항상)</small></span></label>
     <label style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;"><input type="checkbox" id="nwPpt" checked style="margin-top:3px;"> <span>제안서 편집 내용(글자·사진·삭제한 장) <small style="color:var(--ink-soft,#556);">— 양식 파일은 그대로 둠</small></span></label>
-    <label style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;"><input type="checkbox" id="nwPP" checked style="margin-top:3px;"> <span>⚡ 파워플래너 분석 자료·결과</span></label>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;"><input type="checkbox" id="nwPP" checked style="margin-top:3px;"> <span>파워플래너 분석 자료·결과</span></label>
     <p style="margin:10px 0 0;color:var(--ink-soft,#556);font-size:12px;">그대로 남는 것: 제안서 양식·양식 서버 주소·비밀번호, 보기 배율, 자동 배치 같은 설정. 지운 작업은 되돌릴 수 없으니 필요한 파일은 먼저 저장하세요.</p>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
       <button type="button" onclick="newWorkClose()" style="padding:8px 14px;">취소</button>
@@ -506,7 +506,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <button type="button" class="rail-tab-btn active" data-pane="railPaneConsult" onclick="switchRailTab('railPaneConsult')">컨설팅</button>
         <button type="button" class="rail-tab-btn" data-pane="railPaneLayout" onclick="switchRailTab('railPaneLayout')">배치도</button>
         <button type="button" class="rail-tab-btn" data-pane="railPaneProposal" onclick="switchRailTab('railPaneProposal')">제안서</button>
-        <button type="button" class="rail-tab-btn" data-pane="railPanePP" onclick="switchRailTab('railPanePP')" title="한전 파워플래너 자료로 자가소비 분석 · 설치용량 추천">⚡ 파워플래너</button>
+        <button type="button" class="rail-tab-btn" data-pane="railPanePP" onclick="switchRailTab('railPanePP')" title="한전 파워플래너 자료로 자가소비 분석 · 설치용량 추천">파워플래너</button>
       </div>
 
       <!-- ▣ 컨설팅: 주소 검색 + 부지 조건 -->
@@ -913,7 +913,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
       <!-- ▣ 한전 파워플래너 분석: 손익계산서 양식의 '자가소비 연간분석표' 계산을 그대로 옮겨 월별 자가소비·잉여·절감액과 용량별 비교·추천 -->
       <div class="rail-pane" id="railPanePP">
       <div class="card" style="padding:16px 16px 14px;">
-        <h2 style="margin-bottom:6px;">⚡ 한전 파워플래너 분석 · 설치용량 추천</h2>
+        <h2 style="margin-bottom:6px;">한전 파워플래너 분석 · 설치용량 추천</h2>
         <p class="hint" style="margin:0 0 10px;">① "한전 통합 자동화 시스템"(exe)으로 파워플래너에서 12개월 자료를 받아 채운 <b>손익계산서 .xlsx</b>를 끌어다 놓으면 12개월 요일별 사용패턴·공휴일(기저부하)·조건을 읽습니다. 파워플래너에서 직접 내려받은 "YYYY년 M월 실시간사용량_요일별.xls" 12개와 "최저사용량.xls"를 한꺼번에 넣어도 됩니다. ② 계산은 양식 '자가소비 연간분석표'와 같고(검증함), 용량을 바꿔 가며 잉여율·RE100·절감액을 비교해 추천합니다.</p>
         <div id="ppToolBar" style="border:1px solid var(--card-line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--surface-2);font-size:12.5px;">
           <div style="font-weight:700;margin-bottom:6px;">🧰 자동화 프로그램 — 사이트에서 바로 실행 (프로그램·양식은 ☁ 양식 서버에 한 번 올려 두면 모든 컴퓨터가 같은 것을 씀)</div>
@@ -971,6 +971,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <div class="export-row" style="margin:0;">
           <button type="button" class="run" style="background:#0F2A44;color:#fff;" onclick="exportProposalPdf()" title="표지(위성사진 조감도 + 동지 음영) · 모듈 배치도 · 측면도 · 동별 집계표 · 수익성 분석을 한 PDF(A4 가로)로 — 회사 양식 PPT 대신 간단 제안서가 필요할 때">📑 간단 제안서 PDF(자동)</button>
           <button type="button" class="run" style="background:var(--ink);color:#F6F9FC;" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button>
+          <button type="button" class="run" style="background:var(--surface-2);color:var(--ink);" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다">🏠 등기부등본(인터넷등기소)</button>
           <span class="hint" style="font-size:11px;">배치도·측면도·도면틀 CAD 저장은 배치도 탭 ⑥에 있습니다.</span>
         </div>
       </div>
@@ -1218,7 +1219,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03f';
+const APP_VERSION = '2026-11-03g';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -11019,6 +11020,18 @@ async function startEaisAutomation(){
   t.innerHTML = (tab ? '세움터를 열었습니다' : '<span style="color:#FFB4A0;">팝업 차단으로 세움터가 열리지 않았습니다</span> — <a href="#" style="color:#FFD23F;" onclick="eaisOpenTab(EAIS_LOGIN_URL,\'gsEaisLogin\');this.parentNode.remove();return false;">여기서 열기</a>') + ' · ' + (copied ? '주소 복사됨: <b>' + escLand(addr) + '</b>' : '주소 복사 실패: <b>' + escLand(addr) + '</b>');
   document.body.appendChild(t); setTimeout(() => { if(t.parentNode) t.remove(); }, tab ? 4000 : 12000);
 }
+// 🏠 등기부등본: 지번 주소를 복사하고 인터넷등기소를 새 탭으로 엶. 인터넷등기소는 화면 이동 주소가 따로 없는 구조(WebSquare)라 첫 화면을 엶 → 열람·발급 → 부동산 → 열람·발급에서 소재지에 Ctrl+V
+async function openIrosRegistry(){
+  const jibun = String((lastBldrgst && lastBldrgst.addr) || (typeof lastJibunAddress !== 'undefined' && lastJibunAddress) || '').trim() || ((document.getElementById('siteAddress') || {}).value || '').trim();
+  if(!jibun){ alert('먼저 주소를 검색해 주세요.'); return; }
+  const tab = eaisOpenTab('https://www.iros.go.kr/index.jsp', 'gsIros');
+  let copied = false; try{ if(navigator.clipboard){ await navigator.clipboard.writeText(jibun); copied = true; } }catch(e){} if(!copied){ try{ fallbackCopy(jibun); copied = true; }catch(e){} }
+  const old = document.getElementById('eaisModal'); if(old) old.remove();
+  const t = document.createElement('div'); t.id = 'eaisModal';
+  t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;background:#1b2a3a;color:#fff;padding:10px 16px;border-radius:10px;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:92vw;';
+  t.innerHTML = (tab ? '인터넷등기소를 열었습니다' : '<span style="color:#FFB4A0;">팝업 차단으로 인터넷등기소가 열리지 않았습니다</span> — <a href="#" style="color:#FFD23F;" onclick="eaisOpenTab(\'https://www.iros.go.kr/index.jsp\',\'gsIros\');this.parentNode.remove();return false;">여기서 열기</a>') + ' · ' + (copied ? '지번 복사됨: <b>' + escLand(jibun) + '</b>' : '복사 실패: <b>' + escLand(jibun) + '</b>') + ' <span style="opacity:.75;">(열람·발급 → 부동산 → 열람·발급)</span>';
+  document.body.appendChild(t); setTimeout(() => { if(t.parentNode) t.remove(); }, tab ? 5000 : 12000);
+}
 // 정부24 정식 발급: 대상 지번 주소를 클립보드에 복사한 뒤 정부24를 새 탭으로 연다 (정부24에서 '건축물대장' 검색 → 발급하기 → 소재지에 붙여넣기)
 async function openGov24ForBldrgst(){
   const addr = (lastBldrgst && lastBldrgst.addr) || lastJibunAddress || document.getElementById('siteAddress').value.trim();
@@ -11155,6 +11168,7 @@ async function checkBuildingRegister(){
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sky-deep);" onclick="downloadBldrgstPdf()">🖨 PDF로 저장</button>
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sun);color:#2A1A00;" onclick="startEaisAutomation()">📄 건축물대장 및 현황도 발급 (세움터)</button>
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="openGov24ForBldrgst()">정부24 발급 ↗ (주소 복사됨)</button>
+          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="openIrosRegistry()">🏠 등기부등본(인터넷등기소) ↗</button>
         </div>
         <div style="margin-top:8px;">${blocks}</div>
         <p class="footnote" style="margin-top:8px;">국토교통부 건축HUB(건축물대장정보 서비스) 실시간 조회 결과이며, 법적 효력이 있는 서류가 아닙니다. 정식 열람·발급은 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a> 또는 <a href="https://www.gov.kr" target="_blank">정부24</a>에서 하세요.</p>
