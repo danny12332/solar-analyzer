@@ -446,6 +446,31 @@
 #kakaoMap.measuring, #kakaoMap.measuring * { cursor: crosshair !important; }
 #kakaoMap.mod-hover, #kakaoMap.mod-hover * { cursor: grab !important; }
 body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important; }
+
+  /* ===== 디자인 다듬기(taste-skill 규칙 중 화면 틀을 바꾸지 않는 것만 적용) — body.taste 일 때만, 헤더 "디자인" 버튼으로 끄고 켬 =====
+     출처: github.com/leonxlnx/taste-skill (design-taste-frontend) — 쉬는 상태 그림자 없음 · 그라데이션 없음 · 유리(blur) 효과 없음 ·
+     자간 넓힌 작은 라벨 없음 · 큰 제목은 자간을 조금 좁게 · 보조 글도 읽을 수 있는 대비 · 누를 때 반응 · transform만 움직임
+     (적용 안 한 규칙: 화면 배치·카드 구성·이모지·움직임 효과 추가 등 틀이 바뀌는 것) */
+  body.taste{--ink-faint:#5F7184;background:var(--paper) !important;}
+  body.taste header.top{background:var(--dusk);}
+  body.taste header.top .hdr-market{background:rgba(255,255,255,.07);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
+  body.taste header.top .sunmark{background:var(--sun);box-shadow:none;}
+  body.taste .hm-dot{box-shadow:none;}
+  body.taste .hm-caption, body.taste .hm-label{letter-spacing:0;}
+  body.taste .card, body.taste .toolbar-card, body.taste .stamp-band, body.taste .rail-tabs{box-shadow:none;}
+  body.taste .toolbar-card, body.taste .lay-addr-box{background:var(--surface) !important;}
+  body.taste header.top h1, body.taste .card h2, body.taste .toolbar-card h2{letter-spacing:-.02em;}
+  body.taste button:not(:disabled){transition:transform .08s ease, filter .15s;}
+  body.taste button:not(:disabled):active{transform:translateY(1px);}
+  @media (prefers-reduced-motion:reduce){body.taste button:not(:disabled):active{transform:none;}}
+  /* 2026-11-03 QA(Playwright 1440/768/390 실측) 결과 보정 — 글자 크기 11px 바닥, 글 대비 4.5:1 바닥(taste 앱 화면 규칙). 배치는 그대로 */
+  body.taste{--sky:#24679A; --leaf:#3E7430; --coral:#BF4A26; --forest:#24679A; --rust:#BF4A26; --stamp-red:#BF4A26;} /* :root의 --forest:var(--sky)는 :root에서 굳어지므로 함께 덮어씀 */  /* 하늘색 글·칩 3.76→5.09:1, 등급 A 4.2→5.61, 등급 D 3.91→4.97 */
+  body.taste .hm-caption, body.taste .hm-label, body.taste .hm-sub, body.taste .hm-value em{font-size:11px;}
+  body.taste .lay-empty{color:#4E6172;}                       /* 4.44→5.67:1 */
+  body.taste .grp, body.taste [style*="color:#9A7A3A"]{color:#7A5E24 !important;font-size:11px;} /* 3.56→5.38:1 */
+  body.taste small.pp-tool-stat, body.taste .ppt-side small, body.taste .card small{font-size:11px;}
+  body.taste .field select, body.taste .field input{border-color:#C9D4DE;}
+  body.taste table td, body.taste table th{font-variant-numeric:tabular-nums;}
 </style>
   <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=de36da69d21e4e4b2fa5a454db03c557&libraries=services"></script>
 </head>
@@ -477,7 +502,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
     </span>
   </a>
   <div class="meta">
-    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
+    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button><button type="button" class="hdr-btn" id="tasteBtn" onclick="toggleTaste()" title="디자인 다듬기(그림자·그라데이션 정리, 보조 글 대비 높임) 켜기/끄기 — 화면 배치는 그대로" style="margin-right:6px;background:#fff;color:#1b2a3a;">🎨 디자인</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
     기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
   </div>
@@ -1225,7 +1250,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03l';
+const APP_VERSION = '2026-11-03n';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12703,6 +12728,12 @@ const DEFAULT_MAP_CENTER = { lat: 35.1796, lng: 129.0756, label: '부산광역�
   };
   if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', () => setTimeout(run, 50)); } else { setTimeout(run, 50); }
 })();
+</script>
+<script>
+// 디자인 다듬기 켜기/끄기(기본 켜짐) — 이 브라우저에만 기억
+function applyTaste(on){ document.body.classList.toggle('taste', on); const b = document.getElementById('tasteBtn'); if(b){ b.textContent = on ? '🎨 디자인: 다듬음' : '🎨 디자인: 원래'; } }
+function toggleTaste(){ const on = !document.body.classList.contains('taste'); applyTaste(on); try{ localStorage.setItem('gsTaste', on ? '1' : '0'); }catch(e){} }
+(function(){ let v = null; try{ v = localStorage.getItem('gsTaste'); }catch(e){} applyTaste(v !== '0'); })();
 </script>
 </body>
 </html>
