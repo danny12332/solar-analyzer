@@ -276,6 +276,9 @@
   .panel-bar label{font-size:11.5px;color:var(--ink-soft);}
   .panel-bar input, .panel-bar select{padding:3px 5px;border:1px solid #E2CFA3;border-radius:4px;background:#fff;font-family:inherit;font-size:12px;color:var(--ink);}
   .panel-bar button.run{width:auto;margin:0;padding:6px 12px;font-size:12px;border-radius:var(--r-sm);}
+  .mapzoom-grp{display:inline-flex;align-items:center;gap:2px;font-size:12px;font-weight:700;color:var(--ink-soft);margin-left:4px;}
+  .mapzoom-btn{border:1px solid var(--line);background:var(--surface-2);color:var(--ink-soft);border-radius:6px;padding:4px 7px;font-weight:700;font-size:12px;cursor:pointer;}
+  .mapzoom-btn.on{background:var(--forest);color:#fff;border-color:var(--forest);}
   #kakaoMap{width:100%;height:clamp(560px, calc(100vh - 215px), 1200px);border:1px solid var(--line);border-radius:var(--r-md);background:#e6edf2;}
   .map-stage{position:relative;}
   #kakaoRoadviewWrap{display:none;position:absolute;inset:0;z-index:5;border-radius:var(--r-md);overflow:hidden;background:#111;}
@@ -1054,6 +1057,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <button type="button" class="run" id="areaBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleAreaMode()">📐 면적재기</button>
             <button type="button" class="run" id="radiusBtn" style="background:var(--forest-dim);color:var(--forest);" onclick="toggleRadiusMode()">📍 반경재기</button>
             <button type="button" class="run" style="background:var(--surface-2);color:var(--ink-soft);" onclick="clearMeasurements()">🧹 측정 지우기</button>
+            <span class="mapzoom-grp" title="카카오 위성사진 최대 확대(레벨 1)보다 더 크게 봅니다. 사진은 늘려서 보여주는 것이라 선명도는 그대로입니다.">🔍 화면 확대 <button type="button" class="mapzoom-btn on" data-k="1" onclick="setMapZoom(1)">×1</button><button type="button" class="mapzoom-btn" data-k="1.5" onclick="setMapZoom(1.5)">×1.5</button><button type="button" class="mapzoom-btn" data-k="2" onclick="setMapZoom(2)">×2</button><button type="button" class="mapzoom-btn" data-k="3" onclick="setMapZoom(3)">×3</button></span>
           </div>
         </div>
         <div id="solarIllustrationWrap" style="display:none;margin-bottom:12px;border:1px solid var(--card-line);border-radius:8px;overflow:hidden;"></div>
@@ -1221,7 +1225,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03k';
+const APP_VERSION = '2026-11-03l';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2343,6 +2347,45 @@ function dispatchMapClick(ev){
   if(__lastMapClick && t - __lastMapClick.t < 250 && Math.abs(la - __lastMapClick.la) < 1e-7 && Math.abs(ln - __lastMapClick.ln) < 1e-7) return;
   __lastMapClick = { t, la, ln };
   window.__mapClickHandler(ev);
+}
+// ===== 🔍 지도 화면 확대(카카오 위성사진 최대 확대 레벨 1보다 더 크게 보기) =====
+// 카카오 지도는 레벨 1이 최대(레벨 0은 같은 L1 사진을 그대로 쓰면서 좌표만 2배가 되어 도형과 사진이 어긋남 — 2026-11-03 직접 확인).
+// 그래서 지도 칸 전체(사진·도형·글)를 CSS zoom으로 같이 키움 → 사진은 L1 사진을 늘린 것이라 선명도는 그대로.
+// CSS zoom을 걸면 카카오가 마우스 위치를 확대 배율만큼 크게 읽음(직접 확인: 레이아웃 기준 74,187 지점 클릭 → 149,373으로 인식)
+// → 지도 안 마우스 이벤트의 clientX/Y를 (지도 왼쪽 위 기준) 배율로 나눈 값으로 바꿔서 전달.
+let mapZoomK = 1, mapPtrActive = false;
+(function(){
+  const T = ['mousedown','mousemove','mouseup','click','dblclick','contextmenu','mouseover','mouseout','pointerdown','pointermove','pointerup','pointerover','pointerout','pointercancel','wheel'];
+  const fix = e => {
+    if(mapZoomK === 1 || e.__gsZoomFixed) return;
+    const el = document.getElementById('kakaoMap'); if(!el) return;
+    const inside = e.target && e.target.nodeType === 1 && el.contains(e.target);
+    if(e.type === 'pointerdown' || e.type === 'mousedown'){ if(inside) mapPtrActive = true; }
+    if(!inside && !mapPtrActive) return;
+    const r = el.getBoundingClientRect(); const k = mapZoomK;
+    const cx = r.left + (e.clientX - r.left) / k, cy = r.top + (e.clientY - r.top) / k;
+    const dx = cx - e.clientX, dy = cy - e.clientY;
+    const px = e.pageX + dx, py = e.pageY + dy;
+    try{
+      Object.defineProperty(e, 'clientX', { value: cx, configurable: true }); Object.defineProperty(e, 'clientY', { value: cy, configurable: true });
+      Object.defineProperty(e, 'x', { value: cx, configurable: true }); Object.defineProperty(e, 'y', { value: cy, configurable: true });
+      Object.defineProperty(e, 'pageX', { value: px, configurable: true }); Object.defineProperty(e, 'pageY', { value: py, configurable: true });
+      Object.defineProperty(e, '__gsZoomFixed', { value: true });
+    }catch(x){}
+  };
+  T.forEach(t => window.addEventListener(t, fix, { capture: true, passive: true }));
+  const end = () => { setTimeout(() => { mapPtrActive = false; }, 0); };
+  window.addEventListener('pointerup', end, true); window.addEventListener('mouseup', end, true); window.addEventListener('pointercancel', end, true);
+})();
+function setMapZoom(k){
+  const el = document.getElementById('kakaoMap'); if(!el) return;
+  const map = ensureKakaoMap(); const c = map.getCenter();
+  el.style.zoom = ''; el.style.height = '';
+  mapZoomK = k;
+  if(k !== 1){ const h = el.getBoundingClientRect().height; el.style.zoom = String(k); el.style.height = (h / k) + 'px'; if(map.getLevel() > 1) map.setLevel(1); }
+  map.relayout(); map.setCenter(c);
+  document.querySelectorAll('.mapzoom-btn').forEach(b => b.classList.toggle('on', +b.dataset.k === k));
+  try{ scheduleBadgeArrange(); }catch(e){}
 }
 function ensureKakaoMap(){
   if(kakaoMapObj) return kakaoMapObj;
