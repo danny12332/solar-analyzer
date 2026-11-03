@@ -455,7 +455,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
   body.taste header.top{background:var(--dusk);}
   body.taste header.top .hdr-market{background:rgba(255,255,255,.07);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
   body.taste header.top .sunmark{background:var(--sun);box-shadow:none;}
-  body.taste .hm-dot{box-shadow:none;}
+  body.taste .hm-dot, body.taste .hdr-btn{box-shadow:none;}
   body.taste .hm-caption, body.taste .hm-label{letter-spacing:0;}
   body.taste .card, body.taste .toolbar-card, body.taste .stamp-band, body.taste .rail-tabs{box-shadow:none;}
   body.taste .toolbar-card, body.taste .lay-addr-box{background:var(--surface) !important;}
@@ -1250,7 +1250,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03q';
+const APP_VERSION = '2026-11-03r';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
