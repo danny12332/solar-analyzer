@@ -1218,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03c';
+const APP_VERSION = '2026-11-03d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12047,7 +12047,14 @@ function slopeGridHtml(){
   const parts = SLOPE_BINS.map(([lo, hi], k) => G.hist[k] > 0 ? `<span style="white-space:nowrap;"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${SLOPE_COLORS[k]};margin-right:3px;"></i>${hi >= 90 ? lo + '°↑' : lo + '~' + hi + '°'} <b>${Math.round(G.hist[k] * 100)}%</b></span>` : '').filter(Boolean).join(' · ');
   return `<div style="margin-top:4px;">필지 안 경사 분포: ${parts} · 최소 ${G.min.toFixed(1)}° · 최대 <b${G.max >= 15 ? ' style="color:var(--coral);"' : ''}>${G.max.toFixed(1)}°</b>${G.over15 > 0 ? ` · 15° 이상 <b style="color:var(--coral);">${Math.round(G.over15 * 100)}%</b>` : ''} <button type="button" onclick="toggleSlopeGrid()" style="font-size:11px;padding:1px 7px;margin-left:4px;">${slopeGridShown ? '🗺 경사 지도 끄기' : '🗺 경사 지도 보기'}</button> <span class="sum-muted">(약 ${Math.round(G.sp)}m 칸 ${G.cells.length}개 · 같은 90m DEM을 보간한 값이라 참고용)</span></div>`;
 }
+// 건축물이 있는 곳인지: 검색한 필지 안 건물 도형이 있거나, 이 주소의 건축물대장 조회 결과가 있으면 → 측량비·경사도 줄은 숨김(토지 검색일 때만 표시, 2026-11-03 요청)
+function isBuildingSite(){
+  if(Array.isArray(parcelBuildings) && parcelBuildings.length) return true;
+  const cur = ((typeof lastJibunAddress !== 'undefined' && lastJibunAddress) ? String(lastJibunAddress).trim() : '') || ((document.getElementById('siteAddress') || {}).value || '').trim();
+  return !!(lastBldrgst && Array.isArray(lastBldrgst.items) && lastBldrgst.items.length && (!cur || lastBldrgst.addr === cur));
+}
 function slopeRowHtml(){
+  if(isBuildingSite()){ try{ if(slopeGridShown){ slopeGridShown = false; clearSlopeGrid(); } }catch(e){} return '<div id="sumSlopeRow" style="display:none"></div>'; }
   const g = id => document.getElementById(id);
   const cat = (g('landCategory') || {}).value;
   let auto;
@@ -12092,7 +12099,10 @@ const SURVEY_FEE_2026 = {
   status:   { land: [180000, 218000, 257000, 334000, 385000, 411000, 437000], forest: [225000, 274000, 322000, 419000, 483000, 515000, 547000], base: { land: 1500, forest: 5000 } }, // 지적현황측량
   split:    { land: [200000, 243000, 286000, 372000, 429000, 458000, 486000], forest: [251000, 304000, 358000, 465000, 537000, 573000, 609000], base: { land: 1500, forest: 5000 } }  // 분할측량
 };
+var __lastSurveyR = null;
 function surveyRowHtml(r){
+  if(r) __lastSurveyR = r; else r = __lastSurveyR;
+  if(isBuildingSite()) return '<div id="sumSurveyRow" style="display:none"></div>';
   const g = id => document.getElementById(id);
   const price = parseFloat((g('price') || {}).value) || 0;
   const area = r && r.area ? r.area : (parseFloat((g('area') || {}).value) || 0);
@@ -12110,6 +12120,7 @@ function surveyRowHtml(r){
 function refreshSummaryDynamicRows(){
   try{
     const a = document.getElementById('sumSlopeRow'); if(a) a.outerHTML = slopeRowHtml();
+    const sv = document.getElementById('sumSurveyRow'); if(sv) sv.outerHTML = surveyRowHtml();
     const b = document.getElementById('sumIllegalRow'); if(b) b.outerHTML = illegalRowHtml();
   }catch(e){ console.warn('summary rows', e); }
 }
