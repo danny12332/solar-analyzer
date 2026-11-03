@@ -1218,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03e';
+const APP_VERSION = '2026-11-03f';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -4123,7 +4123,7 @@ async function pptOpenBuffer(name, buf, handle, restored){
   pptHistReset();
   st.style.color = 'var(--ink-soft)';
   const nEdit = pptInfo.slides.filter(s => pptEdit.has(s.no)).length;
-  st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}. ★ 편집 장 ${nEdit}장(${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no))})은 직접 고치고, 나머지 장은 필요한 장만 두고 필요 없는 장은 띠의 🗑로 한 장씩 지우세요.`;
+  st.textContent = `${restored ? '💾 저장된 양식 ' : '✅ '}${name} — 슬라이드 ${pptInfo.count}장${pptInfo.size ? ` (${(pptInfo.size.cx / 360000).toFixed(1)}×${(pptInfo.size.cy / 360000).toFixed(1)}cm)` : ''}. ★ 편집 장 ${nEdit}장(${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no))})은 직접 고치고, 나머지 장은 필요한 장만 두고 필요 없는 장은 그 장을 띄운 채 Delete 키(또는 띠의 🗑)로 지우세요.`;
   renderPptEditor();
   document.getElementById('pptMakeBtn').disabled = false;
   pptMakeThumbs().catch(e => console.warn('thumbs', e));
@@ -4789,7 +4789,7 @@ function renderPptEditor(){
   const delCount = pptInfo.slides.filter(s => pptOpFor(s.no).del).length; const nEdit = pptInfo.slides.filter(s => pptEdit.has(s.no)).length; const nRest = pptInfo.slides.filter(s => !pptEdit.has(s.no) && !pptOpFor(s.no).del).length;
   const zoomSel = `<select onchange="pptZoomSet(this.value)" style="font-size:11px;" title="미리보기 크기 — 100%는 PowerPoint 100%와 같은 실제 크기(96dpi 화면 기준)"><option value="fit"${pptZoom === 'fit' ? ' selected' : ''}>맞춤</option>${[0.5, 0.75, 1, 1.25, 1.5, 2].map(z => `<option value="${z}"${pptZoom === z ? ' selected' : ''}>${Math.round(z * 100)}%${z === 1 ? ' (실제 크기)' : ''}</option>`).join('')}</select>`;
   box.innerHTML = `<div class="ppt-edit-bar"><span title="제안서에서 내용을 직접 고치는 장">★ 편집 장 ${nEdit}장: ${rangeText(pptInfo.slides.filter(s => pptEdit.has(s.no)).map(s => s.no)) || '없음'}</span> <button type="button" onclick="pptJumpStar(-1)" title="이전 ★ 편집 장으로">◀ ★</button><button type="button" onclick="pptJumpStar(1)" title="다음 ★ 편집 장으로">★ ▶</button>
-      <small style="color:var(--ink-soft);">전체 ${pptInfo.count}장 · 필요 없는 장은 띠의 🗑 또는 "이 장 지우기"로 한 장씩 지움${delCount ? ` · 지울 장 ${delCount}개(${rangeText(pptInfo.slides.filter(s => pptOpFor(s.no).del).map(s => s.no))})` : ''}</small>
+      <small style="color:var(--ink-soft);">전체 ${pptInfo.count}장 · 필요 없는 장은 그 장을 띄운 채 Delete 키(또는 띠의 🗑·"이 장 지우기")로 지움${delCount ? ` · 지울 장 ${delCount}개(${rangeText(pptInfo.slides.filter(s => pptOpFor(s.no).del).map(s => s.no))})` : ''}</small>
       <span style="margin-left:auto;">크기 ${zoomSel} <button type="button" id="pptWideBtn2" onclick="pptToggleWide()" style="font-size:11px;">${document.getElementById('pptCard') && document.getElementById('pptCard').classList.contains('wide') ? '⤡ 작게' : '⤢ 크게 보기'}</button></span></div>
     <div class="ppt-strip" id="pptStrip">${strip}</div>
     <div class="ppt-head"><button type="button" onclick="pptMoveTo(-1)" title="이전 장 (←)" style="font-size:11px;">◀</button> 슬라이드 <input type="number" min="1" max="${vis.length}" value="${pos + 1}" onchange="pptJump(this.value)" onkeydown="if(event.key==='Enter'){ pptJump(this.value); }" style="width:52px;font-size:12px;" title="번호를 넣고 Enter → 그 장으로"> / ${vis.length} <button type="button" onclick="pptMoveTo(1)" title="다음 장 (→)" style="font-size:11px;">▶</button>${it && it.kind === 's' ? ` <b>원본 ${it.s.no}번</b>${pptEdit.has(it.s.no) ? ' ★' : ''} · ${escLand(it.s.snippet)}` : ' · 새 슬라이드'}${delCount ? ` · 지울 장 ${delCount}개` : ''} <small style="color:var(--ink-soft);">← → 키로 이동 · Ctrl+V: 그림은 사진 칸에, 글은 선택한 글상자에</small>
@@ -4947,10 +4947,15 @@ function pptInlineEdit(idx){
 }
 // Delete 키: 선택한 그림·글상자·넣은 그림 지우기 (Ctrl+Z로 되돌리기)
 document.addEventListener('keydown', e => {
-  if(!pptSel || !pptInfo) return; const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  if(!pptInfo) return; const t = e.target; if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
   if(e.key !== 'Delete' && e.key !== 'Backspace') return;
   { const pane = document.getElementById('pptCard'); if(!pane || pane.offsetWidth === 0) return; } // 제안서 편집기가 보일 때만
   const it = pptItemOf(pptCur); if(!it) return; e.preventDefault();
+  if(!pptSel){ // 선택한 도형이 없으면 지금 장을 지움(PowerPoint처럼) → 다음 장으로. 이미 지운 장이면 되살림 · Ctrl+Z로 되돌리기
+    if(it.kind === 's'){ const op = pptOpFor(it.s.no); const wasDel = !!op.del; op.del = !wasDel; if(!wasDel){ const vis = pptVisibleOrder(); const i = vis.indexOf(pptCur); if(i >= 0 && i < vis.length - 1) pptCur = vis[i + 1]; } pptSaveState(); renderPptEditor(); pptToast(wasDel ? `${it.s.no}번 장을 되살렸습니다` : `${it.s.no}번 장을 지울 장으로 표시했습니다 (Ctrl+Z 되돌리기 · 지운 장에서 Delete = 되살리기)`); }
+    else if(it.kind === 'n'){ pptDelBlank(it.n.id); pptToast('새 장을 지웠습니다 (Ctrl+Z 되돌리기)'); }
+    return;
+  }
   if(pptSel.kind === 'ov'){ const list = pptCurOverlays(); if(list) list.splice(pptSel.i, 1); }
   else if(it.kind === 's'){ const op = pptOpFor(it.s.no); if(pptSel.kind === 'pic'){ op.hidePic = op.hidePic || {}; op.hidePic[pptSel.i] = true; } else { op.hideSp = op.hideSp || {}; op.hideSp[pptSel.i] = true; } } // PowerPoint처럼 도형째 지움(되돌리기 Ctrl+Z)
   pptSel = null; pptSaveState(); renderPptEditor();
