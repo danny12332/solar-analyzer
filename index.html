@@ -1250,7 +1250,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03n';
+const APP_VERSION = '2026-11-03q';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -11126,6 +11126,49 @@ async function openGov24ForBldrgst(){
 }
 // 건축물대장 조회 결과를 인쇄용 창으로 열어 "PDF로 저장" (브라우저 인쇄 대화상자) — 정식 증명서가 아닌 조회 결과 출력물
 let lastBldrgst = null;
+// 건축물대장 조회 결과 → PDF 파일 바로 저장(인쇄 대화상자 없이, A4 세로, 캔버스 → canvasesToPdfA4). 여러 동이면 쪽을 이어서 만듦
+function exportBldrgstPdfFile(){
+  if(!lastBldrgst || !Array.isArray(lastBldrgst.items) || !lastBldrgst.items.length){ alert('먼저 건축물대장을 조회해 주세요.'); return; }
+  const W = 1754, H = 2480, M = 110; const F = (sz, w) => `${w || ''} ${sz}px "Noto Sans KR", "Malgun Gothic", "IBM Plex Sans KR", sans-serif`;
+  const d = lastBldrgst.fetchedAt || new Date(); const p2 = v => String(v).padStart(2, '0');
+  const stamp = `${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const n = v => (v === undefined || v === null || v === '' ? '' : Number(v).toLocaleString('ko-KR'));
+  const rowsOf = it => [
+    ['대지위치', it.platPlc], ['도로명주소', it.newPlatPlc], ['건물명', it.bldNm], ['동명칭', it.dongNm],
+    ['대장구분', [it.regstrGbCdNm, it.regstrKindCdNm].filter(Boolean).join(' · ')], ['주용도', it.mainPurpsCdNm], ['기타용도', it.etcPurps],
+    ['구조', it.strctCdNm], ['기타구조', it.etcStrct], ['지붕', it.roofCdNm], ['기타지붕', it.etcRoof],
+    ['대지면적', it.platArea ? n(it.platArea) + ' ㎡' : ''], ['건축면적', it.archArea ? n(it.archArea) + ' ㎡' : ''], ['연면적', it.totArea ? n(it.totArea) + ' ㎡' : ''],
+    ['건폐율', it.bcRat ? it.bcRat + ' %' : ''], ['용적률', it.vlRat ? it.vlRat + ' %' : ''], ['높이', it.heit ? it.heit + ' m' : ''],
+    ['층수(지상/지하)', `${it.grndFlrCnt ?? '-'} / ${it.ugrndFlrCnt ?? '-'}`], ['세대/가구/호수', `${it.hhldCnt ?? 0} / ${it.fmlyCnt ?? 0} / ${it.hoCnt ?? 0}`],
+    ['승강기(승용/비상용)', `${it.rideUseElvtCnt ?? 0} / ${it.emgenUseElvtCnt ?? 0}`],
+    ['허가일', bldrgstFormatDate(it.pmsDay)], ['착공일', bldrgstFormatDate(it.stcnsDay)], ['사용승인일', bldrgstFormatDate(it.useAprDay)],
+    ['내진설계 적용여부', it.rserthqkDsgnApplyYn === '1' ? '적용' : (it.rserthqkDsgnApplyYn === '0' ? '미적용' : (it.rserthqkDsgnApplyYn || ''))],
+  ].filter(r => r[1] !== undefined && r[1] !== null && String(r[1]).trim() !== '');
+  const pages = []; let cv, g, y;
+  const newPage = () => { cv = document.createElement('canvas'); cv.width = W; cv.height = H; g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+    g.fillStyle = '#1E2D3C'; g.font = F(44, 'bold'); g.fillText('건축물대장 표제부 조회 결과', M, 190);
+    g.fillStyle = '#666'; g.font = F(22); g.fillText(`대상: ${lastBldrgst.addr || ''} · 조회 ${stamp} · 출처: 국토교통부 건축HUB 건축물대장정보 서비스(오픈API)`, M, 235);
+    g.fillStyle = '#777'; g.font = F(19); g.fillText('공개 API 조회 결과를 정리한 출력물이며 법적 효력이 있는 건축물대장 등본·초본이 아닙니다. 정식 발급은 정부24 또는 세움터에서 하세요.', M, H - 90);
+    y = 300; pages.push(cv); };
+  const wrap = (txt, maxW, font) => { g.font = font; const out = []; let line = ''; for(const ch of String(txt)){ const t = line + ch; if(g.measureText(t).width > maxW && line){ out.push(line); line = ch; } else line = t; } out.push(line); return out; };
+  newPage();
+  const items = lastBldrgst.items; const kw = 420, tw = W - 2 * M;
+  items.forEach((it, i) => {
+    const rows = rowsOf(it); const need = 70 + rows.length * 52;
+    if(y + Math.min(need, 400) > H - 140) newPage();
+    g.fillStyle = '#1E2F6B'; g.font = F(28, 'bold'); g.fillText(items.length > 1 ? `동 ${i + 1}${it.dongNm ? ' — ' + it.dongNm : ''}${it.bldNm ? ' (' + it.bldNm + ')' : ''}` : (it.bldNm || '표제부'), M, y + 30); y += 56;
+    rows.forEach(([k, v]) => {
+      const lines = wrap(v, tw - kw - 30, F(22)); const h = Math.max(50, lines.length * 30 + 20);
+      if(y + h > H - 140){ newPage(); }
+      g.fillStyle = '#EEF2F6'; g.fillRect(M, y, kw, h); g.strokeStyle = '#C9D3DD'; g.lineWidth = 2; g.strokeRect(M, y, tw, h);
+      g.fillStyle = '#334'; g.font = F(22, 'bold'); g.fillText(k, M + 16, y + 34); g.fillStyle = '#1E2D3C'; g.font = F(22); lines.forEach((t, j) => g.fillText(t, M + kw + 16, y + 34 + j * 30)); y += h;
+    });
+    y += 40;
+  });
+  pages.forEach((c, i) => { const gg = c.getContext('2d'); gg.fillStyle = '#999'; gg.font = F(19); gg.textAlign = 'right'; gg.fillText(`${i + 1} / ${pages.length}`, W - M, H - 90); });
+  const base = ('건축물대장_' + (lastBldrgst.addr || '조회결과')).replace(/[\\/:*?"<>|]/g, '_');
+  const blob = canvasesToPdfA4(pages); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.pdf'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
 function downloadBldrgstPdf(){
   if(!lastBldrgst){ alert('먼저 건축물대장을 조회해 주세요.'); return; }
   const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -11245,7 +11288,8 @@ async function checkBuildingRegister(){
         <span onclick="closeResultPanel('bldrgstResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
         ${usedNote}<b>🏢 건축물대장 표제부 조회 결과${data.items.length>1?` (총 ${data.items.length}개 동)`:''}</b>
         <div style="margin:8px 0 4px;display:flex;gap:6px;flex-wrap:wrap;">
-          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sky-deep);" onclick="downloadBldrgstPdf()">🖨 PDF로 저장</button>
+          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sky-deep);" onclick="exportBldrgstPdfFile()" title="조회 결과를 PDF 파일로 바로 내려받습니다(A4)">📥 PDF 파일 저장</button>
+          <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="downloadBldrgstPdf()" title="인쇄 대화상자로 열기">🖨 인쇄</button>
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--sun);color:#2A1A00;" onclick="startEaisAutomation()">📄 건축물대장 및 현황도 발급 (세움터)</button>
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="openGov24ForBldrgst()">정부24 발급 ↗ (주소 복사됨)</button>
           <button type="button" class="run" style="width:auto;margin:0;padding:6px 12px;font-size:12px;background:var(--surface-2);color:var(--ink);" onclick="openIrosRegistry()">🏠 등기부등본(인터넷등기소) ↗</button>
