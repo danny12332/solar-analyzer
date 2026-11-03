@@ -1218,7 +1218,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03d';
+const APP_VERSION = '2026-11-03e';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -1345,6 +1345,8 @@ function applyParcelToForm(props, kakaoPath){
   lastParcelPath = kakaoPath || null;
   lastBldrgst = null; // 다른 필지 → 이전 건축물대장 결과는 버림
   try{ fetchParcelSlope(lastParcelPath); }catch(e){ console.warn('slope', e); }
+  try{ fetchGridInfra(); }catch(e){ console.warn('grid infra', e); }
+  try{ fetchSolarResource(); }catch(e){ console.warn('solar res', e); }
   lastAreaPolygonPath = null; // 새 필지 검색 → 배치 경계는 새 필지 경계를 기본으로 씀 (이미 만든 배치는 유지)
   ['landCategory','farmZone','forestType','useZone'].forEach(id => collapseSeg(id, false));
   lastKepcoSummary = null; lastLandInfo = null;
@@ -11956,6 +11958,34 @@ function runAnalysis(){
 
 
 // ===== 핵심 요약 카드 =====
+// ===== 지형 표고(30m): Mapzen/Tilezen Terrain Tiles(Terrarium, AWS 공개) — 한국은 SRTM 원자료(문서상 "30 meters (90 meters nominal quality)") =====
+//   타일 PNG의 R·G·B로 표고 = R×256 + G + B/256 − 32768 (m). 실패하면 Open-Meteo(Copernicus 90m)로 대체
+const TERR_Z = 14; const __terrTiles = new Map();
+function terrXY(lat, lon, z){ const n = 2 ** z, r = lat * Math.PI / 180; return { x: (lon + 180) / 360 * n, y: (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n }; }
+function terrTile(z, x, y){
+  const key = z + '/' + x + '/' + y; if(__terrTiles.has(key)) return __terrTiles.get(key);
+  const pr = fetch(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${key}.png`).then(r => { if(!r.ok) throw new Error('지형 타일 HTTP ' + r.status); return r.blob(); }).then(b => createImageBitmap(b)).then(bm => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bm, 0, 0);
+    const d = g.getImageData(0, 0, 256, 256).data; const e = new Float32Array(65536); for(let i = 0; i < 65536; i++) e[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768; return e; });
+  pr.catch(() => __terrTiles.delete(key)); __terrTiles.set(key, pr); return pr;
+}
+async function terrElevations(lls){ // lls: kakao LatLng 배열 → 표고(m) 배열(쌍선형 보간)
+  const z = TERR_Z; const P = lls.map(l => { const t = terrXY(l.getLat(), l.getLng(), z); return { px: t.x * 256 - 0.5, py: t.y * 256 - 0.5 }; });
+  const need = new Set(); P.forEach(q => { [Math.floor(q.px), Math.floor(q.px) + 1].forEach(xx => [Math.floor(q.py), Math.floor(q.py) + 1].forEach(yy => need.add(Math.floor(xx / 256) + ',' + Math.floor(yy / 256)))); });
+  const tiles = {}; await Promise.all([...need].map(async k => { const [tx, ty] = k.split(',').map(Number); tiles[k] = await terrTile(z, tx, ty); }));
+  const at = (xx, yy) => { const tx = Math.floor(xx / 256), ty = Math.floor(yy / 256); const t = tiles[tx + ',' + ty]; return t[(yy - ty * 256) * 256 + (xx - tx * 256)]; };
+  return P.map(q => { const x0 = Math.floor(q.px), y0 = Math.floor(q.py), fx = q.px - x0, fy = q.py - y0; return at(x0, y0) * (1 - fx) * (1 - fy) + at(x0 + 1, y0) * fx * (1 - fy) + at(x0, y0 + 1) * (1 - fx) * fy + at(x0 + 1, y0 + 1) * fx * fy; });
+}
+async function openMeteoElevations(lls){
+  const out = [];
+  for(let a = 0; a < lls.length; a += 100){ const part = lls.slice(a, a + 100); const url = `https://api.open-meteo.com/v1/elevation?latitude=${part.map(l => l.getLat().toFixed(6)).join(',')}&longitude=${part.map(l => l.getLng().toFixed(6)).join(',')}`; const res = await fetch(url); const data = await res.json(); if(!res.ok || !data || !Array.isArray(data.elevation) || data.elevation.length !== part.length) throw new Error(data && data.reason || ('HTTP ' + res.status)); out.push(...data.elevation.map(Number)); }
+  return out;
+}
+// 표고 조회: 30m 지형 타일 우선, 실패 시 90m(Open-Meteo). { z, src }
+async function demElevations(lls){
+  try{ const z = await terrElevations(lls); if(z.every(v => isFinite(v) && v > -500)) return { z, src: 'SRTM 30m(Terrain Tiles)', res: 30 }; }catch(e){ console.warn('terrarium', e); }
+  return { z: await openMeteoElevations(lls), src: 'Copernicus DEM 90m(Open-Meteo)', res: 90 };
+}
 // ===== 경사도 자동 측정: 필지 꼭짓점·중심의 표고(Open-Meteo Elevation API, Copernicus DEM GLO-90 · 90m 해상도)로 평면을 맞춰 평균 경사 계산 =====
 let lastSlope = null; // { deg, aspect, zmin, zmax, n, pnu } | { error }
 async function fetchParcelSlope(path){
@@ -11970,11 +12000,9 @@ async function fetchParcelSlope(path){
     let pts = xy.slice(0, 24).concat([{ x: cx, y: cy }]);
     [[60, 0], [-60, 0], [0, 60], [0, -60]].forEach(([dx, dy]) => pts.push({ x: cx + dx, y: cy + dy }));
     const lls = pts.map(q => solarToLatLng(q.x, q.y, lat0));
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lls.map(l => l.getLat().toFixed(6)).join(',')}&longitude=${lls.map(l => l.getLng().toFixed(6)).join(',')}`;
-    const res = await fetch(url); const data = await res.json();
-    if(!res.ok || !data || !Array.isArray(data.elevation) || data.elevation.length !== pts.length) throw new Error(data && data.reason || ('HTTP ' + res.status));
+    const dem = await demElevations(lls);
     if(pnu !== lastParcelPnu) return; // 그 사이 다른 필지 검색
-    const z = data.elevation.map(Number);
+    const z = dem.z;
     // 최소제곱 평면 z = a + b·x + c·y
     const n = pts.length; let sx = 0, sy = 0, sz = 0, sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0;
     pts.forEach((q, i) => { sx += q.x; sy += q.y; sz += z[i]; sxx += q.x * q.x; syy += q.y * q.y; sxy += q.x * q.y; sxz += q.x * z[i]; syz += q.y * z[i]; });
@@ -11985,7 +12013,7 @@ async function fetchParcelSlope(path){
     const deg = Math.atan(Math.hypot(b, c)) * 180 / Math.PI;
     const downAz = (Math.atan2(-b, -c) * 180 / Math.PI + 360) % 360; // 내리막 방향 방위각(북 0°, 동 90°)
     const dirs = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
-    lastSlope = { deg, aspect: dirs[Math.round(downAz / 45) % 8], downAz, zmin: Math.min(...z), zmax: Math.max(...z), n, pnu };
+    lastSlope = { deg, aspect: dirs[Math.round(downAz / 45) % 8], downAz, zmin: Math.min(...z), zmax: Math.max(...z), n, pnu, src: dem.src, res: dem.res };
   }catch(e){ lastSlope = { error: String(e && e.message || e), pnu }; }
   refreshSummaryDynamicRows();
   if(lastSlope && !lastSlope.error){ try{ await fetchSlopeGrid(path, pnu); }catch(e){ if(lastSlope && lastSlope.pnu === pnu) lastSlope.gridError = String(e && e.message || e); refreshSummaryDynamicRows(); } }
@@ -12000,9 +12028,9 @@ async function fetchSlopeGrid(path, pnu){
   const xy = path.map(q => solarToXY(q, lat0));
   const x0 = Math.min(...xy.map(q => q.x)), x1 = Math.max(...xy.map(q => q.x)), y0 = Math.min(...xy.map(q => q.y)), y1 = Math.max(...xy.map(q => q.y));
   const area = Math.max(1, areaXY(xy));
-  let sp = Math.max(5, Math.sqrt(area / 80));
+  let sp = Math.max(5, Math.sqrt(area / 150));
   let nx, ny;
-  for(let k = 0; k < 6; k++){ nx = Math.max(1, Math.ceil((x1 - x0) / sp)); ny = Math.max(1, Math.ceil((y1 - y0) / sp)); if((nx + 1) * (ny + 1) <= 300) break; sp *= Math.sqrt((nx + 1) * (ny + 1) / 300) * 1.05; }
+  const CAP = 1500; for(let k = 0; k < 8; k++){ nx = Math.max(1, Math.ceil((x1 - x0) / sp)); ny = Math.max(1, Math.ceil((y1 - y0) / sp)); if((nx + 1) * (ny + 1) <= CAP) break; sp *= Math.sqrt((nx + 1) * (ny + 1) / CAP) * 1.05; }
   const ox = (x0 + x1) / 2 - nx * sp / 2, oy = (y0 + y1) / 2 - ny * sp / 2;
   const cells = [];
   for(let i = 0; i < nx; i++) for(let j = 0; j < ny; j++){ const c = { x: ox + (i + 0.5) * sp, y: oy + (j + 0.5) * sp }; if(pointInPolygonXY(c, xy)) cells.push({ i, j, x: c.x, y: c.y }); }
@@ -12011,14 +12039,9 @@ async function fetchSlopeGrid(path, pnu){
   cells.forEach(c => [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([di, dj]) => need.set(key(c.i + di, c.j + dj), { i: c.i + di, j: c.j + dj })));
   const nodes = [...need.values()];
   const z = new Map();
-  for(let a = 0; a < nodes.length; a += 100){
-    const part = nodes.slice(a, a + 100); const lls = part.map(n => solarToLatLng(ox + n.i * sp, oy + n.j * sp, lat0));
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lls.map(l => l.getLat().toFixed(6)).join(',')}&longitude=${lls.map(l => l.getLng().toFixed(6)).join(',')}`;
-    const res = await fetch(url); const data = await res.json();
-    if(!res.ok || !data || !Array.isArray(data.elevation) || data.elevation.length !== part.length) throw new Error(data && data.reason || ('HTTP ' + res.status));
-    part.forEach((n, t) => z.set(key(n.i, n.j), Number(data.elevation[t])));
-    if(pnu !== lastParcelPnu) return;
-  }
+  const dem = await demElevations(nodes.map(n => solarToLatLng(ox + n.i * sp, oy + n.j * sp, lat0)));
+  if(pnu !== lastParcelPnu) return;
+  nodes.forEach((n, t) => z.set(key(n.i, n.j), dem.z[t]));
   cells.forEach(c => {
     const z00 = z.get(key(c.i, c.j)), z10 = z.get(key(c.i + 1, c.j)), z01 = z.get(key(c.i, c.j + 1)), z11 = z.get(key(c.i + 1, c.j + 1));
     const gx = ((z10 + z11) - (z00 + z01)) / (2 * sp), gy = ((z01 + z11) - (z00 + z10)) / (2 * sp);
@@ -12026,7 +12049,7 @@ async function fetchSlopeGrid(path, pnu){
   });
   const hist = SLOPE_BINS.map(([lo, hi]) => cells.filter(c => c.deg >= lo && c.deg < hi).length / cells.length);
   if(!lastSlope || lastSlope.pnu !== pnu) return;
-  lastSlope.grid = { sp, cells, hist, max: Math.max(...cells.map(c => c.deg)), min: Math.min(...cells.map(c => c.deg)), over15: cells.filter(c => c.deg >= 15).length / cells.length, lat0 };
+  lastSlope.grid = { src: dem.src, res: dem.res, sp, cells, hist, max: Math.max(...cells.map(c => c.deg)), min: Math.min(...cells.map(c => c.deg)), over15: cells.filter(c => c.deg >= 15).length / cells.length, lat0 };
   if(slopeGridShown) drawSlopeGrid();
   refreshSummaryDynamicRows();
 }
@@ -12045,7 +12068,7 @@ function slopeGridHtml(){
   if(S.gridError) return `<div class="sum-muted" style="margin-top:3px;">필지 안 경사 분포 조회 실패(${escLand(S.gridError)})</div>`;
   const G = S.grid; if(!G) return '<div class="sum-muted" style="margin-top:3px;">필지 안 경사 분포 계산 중…</div>';
   const parts = SLOPE_BINS.map(([lo, hi], k) => G.hist[k] > 0 ? `<span style="white-space:nowrap;"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${SLOPE_COLORS[k]};margin-right:3px;"></i>${hi >= 90 ? lo + '°↑' : lo + '~' + hi + '°'} <b>${Math.round(G.hist[k] * 100)}%</b></span>` : '').filter(Boolean).join(' · ');
-  return `<div style="margin-top:4px;">필지 안 경사 분포: ${parts} · 최소 ${G.min.toFixed(1)}° · 최대 <b${G.max >= 15 ? ' style="color:var(--coral);"' : ''}>${G.max.toFixed(1)}°</b>${G.over15 > 0 ? ` · 15° 이상 <b style="color:var(--coral);">${Math.round(G.over15 * 100)}%</b>` : ''} <button type="button" onclick="toggleSlopeGrid()" style="font-size:11px;padding:1px 7px;margin-left:4px;">${slopeGridShown ? '🗺 경사 지도 끄기' : '🗺 경사 지도 보기'}</button> <span class="sum-muted">(약 ${Math.round(G.sp)}m 칸 ${G.cells.length}개 · 같은 90m DEM을 보간한 값이라 참고용)</span></div>`;
+  return `<div style="margin-top:4px;">필지 안 경사 분포: ${parts} · 최소 ${G.min.toFixed(1)}° · 최대 <b${G.max >= 15 ? ' style="color:var(--coral);"' : ''}>${G.max.toFixed(1)}°</b>${G.over15 > 0 ? ` · 15° 이상 <b style="color:var(--coral);">${Math.round(G.over15 * 100)}%</b>` : ''} <button type="button" onclick="toggleSlopeGrid()" style="font-size:11px;padding:1px 7px;margin-left:4px;">${slopeGridShown ? '🗺 경사 지도 끄기' : '🗺 경사 지도 보기'}</button> <span class="sum-muted">(약 ${Math.round(G.sp)}m 칸 ${G.cells.length}개 · ${G.src || 'DEM'} 기준${(G.res || 90) > G.sp ? ` — 원자료가 ${G.res || 90}m 간격이라 그보다 작은 칸은 보간값(참고용)` : ''})</span></div>`;
 }
 // 건축물이 있는 곳인지: 검색한 필지 안 건물 도형이 있거나, 이 주소의 건축물대장 조회 결과가 있으면 → 측량비·경사도 줄은 숨김(토지 검색일 때만 표시, 2026-11-03 요청)
 function isBuildingSite(){
@@ -12061,7 +12084,7 @@ function slopeRowHtml(){
   if(!lastParcelPath || lastParcelPath.length < 3) auto = '<span class="sum-muted">필지 경계가 없어 측정하지 않음</span>';
   else if(!lastSlope) auto = '<span class="sum-muted">표고 조회 중…</span>';
   else if(lastSlope.error) auto = `<span class="sum-muted">자동 측정 실패(${escLand(lastSlope.error)}) — 현장·지형도 확인 필요</span>`;
-  else { const S = lastSlope; const warn = S.deg >= 15; auto = `자동 측정 <b${warn ? ' style="color:var(--coral);"' : ''}>약 ${S.deg.toFixed(1)}°</b> (${S.aspect}쪽으로 내리막 · 표고 ${S.zmin.toFixed(0)}~${S.zmax.toFixed(0)}m, 표본 ${S.n}점) <span class="sum-muted">— Copernicus DEM 90m 격자 기준 평균 기울기(참고용, 소규모 필지는 오차 큼 · 출처 Open-Meteo)</span>`; }
+  else { const S = lastSlope; const warn = S.deg >= 15; auto = `자동 측정 <b${warn ? ' style="color:var(--coral);"' : ''}>약 ${S.deg.toFixed(1)}°</b> (${S.aspect}쪽으로 내리막 · 표고 ${S.zmin.toFixed(0)}~${S.zmax.toFixed(0)}m, 표본 ${S.n}점) <span class="sum-muted">— ${escLand(S.src || 'Copernicus DEM 90m')} 기준 평균 기울기(참고용, 소규모 필지는 오차 큼)</span>`; }
   let manual = '';
   if(cat === 'forest'){ const sv = (g('slope') || {}).value || '10'; const lab = { '10': '10° 미만', '20': '10~20°', '30': '20~30°', '99': '30° 이상' }[sv] || sv + '°'; manual = `<div style="margin-top:3px;">입력값 평균 경사도 <b>${lab}</b> <span class="sum-muted">(왼쪽 "평균 경사도")</span>${sv !== '10' ? ' — 산지 태양광은 통상 15° 초과 시 지자체 조례상 불허 사례가 많아 관할청 확인 필요' : ''}</div>`; }
   const warnCls = (lastSlope && !lastSlope.error && lastSlope.deg >= 15) || (cat === 'forest' && ((g('slope') || {}).value || '10') !== '10') ? ' warn' : '';
@@ -12089,6 +12112,97 @@ function illegalRowHtml(){
   }
   txt += `<span class="sum-muted">위반건축물 표기(대장 상단 노란 표시)와 사용승인 여부는 <a href="https://www.gov.kr" target="_blank">정부24 건축물대장 열람</a> 또는 <a href="https://cloud.eais.go.kr" target="_blank">세움터</a>에서 직접 확인하세요. 이 사이트가 쓰는 건축HUB 오픈API 표제부 항목에 위반건축물 전용 필드가 있는지는 확인되지 않았습니다. 불법건축물(미양성화)은 개발행위 전 양성화·철거가 필요합니다(견적서 참고사항).</span>`;
   return `<div class="sum-row${cls}" id="sumIllegalRow"><span class="sum-k">위반건축물</span><span class="sum-v">${txt}</span></div>`;
+}
+// ===== ⚡ 주변 전력망(참고): OpenStreetMap(Overpass API) 변전소·송전선 위치 → 필지에서 직선거리 =====
+//   OSM은 누구나 편집하는 지도라 빠진 곳이 있을 수 있고, 22.9kV 배전선은 대부분 없음. 여유용량은 기존 한전ON 조회(계통 줄)를 봄
+let lastGridInfra = null, gridInfraOv = [], gridInfraShown = false;
+const OVERPASS_EPS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+function haversineM(a, b){ const R = 6371000, r = Math.PI / 180; const dl = (b.lat - a.lat) * r, dn = (b.lon - a.lon) * r; const h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
+function distToPolylineM(pt, geom){ // 위경도 → 국지 평면(m)으로 바꿔 점-선분 거리
+  const r = Math.PI / 180, kx = 111320 * Math.cos(pt.lat * r), ky = 110540; const P = q => ({ x: (q.lon - pt.lon) * kx, y: (q.lat - pt.lat) * ky });
+  let best = Infinity; for(let i = 0; i + 1 < geom.length; i++){ const a = P(geom[i]), b = P(geom[i + 1]); const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy; let t = L2 ? -(a.x * dx + a.y * dy) / L2 : 0; t = Math.max(0, Math.min(1, t)); best = Math.min(best, Math.hypot(a.x + t * dx, a.y + t * dy)); }
+  return best;
+}
+function parcelCenterLL(){ const P = lastParcelPath; if(!P || P.length < 3) return null; return { lat: P.reduce((a, q) => a + q.getLat(), 0) / P.length, lon: P.reduce((a, q) => a + q.getLng(), 0) / P.length }; }
+async function fetchGridInfra(){
+  const c = parcelCenterLL(); const pnu = lastParcelPnu; lastGridInfra = c ? { loading: true, pnu } : null; clearGridInfra(); refreshSummaryDynamicRows(); if(!c) return;
+  const q = `[out:json][timeout:30];(nwr(around:15000,${c.lat.toFixed(5)},${c.lon.toFixed(5)})[power=substation];way(around:5000,${c.lat.toFixed(5)},${c.lon.toFixed(5)})[power=line];);out geom 120;`;
+  let data = null, lastErr = '';
+  for(const ep of OVERPASS_EPS){
+    const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 45000);
+    try{ const r = await fetch(ep + '?data=' + encodeURIComponent(q), { signal: ac.signal }); const t = await r.text(); if(!r.ok || !t.trim().startsWith('{')) throw new Error('HTTP ' + r.status); data = JSON.parse(t); break; }
+    catch(e){ lastErr = e.name === 'AbortError' ? '응답 시간 초과' : String(e.message || e); } finally { clearTimeout(to); }
+    if(pnu !== lastParcelPnu) return;
+  }
+  if(pnu !== lastParcelPnu) return;
+  if(!data){ lastGridInfra = { error: lastErr, pnu }; refreshSummaryDynamicRows(); return; }
+  const kv = v => { const n = Math.max(...String(v || '').split(';').map(x => parseFloat(x) || 0)); return n ? n / 1000 : null; };
+  const subs = [], lines = [];
+  data.elements.forEach(e => { const t = e.tags || {};
+    let geom = e.geometry ? e.geometry.map(g => ({ lat: g.lat, lon: g.lon })) : (e.lat ? [{ lat: e.lat, lon: e.lon }] : []);
+    if(e.type === 'relation' && e.members){ geom = []; e.members.forEach(m => (m.geometry || []).forEach(g => geom.push({ lat: g.lat, lon: g.lon }))); }
+    if(!geom.length) return;
+    if(t.power === 'substation'){ const ctr = { lat: geom.reduce((a, g) => a + g.lat, 0) / geom.length, lon: geom.reduce((a, g) => a + g.lon, 0) / geom.length }; subs.push({ name: t.name || t['name:ko'] || '(이름 없음)', kv: kv(t.voltage), ctr, geom, d: haversineM(c, ctr) }); }
+    else if(t.power === 'line'){ lines.push({ kv: kv(t.voltage), geom, d: distToPolylineM(c, geom), name: t.name || '' }); }
+  });
+  subs.sort((a, b) => a.d - b.d); lines.sort((a, b) => a.d - b.d);
+  lastGridInfra = { pnu, c, subs, lines, at: new Date() };
+  if(gridInfraShown) drawGridInfra();
+  refreshSummaryDynamicRows();
+}
+function clearGridInfra(){ gridInfraOv.forEach(o => { try{ o.setMap(null); }catch(e){} }); gridInfraOv = []; }
+function drawGridInfra(){
+  clearGridInfra(); const G = lastGridInfra; if(!G || !G.subs) return; const map = ensureKakaoMap(); const LL = g => new kakao.maps.LatLng(g.lat, g.lon);
+  G.lines.slice(0, 60).forEach(l => gridInfraOv.push(new kakao.maps.Polyline({ map, path: l.geom.map(LL), strokeWeight: (l.kv || 0) >= 345 ? 4 : 3, strokeColor: (l.kv || 0) >= 345 ? '#7B2CBF' : '#E85D04', strokeOpacity: 0.85, zIndex: 3 })));
+  G.subs.slice(0, 8).forEach(sb => { gridInfraOv.push(new kakao.maps.CustomOverlay({ map, position: LL(sb.ctr), yAnchor: 1.2, zIndex: 20, content: `<div style="background:#1b2a3a;color:#fff;font-size:11px;padding:2px 7px;border-radius:5px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3);">⚡ ${escLand(sb.name)}${sb.kv ? ' ' + sb.kv + 'kV' : ''} · ${(sb.d / 1000).toFixed(1)}km</div>` })); });
+}
+function toggleGridInfra(){ gridInfraShown = !gridInfraShown; if(gridInfraShown) drawGridInfra(); else clearGridInfra(); refreshSummaryDynamicRows(); }
+function gridInfraRowHtml(){
+  const G = lastGridInfra; const head = '<div class="sum-row" id="sumGridInfraRow"><span class="sum-k">주변 전력망</span><span class="sum-v">';
+  if(!G) return '<div id="sumGridInfraRow" style="display:none"></div>';
+  if(G.loading) return head + '<span class="sum-muted">OpenStreetMap에서 변전소·송전선 찾는 중… (보통 10~40초)</span></span></div>';
+  if(G.error) return head + `<span class="sum-muted">조회 실패(${escLand(G.error)}) — <a href="#" onclick="fetchGridInfra();return false;">다시 조회</a></span></span></div>`;
+  const km = d => (d / 1000).toFixed(d < 10000 ? 1 : 0) + 'km';
+  const kepco = (typeof lastKepcoSummary !== 'undefined' && lastKepcoSummary && lastKepcoSummary.lines && lastKepcoSummary.lines[0]) ? String(lastKepcoSummary.lines[0].subst || '').replace(/^-$/, '') : '';
+  const match = kepco ? G.subs.find(sb => sb.name.replace(/\s|변전소|S\/S/g, '').includes(kepco.replace(/\s|변전소|S\/S/g, '')) && kepco.replace(/\s|변전소|S\/S/g, '').length >= 2) : null;
+  const subTxt = G.subs.length ? G.subs.slice(0, 3).map(sb => `${escLand(sb.name)}${sb.kv ? ` ${sb.kv}kV` : ''} <b>${km(sb.d)}</b>`).join(' · ') : '15km 안에 등록된 변전소 없음';
+  const l154 = G.lines.find(l => (l.kv || 0) >= 154 && (l.kv || 0) < 345), l345 = G.lines.find(l => (l.kv || 0) >= 345);
+  const lineTxt = G.lines.length ? [l154 ? `154kV 선로 <b>${km(l154.d)}</b>` : '', l345 ? `345kV 이상 <b>${km(l345.d)}</b>` : '', !l154 && !l345 ? `송전선 <b>${km(G.lines[0].d)}</b>` : ''].filter(Boolean).join(' · ') : '5km 안 송전선 없음';
+  return head + `변전소(가까운 순): ${subTxt}<br>송전선: ${lineTxt}${match ? `<br>한전ON 접속 변전소(${escLand(kepco)})까지 직선 <b>${km(match.d)}</b>` : (kepco ? `<br><span class="sum-muted">한전ON 접속 변전소 ${escLand(kepco)}는 OSM에서 이름이 안 맞아 거리 미표시</span>` : '')} <button type="button" onclick="toggleGridInfra()" style="font-size:11px;padding:1px 7px;margin-left:4px;">${gridInfraShown ? '🗺 지도에서 끄기' : '🗺 지도에 표시'}</button> <span class="sum-muted">— OpenStreetMap 기여자 자료(ODbL, 빠진 곳 있을 수 있음 · 22.9kV 배전선은 대부분 없음), 필지 중심에서 직선거리</span></span></div>`;
+}
+
+// ===== ☀ 일사량·발전량(월별): PVGIS(EU JRC, ERA5 일사 + 지형 수평선 음영) → 안 되면 NASA POWER(수평면 일사 평년값) =====
+//   PVGIS는 브라우저에서 바로 부를 수 없어(CORS) 양식 서버 Worker의 /pvgis 경로로 중계. Worker를 새 코드로 배포하기 전에는 NASA POWER만 씀
+let lastSolarRes = null;
+async function fetchSolarResource(){
+  const c = parcelCenterLL(); const pnu = lastParcelPnu; lastSolarRes = c ? { loading: true, pnu } : null; refreshSummaryDynamicRows(); if(!c) return;
+  const tilt = 30, lat = c.lat.toFixed(4), lon = c.lon.toFixed(4);
+  try{
+    const u = `${pptServerUrl()}/pvgis/PVcalc?lat=${lat}&lon=${lon}&peakpower=1&loss=14&angle=${tilt}&aspect=0&usehorizon=1&outputformat=json`;
+    const r = await fetch(u, { cache: 'no-store' }); if(!r.ok) throw new Error('HTTP ' + r.status); const j = await r.json(); if(!j.outputs) throw new Error('PVGIS 응답 형식');
+    if(pnu !== lastParcelPnu) return;
+    const m = (j.outputs.monthly.fixed || []).map(x => x.E_m); const H = (j.outputs.monthly.fixed || []).map(x => x['H(i)_m']);
+    lastSolarRes = { pnu, src: 'pvgis', tilt, monthly: m, irr: H, year: j.outputs.totals.fixed.E_y, hDay: j.outputs.totals.fixed.E_d, shade: j.inputs && j.inputs.meteo_data && j.inputs.meteo_data.use_horizon, db: (j.inputs.meteo_data || {}).radiation_db, yr: `${(j.inputs.meteo_data || {}).year_min}~${(j.inputs.meteo_data || {}).year_max}` };
+    refreshSummaryDynamicRows(); return;
+  }catch(e){ console.warn('pvgis', e); }
+  try{
+    const r = await fetch(`https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=ALLSKY_SFC_SW_DWN&community=RE&longitude=${lon}&latitude=${lat}&format=JSON`); const j = await r.json();
+    if(pnu !== lastParcelPnu) return;
+    const P = j.properties.parameter.ALLSKY_SFC_SW_DWN; const mk = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']; const days = [31,28,31,30,31,30,31,31,30,31,30,31];
+    const ghi = mk.map(k => P[k]); const PR = 0.8; const monthly = ghi.map((g, i) => g * days[i] * PR);
+    lastSolarRes = { pnu, src: 'nasa', monthly, irr: ghi.map((g, i) => g * days[i]), year: monthly.reduce((a, b) => a + b, 0), hDay: P.ANN * PR, PR };
+  }catch(e){ lastSolarRes = { pnu, error: String(e && e.message || e) }; }
+  refreshSummaryDynamicRows();
+}
+function solarBarsSvg(vals){ const max = Math.max(...vals) || 1, W = 252, H = 64, bw = W / 12; const bars = vals.map((v, i) => { const h = Math.max(1, v / max * (H - 14)); return `<rect x="${(i * bw + 2).toFixed(1)}" y="${(H - 12 - h).toFixed(1)}" width="${(bw - 4).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="#F5A623"><title>${i + 1}월 ${Math.round(v)}kWh/kWp</title></rect><text x="${(i * bw + bw / 2).toFixed(1)}" y="${H - 2}" font-size="8" text-anchor="middle" fill="currentColor" opacity=".6">${i + 1}</text>`; }).join(''); return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;margin-top:4px;max-width:100%;" role="img" aria-label="월별 발전량">${bars}</svg>`; }
+function solarRowHtml(){
+  const S = lastSolarRes; const head = '<div class="sum-row" id="sumSolarRow"><span class="sum-k">일사·발전량</span><span class="sum-v">';
+  if(!S) return '<div id="sumSolarRow" style="display:none"></div>';
+  if(S.loading) return head + '<span class="sum-muted">월별 일사량 조회 중…</span></span></div>';
+  if(S.error) return head + `<span class="sum-muted">조회 실패(${escLand(S.error)})</span></span></div>`;
+  const best = S.monthly.indexOf(Math.max(...S.monthly)) + 1, worst = S.monthly.indexOf(Math.min(...S.monthly)) + 1;
+  const note = S.src === 'pvgis' ? `PVGIS ${escLand(S.db || '')} ${escLand(S.yr || '')}년 평균 · 정남향 ${S.tilt}° · 손실 14%${S.shade ? ' · 주변 지형(산) 그림자 반영' : ''}` : `NASA POWER 수평면 일사 평년값 × 성능비 ${S.PR} (경사면·지형 그림자 미반영 — 양식 서버 Worker에 /pvgis를 배포하면 PVGIS로 바뀜)`;
+  return head + `1kW당 연 <b>${Math.round(S.year).toLocaleString('ko-KR')}kWh</b> (하루 평균 <b>${S.hDay.toFixed(2)}시간</b>) · 많은 달 ${best}월 · 적은 달 ${worst}월${solarBarsSvg(S.monthly)}<span class="sum-muted">${note}. 실제 발전량은 모듈·방위·주변 건물 그림자에 따라 달라짐</span></span></div>`;
 }
 // ===== 토지 측량비용(지적측량수수료) 개략: 국토교통부 고시 제2025-896호(2026.1.1 시행) "개별공시지가 구간별 1필지 기본단가(군지역 기준)" 표 =====
 //   표의 값만 씀. 기준면적 초과분 면적 가산·시·구 지역 계수는 고시 표에 값이 없어 반영하지 않음(실제 수수료는 LX 바로처리센터에서 확인)
@@ -12121,6 +12235,8 @@ function refreshSummaryDynamicRows(){
   try{
     const a = document.getElementById('sumSlopeRow'); if(a) a.outerHTML = slopeRowHtml();
     const sv = document.getElementById('sumSurveyRow'); if(sv) sv.outerHTML = surveyRowHtml();
+    const gi = document.getElementById('sumGridInfraRow'); if(gi) gi.outerHTML = gridInfraRowHtml();
+    const so = document.getElementById('sumSolarRow'); if(so) so.outerHTML = solarRowHtml();
     const b = document.getElementById('sumIllegalRow'); if(b) b.outerHTML = illegalRowHtml();
   }catch(e){ console.warn('summary rows', e); }
 }
@@ -12221,6 +12337,8 @@ function buildSummaryHtml(r){
         <div class="sum-row${r.absoluteBlock ? ' warn' : ''}"><span class="sum-k">인허가</span><span class="sum-v">개발행위허가 규모 상한 ${fmtArea(r.effectiveLimit)} → <b>${r.area > r.effectiveLimit ? '규모 초과' : '상한 이내'}</b>${r.absoluteBlock ? `<div style="margin-top:4px;"><b style="color:var(--coral);">⛔ 원칙적 불허: ${r.absoluteBlock}</b></div>` : ''}</span></div>
         <div class="sum-row"><span class="sum-k">예상 용량</span><span class="sum-v">${capText} <span class="sum-muted">— 실무 밀도 기준 개략치</span></span></div>
         <div class="sum-row ${gridCls}"><span class="sum-k">계통</span><span class="sum-v">${gridText}</span></div>
+        ${gridInfraRowHtml()}
+        ${solarRowHtml()}
         <div class="sum-row ${setbackCls}"><span class="sum-k">이격거리</span><span class="sum-v">${setbackText}</span></div>
         <div class="sum-row ${roadCls}"><span class="sum-k">진입로</span><span class="sum-v">${roadText}</span></div>
         ${illegalRowHtml()}
