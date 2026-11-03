@@ -1221,7 +1221,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03j';
+const APP_VERSION = '2026-11-03k';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -11416,6 +11416,15 @@ function jibunDistance(target, candStr){
   return mountainPenalty + Math.abs(target.bobn - cand.bobn) * 1000 + Math.abs(target.bubn - cand.bubn);
 }
 
+// 동 이름의 한글 숫자를 아라비아 숫자로: 화북이동 → 화북2동, 종로일가 → 종로1가 (한전ON 표기)
+function kepcoNumDong(name){
+  const D = { 일: 1, 이: 2, 삼: 3, 사: 4, 오: 5, 육: 6, 칠: 7, 팔: 8, 구: 9 };
+  return String(name || '').replace(/(?<=[가-힣])(십?)([일이삼사오육칠팔구]?)(십?)(동|가)$/, (m, a, d, b, suf) => {
+    if(!a && !d && !b) return m;
+    let n; if(a && !b) n = 10 + (d ? D[d] : 0); else if(b && !a) n = (d ? D[d] : 1) * 10; else if(!a && !b) n = D[d]; else return m;
+    return n + suf;
+  });
+}
 async function fetchJibunList(admin, lidong, li){
   const params = new URLSearchParams({ do: admin.do, si: admin.si, gu: admin.gu, lidong, li });
   const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-jibun-list?' + params.toString());
@@ -11611,6 +11620,12 @@ async function checkKepcoCapacityInner(){
       let listErr = '';
       try{ jibunList = await fetchJibunList(admin, lidong, li); }
       catch(e){ listErr = e && e.message ? e.message : String(e); }
+      // 법정동 "화북이동"을 한전ON은 "화북2동"처럼 숫자로 표기 (2026-11-03 한전ON 지번목록 직접 확인: 화북이동 0건 / 화북2동 773건)
+      const numName = kepcoNumDong(lidong);
+      if(!jibunList.length && numName !== lidong){
+        let alt = []; try{ alt = await fetchJibunList(admin, numName, li); }catch(e){}
+        if(alt.length){ if(lidong === admin.lidong) kepcoLooseNote = (kepcoLooseNote ? kepcoLooseNote + ' ' : '') + `ℹ 한전ON 주소 목록에는 "${lidong}"이 없어 <b>"${numName}"</b>(숫자 표기)으로 조회했습니다.`; lidong = numName; jibunList = alt; listErr = ''; }
+      }
       const step = { lidong, li, listCount: jibunList.length, listErr, attempts: '', nearest: '' };
       kepcoDebug.steps.push(step);
       let all;
