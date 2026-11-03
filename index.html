@@ -1221,7 +1221,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03i';
+const APP_VERSION = '2026-11-03j';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -4554,6 +4554,7 @@ async function pptDrawSp(ctx, sp, T, level, part){
       if(phL && phL !== phM){ L.push(pptLstLevels(xFind(phL, 'txBody/lstStyle'), ctx)); const bp = xFind(phL, 'txBody/bodyPr'); if(bp && xAttr(bp, 'anchor', null)) def.anchor = xAttr(bp, 'anchor', null); }
       def.levels = pptMergeLevels.apply(null, L); }
     else { if(ctx.masterTx && ctx.masterTx.other) def.levels = ctx.masterTx.other; if(style){ const fr = xChild(style, 'fontRef'); if(fr && fr.firstElementChild){ const c = pptColorOf(fr.firstElementChild, ctx); if(c) def.base.color = c; } } }
+    if(xf.flipH || xf.flipV){ g.restore(); g.save(); pptRotate(g, { rot: (xf.rot || 0) + (xf.flipV ? 180 : 0) }, box); } // 파워포인트와 같게: 좌우 뒤집기는 글에 적용하지 않고, 상하 뒤집기는 글을 180° 돌림
     pptDrawTextBody(g, txBody, box, ctx, def, overrideText);
     if(overrideText !== undefined && !ctx.plain){ g.strokeStyle = '#B3261E'; g.lineWidth = 1.5; g.setLineDash([4, 3]); g.strokeRect(box.x, box.y, box.w, box.h); g.setLineDash([]); }
   }
