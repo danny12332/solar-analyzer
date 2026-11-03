@@ -1219,7 +1219,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03g';
+const APP_VERSION = '2026-11-03h';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -11007,29 +11007,28 @@ async function startEaisAutomation(){
   const jibun = String((lastBldrgst && lastBldrgst.addr) || (typeof lastJibunAddress !== 'undefined' && lastJibunAddress) || '').trim();
   const typed = ((document.getElementById('siteAddress') || {}).value || '').trim();
   const addr = jibun || typed;
-  if(!addr){ alert('먼저 주소를 검색해 주세요.'); return; }
+  // 주소가 없어도 바로 엶(2026-11-03 요청) — 주소가 있으면 복사까지
   // 새 탭은 클릭 직후(기다리기 전)에 열어야 팝업 차단에 걸리지 않음
   const tab = eaisOpenTab(EAIS_LOGIN_URL, 'gsEaisLogin');
   let copied = false;
-  try{ if(navigator.clipboard){ await navigator.clipboard.writeText(addr); copied = true; } }catch(e){}
-  if(!copied){ try{ fallbackCopy(addr); copied = true; }catch(e){} }
+  if(addr){ try{ if(navigator.clipboard){ await navigator.clipboard.writeText(addr); copied = true; } }catch(e){}
+  if(!copied){ try{ fallbackCopy(addr); copied = true; }catch(e){} } }
   // 안내 창 없이 짧은 알림만(사용자 요청 2026-11-02: 자동화가 아니면 발급 방법 안내는 필요 없음)
   const old = document.getElementById('eaisModal'); if(old) old.remove();
   const t = document.createElement('div'); t.id = 'eaisModal';
   t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;background:#1b2a3a;color:#fff;padding:10px 16px;border-radius:10px;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:92vw;';
-  t.innerHTML = (tab ? '세움터를 열었습니다' : '<span style="color:#FFB4A0;">팝업 차단으로 세움터가 열리지 않았습니다</span> — <a href="#" style="color:#FFD23F;" onclick="eaisOpenTab(EAIS_LOGIN_URL,\'gsEaisLogin\');this.parentNode.remove();return false;">여기서 열기</a>') + ' · ' + (copied ? '주소 복사됨: <b>' + escLand(addr) + '</b>' : '주소 복사 실패: <b>' + escLand(addr) + '</b>');
+  t.innerHTML = (tab ? '세움터를 열었습니다' : '<span style="color:#FFB4A0;">팝업 차단으로 세움터가 열리지 않았습니다</span> — <a href="#" style="color:#FFD23F;" onclick="eaisOpenTab(EAIS_LOGIN_URL,\'gsEaisLogin\');this.parentNode.remove();return false;">여기서 열기</a>') + ' · ' + (!addr ? '검색한 주소 없음 — 세움터에서 직접 입력' : (copied ? '주소 복사됨: <b>' + escLand(addr) + '</b>' : '주소 복사 실패: <b>' + escLand(addr) + '</b>'));
   document.body.appendChild(t); setTimeout(() => { if(t.parentNode) t.remove(); }, tab ? 4000 : 12000);
 }
 // 🏠 등기부등본: 지번 주소를 복사하고 인터넷등기소를 새 탭으로 엶. 인터넷등기소는 화면 이동 주소가 따로 없는 구조(WebSquare)라 첫 화면을 엶 → 열람·발급 → 부동산 → 열람·발급에서 소재지에 Ctrl+V
 async function openIrosRegistry(){
   const jibun = String((lastBldrgst && lastBldrgst.addr) || (typeof lastJibunAddress !== 'undefined' && lastJibunAddress) || '').trim() || ((document.getElementById('siteAddress') || {}).value || '').trim();
-  if(!jibun){ alert('먼저 주소를 검색해 주세요.'); return; }
-  const tab = eaisOpenTab('https://www.iros.go.kr/index.jsp', 'gsIros');
-  let copied = false; try{ if(navigator.clipboard){ await navigator.clipboard.writeText(jibun); copied = true; } }catch(e){} if(!copied){ try{ fallbackCopy(jibun); copied = true; }catch(e){} }
+  const tab = eaisOpenTab('https://www.iros.go.kr/index.jsp', 'gsIros'); // 주소가 없어도 바로 엶(2026-11-03 요청)
+  let copied = false; if(jibun){ try{ if(navigator.clipboard){ await navigator.clipboard.writeText(jibun); copied = true; } }catch(e){} if(!copied){ try{ fallbackCopy(jibun); copied = true; }catch(e){} } }
   const old = document.getElementById('eaisModal'); if(old) old.remove();
   const t = document.createElement('div'); t.id = 'eaisModal';
   t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;background:#1b2a3a;color:#fff;padding:10px 16px;border-radius:10px;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:92vw;';
-  t.innerHTML = (tab ? '인터넷등기소를 열었습니다' : '<span style="color:#FFB4A0;">팝업 차단으로 인터넷등기소가 열리지 않았습니다</span> — <a href="#" style="color:#FFD23F;" onclick="eaisOpenTab(\'https://www.iros.go.kr/index.jsp\',\'gsIros\');this.parentNode.remove();return false;">여기서 열기</a>') + ' · ' + (copied ? '지번 복사됨: <b>' + escLand(jibun) + '</b>' : '복사 실패: <b>' + escLand(jibun) + '</b>') + ' <span style="opacity:.75;">(열람·발급 → 부동산 → 열람·발급)</span>';
+  t.innerHTML = (tab ? '인터넷등기소를 열었습니다' : '<span style="color:#FFB4A0;">팝업 차단으로 인터넷등기소가 열리지 않았습니다</span> — <a href="#" style="color:#FFD23F;" onclick="eaisOpenTab(\'https://www.iros.go.kr/index.jsp\',\'gsIros\');this.parentNode.remove();return false;">여기서 열기</a>') + ' · ' + (!jibun ? '검색한 주소 없음 — 인터넷등기소에서 직접 입력' : (copied ? '지번 복사됨: <b>' + escLand(jibun) + '</b>' : '복사 실패: <b>' + escLand(jibun) + '</b>')) + ' <span style="opacity:.75;">(열람·발급 → 부동산 → 열람·발급)</span>';
   document.body.appendChild(t); setTimeout(() => { if(t.parentNode) t.remove(); }, tab ? 5000 : 12000);
 }
 // 정부24 정식 발급: 대상 지번 주소를 클립보드에 복사한 뒤 정부24를 새 탭으로 연다 (정부24에서 '건축물대장' 검색 → 발급하기 → 소재지에 붙여넣기)
