@@ -846,6 +846,12 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <label title="경계(지붕 끝) 변마다 가장 가까운 모듈 모서리까지의 거리를 mm 치수로 표시 — 지자체 제출용"><input id="sheetDim" type="checkbox" checked style="vertical-align:middle;"> 처마끝 이격 치수(mm) 표시</label>
           <label title="측면도에 그릴 건물 처마(지붕 바닥) 높이 — 건축물대장·현장 확인값을 넣으세요(가정값)">처마 높이(m) <input id="sideEaveH" type="number" value="6" step="0.5" min="0" style="width:60px;"></label>
           <label title="측면도 지붕 경사각(경사지붕). 평슬라브·토지는 0">지붕 경사(°) <input id="sideRoofDeg" type="number" value="10" step="1" min="0" max="45" style="width:60px;"></label>
+          <label title="지붕 형태. 박공 = 가운데 용마루 1개. 연속 박공(M자) = 용마루 N개, 각 스팬이 골에서 올라가 용마루에서 다시 내려옴(11-0311 도면 형태). 톱날 = 각 스팬이 남→북으로 올라가 용마루에서 수직으로 떨어짐">지붕 형태 <select id="sideRoofForm" style="font-size:11.5px;"><option value="gable:1">박공(용마루 1)</option><option value="mgable:2">연속 박공 2</option><option value="mgable:3">연속 박공 3</option><option value="mgable:4">연속 박공 4</option><option value="mgable:5">연속 박공 5</option><option value="mgable:6">연속 박공 6</option><option value="saw:2">톱날 2</option><option value="saw:3">톱날 3</option><option value="saw:4">톱날 4</option><option value="saw:5">톱날 5</option><option value="saw:6">톱날 6</option></select></label>
+          <label title="음영 검토 기준 태양 고도각. 앞 줄(남쪽) 모듈 상단에서 이 각도로 내려오는 선 아래에 들어가는 뒷 줄 모듈을 제외합니다. 0 = 음영 검토 안 함. (11-0311 도면 기준 22°)">☀ 음영 고도각(°) <input id="shadeDeg" type="number" value="22" step="1" min="0" max="60" style="width:56px;"></label>
+          <label title="배치 생성 때 음영에 걸리는 모듈을 자동으로 제외"><input id="shadeAuto" type="checkbox" style="vertical-align:middle;"> 배치 생성 때 음영 제외</label>
+          <label title="지붕 바닥(처마)에서 모듈 상단까지 허용 높이. 연속 박공에서는 뒷 스팬의 앞쪽을 음영선 위로 올리되 이 높이를 넘지 않게 앞 줄을 뺍니다">최대 높이(m) <input id="shadeMaxH" type="number" value="4" step="0.1" min="1" style="width:52px;"></label>
+          <label title="연속 박공 용마루 위 벤츄레이터 자리: 용마루 양쪽으로 이 폭의 절반씩 비움(0 = 안 비움). 11-0311 도면 약 1.2m">용마루 비움(m) <input id="shadeRidgeGap" type="number" value="0" step="0.1" min="0" style="width:52px;"></label>
+          <button type="button" class="preset-btn" onclick="applyShadeAll()" title="지금 배치에 음영 제외를 적용(↶ 이전으로 복구 가능)">☀ 음영 제외 적용</button>
           <label title="같은 유형·단 수인 동은 대표 1장만 그림"><input id="sideRep" type="checkbox" checked style="vertical-align:middle;"> 같은 유형은 대표 측면도 1장</label>
           <button type="button" class="preset-btn" id="sheetWinBtn" onclick="toggleSheetWindowMode()" title="캐드 플롯의 '윈도우'처럼 지도에서 두 모서리를 클릭해 출력할 범위를 지정 (용지에 맞춤·중심 맞춤)">⬚ 출력 범위 지정</button>
           <button type="button" class="preset-btn" onclick="clearSheetWindow()" title="범위 지정을 해제하고 배치 전체가 들어가게 자동 범위로">범위 해제</button>
@@ -1249,7 +1255,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-04b';
+const APP_VERSION = '2026-11-04e';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3619,6 +3625,98 @@ function sideViewKind(ed){
   if(ed.kind === 'parking') return 'parking';
   return 'gable'; // 원단·인삼밭·제로솔루션: 경사면에 평행
 }
+// ===== 지붕 단면 프로필: y(앞=남쪽 0 … D=뒤) → 지붕면 높이. 스팬 1 = 가운데 용마루 박공, 스팬 N≥2 = 톱날지붕(각 스팬이 앞에서 뒤로 올라가 용마루에서 떨어짐) =====
+function roofProfile(kind, D, eaveH, roofDeg, spans, form){
+  const t = Math.tan(Math.max(0, roofDeg || 0) * Math.PI / 180); const N = Math.max(1, Math.round(spans || 1)); form = form || (N > 1 ? 'mgable' : 'gable');
+  if(kind !== 'gable' && kind !== 'flat') return { z: () => eaveH, ridgeH: eaveH, spans: 1, spanW: D, ridges: [], valleys: [], form: 'flat', southOf: () => true };
+  const sw = D / N;
+  if(form === 'saw' && N > 1){
+    return { z: y => { let k = Math.floor(y / sw); if(k >= N) k = N - 1; if(k < 0) k = 0; const u = Math.min(sw, Math.max(0, y - k * sw)); return eaveH + u * t; }, ridgeH: eaveH + sw * t, spans: N, spanW: sw, ridges: Array.from({ length: N - 1 }, (_, k) => (k + 1) * sw), valleys: [], form: 'saw', southOf: () => true };
+  }
+  const half = sw / 2; // 박공(N=1) 또는 연속 박공(M자): 스팬마다 가운데 용마루. 연속 박공은 스팬마다 용마루를 넘는 한 평면(지붕 경사 + 모듈 경사)에 모듈을 얹음(11-0311 도면)
+  return { spanStart: y => { let k = Math.floor(y / sw); if(k >= N) k = N - 1; if(k < 0) k = 0; return k * sw; }, z: y => { let k = Math.floor(y / sw); if(k >= N) k = N - 1; if(k < 0) k = 0; const u = Math.min(sw, Math.max(0, y - k * sw)); return eaveH + (half - Math.abs(u - half)) * t; }, ridgeH: eaveH + half * t, spans: N, spanW: sw, ridges: Array.from({ length: N }, (_, k) => k * sw + half), valleys: Array.from({ length: N - 1 }, (_, k) => (k + 1) * sw), form: N > 1 ? 'mgable' : 'gable', southOf: y => { let k = Math.floor(y / sw); if(k >= N) k = N - 1; if(k < 0) k = 0; return (y - k * sw) < half; } };
+}
+function sideViewOpts(){ const g0 = id => ((document.getElementById(id) || {}).value || '').trim(); const eaveH = parseFloat(g0('sideEaveH')), roofDeg = parseFloat(g0('sideRoofDeg')), rf = (g0('sideRoofForm') || 'gable:1').split(':'), form = rf[0], spans = parseInt(rf[1]) || 1, shadeDeg = parseFloat(g0('shadeDeg')), maxH = parseFloat(g0('shadeMaxH')), ridgeGap = parseFloat(g0('shadeRidgeGap')); return { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, spans, form, shadeDeg: isFinite(shadeDeg) ? shadeDeg : 0, maxH: isFinite(maxH) ? maxH : 4, ridgeGap: isFinite(ridgeGap) ? ridgeGap : 0 }; }
+// 음영 제외: 앞(남쪽) 묶음의 뒤쪽 상단에서 태양고도 θ로 내려오는 선 아래에 앞 모서리가 들어가는 뒷 모듈을 제외. 반환: 제외 장수
+function applyShadeExclusion(ed, thetaDeg, o){
+  if(!ed || !ed.modules || !(thetaDeg > 0)) return 0;
+  o = o || sideViewOpts();
+  const kind = sideViewKind(ed); const lat0 = ed.lat0Rad, az = ed.azRad || 0;
+  const B = ed.boundary.map(q => { const xy = solarToXY(q, lat0); return rotateXY(xy.x, xy.y, -az); }); const y0 = Math.min(...B.map(q => q.y)), D = Math.max(...B.map(q => q.y)) - y0;
+  const half = D / 2; const roofDeg = (kind === 'gable' || kind === 'flat') ? o.roofDeg : 0;
+  let eaveH = kind === 'ground' ? 0 : Math.max(0, o.eaveH || 0); const reg = kind === 'ground' ? null : bldHeightFor(ed);
+  const prof0 = roofProfile(kind, D, eaveH, roofDeg, o.spans, o.form);
+  if(reg){ eaveH = Math.max(0.5, reg.height - (prof0.ridgeH - eaveH)); }
+  const prof = roofProfile(kind, D, eaveH, roofDeg, o.spans, o.form);
+  const tiltDeg = typeof ed.tilt === 'number' ? ed.tilt : 10; const panelL = ed.panelL || parseFloat((document.getElementById('panelL') || {}).value) || 2.465;
+  const offN = (ed.kind === 'wondan' || ed.kind === 'wondan_barn') ? { s: 1.0, n: 0.5 } : { s: 0.5, n: 0.5 };
+  const base = kind === 'ground' ? 1.0 : (kind === 'parking' ? 3.0 : 0.5);
+  const live = ed.modules.filter(m => !m.removed); if(!live.length) return 0;
+  const units = (ed.tables && ed.tables.length) ? ed.tables.map(t => t.mods.filter(m => !m.removed)).filter(ms => ms.length) : live.map(m => [m]);
+  const blocks = units.map(ms => { let a = Infinity, b = -Infinity; ms.forEach(m => modCornersRot(ed, m).forEach(c => { a = Math.min(a, c.y - y0); b = Math.max(b, c.y - y0); })); return { a, b, ms }; }).filter(u => u.a < u.b).sort((p, q) => p.a - q.a);
+  // 묶음의 앞/뒤 높이(측면도와 같은 식)
+  const zOf = (y, rear, blk) => {
+    if(kind === 'flat') return prof.ridgeH + 0.5;
+    if(kind === 'gable'){ const south = prof.southOf((blk.a + blk.b) / 2); return prof.z(y) + (south ? offN.s : offN.n); }
+    return eaveH + base + (rear ? (blk.b - blk.a) * Math.tan(tiltDeg * Math.PI / 180) : 0);
+  };
+  const tanT = Math.tan(thetaDeg * Math.PI / 180); let removed = 0;
+  if(kind === 'gable' && prof.form === 'mgable'){
+    // ===== 연속 박공(11-0311 도면 방식): 스팬마다 모듈을 한 평면(경사 = 모듈 경사, 수평 기준)에 얹음. 1스팬 앞 높이 1.0m, 뒷 스팬 앞 높이 = 앞 스팬 뒤쪽 상단에서 θ로 내려온 음영선 위.
+    //   뒤쪽 상단이 최대 높이(기본 4m)를 넘으면 그 스팬의 앞 줄을 빼서 시작을 뒤로 미룸(그러면 음영선이 더 내려와 앞 높이·뒤 높이가 낮아짐). 골을 걸치는 모듈·용마루 벤츄레이터 자리 제외.
+    const tanP = Math.tan(tiltDeg * Math.PI / 180); const maxH = o.maxH || 4; const rg = Math.max(0, o.ridgeGap || 0) / 2; const clear = 0.3;
+    const yOf = m => { const ys = modCornersRot(ed, m).map(c => c.y - y0); return [Math.min(...ys), Math.max(...ys)]; };
+    const kill = (m, why) => { setModuleRemoved(m, true); m.shaded = true; m.shadeWhy = why; removed++; };
+    live.forEach(m => { const [a, b] = yOf(m); if(prof.valleys.some(v => a < v - 0.02 && b > v + 0.02)) kill(m, 'valley'); else if(rg > 0 && prof.ridges.some(r => a < r + rg - 0.02 && b > r - rg + 0.02)) kill(m, 'ridge'); });
+    // 줄(y 구간) 묶기: 살아 있는 모듈을 y 시작값으로 정렬해 겹치는 것끼리 한 줄
+    const rowsAll = []; live.filter(m => !m.removed).map(m => ({ m, y: yOf(m) })).sort((p, q) => p.y[0] - q.y[0]).forEach(x => { const last = rowsAll[rowsAll.length - 1]; if(last && x.y[0] <= last.b + 0.05){ last.b = Math.max(last.b, x.y[1]); last.ms.push(x.m); } else rowsAll.push({ a: x.y[0], b: x.y[1], ms: [x.m] }); });
+    ed.spanPlanes = []; let prevTop = null, prevRear = null;
+    for(let k = 0; k < prof.spans; k++){
+      const s0 = k * prof.spanW, s1 = (k + 1) * prof.spanW; const ridgeY = prof.ridges[k];
+      const rows = rowsAll.filter(r => (r.a + r.b) / 2 >= s0 && (r.a + r.b) / 2 < s1); if(!rows.length) continue;
+      let pick = -1, plane = null;
+      for(let si = 0; si < rows.length; si++){
+        const yF = rows[si].a, yR = rows[rows.length - 1].b;
+        let h = offN.s; if(prevTop !== null) h = Math.max(h, prevTop - (yF - prevRear) * tanT + 0.05);
+        // 용마루 위 여유: 평면이 용마루(지붕 솟음)보다 clear 이상 높아야 함
+        if(ridgeY > yF && ridgeY < yR){ const need = (prof.ridgeH - eaveH) + clear - (ridgeY - yF) * tanP; if(need > h) h = need; }
+        const top = h + (yR - yF) * tanP;
+        if(top <= maxH + 1e-6){ pick = si; plane = { k, yF, yR, h, top }; break; }
+      }
+      if(pick < 0){ pick = rows.length - 1; const yF = rows[pick].a, yR = rows[pick].b; let h = offN.s; if(prevTop !== null) h = Math.max(h, prevTop - (yF - prevRear) * tanT + 0.05); plane = { k, yF, yR, h, top: h + (yR - yF) * tanP, over: true }; }
+      for(let si = 0; si < pick; si++) rows[si].ms.forEach(m => kill(m, 'shade'));
+      ed.spanPlanes.push(plane); prevTop = plane.top; prevRear = plane.yR;
+    }
+    ed.spanPlaneTilt = tiltDeg; ed.shadeDeg = thetaDeg; ed.shadeRemoved = (ed.shadeRemoved || 0) + removed;
+    if(removed){ try{ refreshLayoutLabel(ed); applyBadge(ed); }catch(e){} }
+    return removed;
+  }
+  // 용마루·골(스팬 경계)을 걸치는 모듈은 설치 불가 → 제외 (박공 1개면 용마루는 원단 생성기가 이미 피함)
+  if(prof.spans > 1 && kind === 'gable'){
+    const lines = prof.form === 'mgable' ? prof.valleys : prof.ridges.concat(prof.valleys); // 연속 박공은 용마루를 넘어 한 평면이라 골만 못 걸침
+    blocks.forEach(blk => blk.ms.forEach(m => { if(m.removed) return; const ys = modCornersRot(ed, m).map(c => c.y - y0); const a = Math.min(...ys), b = Math.max(...ys); if(lines.some(r => r > 0.01 && r < D - 0.01 && a < r - 0.02 && b > r + 0.02)){ setModuleRemoved(m, true); m.shaded = true; m.ridgeCut = true; removed++; } }));
+  }
+  const blocks2 = blocks.map(blk => { const ms = blk.ms.filter(m => !m.removed); if(!ms.length) return null; let a = Infinity, b = -Infinity; ms.forEach(m => modCornersRot(ed, m).forEach(c => { a = Math.min(a, c.y - y0); b = Math.max(b, c.y - y0); })); return { a, b, ms }; }).filter(Boolean).sort((p, q) => p.a - q.a);
+  blocks2.forEach((src, i) => {
+    const zb = zOf(src.b, true, src);
+    for(let j = i + 1; j < blocks2.length; j++){
+      const dst = blocks2[j];
+      dst.ms.forEach(m => { if(m.removed) return; const ym = Math.min(...modCornersRot(ed, m).map(c => c.y - y0)); if(ym <= src.b) return; const zShade = zb - (ym - src.b) * tanT; const zFront = zOf(ym, false, dst); if(zFront < zShade - 1e-6){ setModuleRemoved(m, true); m.shaded = true; removed++; } });
+    }
+  });
+  ed.shadeDeg = thetaDeg; ed.shadeRemoved = (ed.shadeRemoved || 0) + removed;
+  if(removed){ try{ refreshLayoutLabel(ed); applyBadge(ed); }catch(e){} }
+  return removed;
+}
+function applyShadeAll(){
+  const o = sideViewOpts(); const st = document.getElementById('roadviewStatus');
+  if(!(o.shadeDeg > 0)){ if(st){ st.style.color = '#b3402a'; st.textContent = '☀ 음영 고도각(°)을 0보다 크게 넣어 주세요.'; } return; }
+  if(!layoutRegistry.length){ if(st){ st.style.color = '#b3402a'; st.textContent = '☀ 배치가 없습니다.'; } return; }
+  histCheckpoint('음영 제외');
+  let total = 0; layoutRegistry.forEach(ed => { total += applyShadeExclusion(ed, o.shadeDeg, o); });
+  try{ renderLayoutCards(); }catch(e){}
+  if(st){ st.style.color = total ? 'var(--ink-soft)' : '#8a6d1f'; st.textContent = total ? `☀ 음영 제외 — 태양고도 ${o.shadeDeg}°, 지붕 스팬 ${o.spans}개 기준으로 앞 줄 그림자에 들어가는 모듈 ${total.toLocaleString('ko-KR')}장을 뺐습니다(회색). 처마 높이·지붕 경사·스팬은 측면도 설정값 기준. ↶ 이전으로 복구.` : `☀ 음영 제외 — 태양고도 ${o.shadeDeg}°, 스팬 ${o.spans}개 기준으로는 그림자에 걸리는 모듈이 없습니다.`; }
+}
 // g: 캔버스, box:{x,y,w,h} 그릴 영역, ed: 배치, opts:{eaveH, roofDeg, tilt, title}
 function drawSideView(g, box, ed, opts){
   const sv = sideViewData(ed); if(!sv.blocks.length) return;
@@ -3631,13 +3729,12 @@ function drawSideView(g, box, ed, opts){
   let eaveH = kind === 'ground' ? 0 : Math.max(0, opts.eaveH || 0);
   let heightSrc = kind === 'ground' ? '' : '입력값';
   const reg = kind === 'ground' ? null : bldHeightFor(ed);
-  if(reg){ const rise = (kind === 'gable' || kind === 'flat') ? half * Math.tan(roofDeg * Math.PI / 180) : 0; eaveH = Math.max(0.5, reg.height - rise); heightSrc = `건축물대장 높이 ${reg.height}m`; }
+  if(reg){ const spans0 = Math.max(1, parseInt(opts.spans) || 1); const rise = (kind === 'gable' || kind === 'flat') ? ((opts.form === 'saw' && spans0 > 1) ? D / spans0 : D / spans0 / 2) * Math.tan(roofDeg * Math.PI / 180) : 0; eaveH = Math.max(0.5, reg.height - rise); heightSrc = `건축물대장 높이 ${reg.height}m`; }
   if(opts.onHeight) opts.onHeight({ eaveH, heightSrc, reg });
-  const roofZ = y => { // y: 0..D (왼쪽 처마=0). 경사지붕은 가운데 용마루
-    if(kind !== 'gable' && kind !== 'flat') return eaveH;
-    const d = Math.abs(y - half); return eaveH + (half - d) * Math.tan(roofDeg * Math.PI / 180);
-  };
-  const ridgeH = roofZ(half);
+  const spans = Math.max(1, parseInt(opts.spans) || 1);
+  const prof = roofProfile(kind, D, eaveH, roofDeg, spans, opts.form);
+  const roofZ = y => prof.z(y); // y: 0..D (왼쪽 처마=0). 스팬 1 = 가운데 용마루, N≥2 = 톱날지붕
+  const ridgeH = prof.ridgeH;
   // 모듈 선분(단면): 각 묶음마다 [ (y,z) 시작, (y,z) 끝 ]
   const offN = (ed.kind === 'wondan' || ed.kind === 'wondan_barn') ? { s: 1.0, n: 0.5 } : { s: 0.5, n: 0.5 }; // 남(앞) / 북(뒤) 지붕면 위 높이
   const segs = [], posts = [];
@@ -3650,9 +3747,10 @@ function drawSideView(g, box, ed, opts){
   } else if(kind === 'gable'){
     sv.blocks.forEach(bl => {
       const a = bl[0] - sv.y0, b = bl[1] - sv.y0;
-      const south = (a + b) / 2 < half; // 왼쪽 면을 남쪽(앞)으로 가정
+      const south = prof.southOf((a + b) / 2); // 왼쪽 면을 남쪽(앞)으로 가정 · 톱날지붕은 모든 스팬이 남쪽 면
       const off = south ? offN.s : offN.n;
-      const za = roofZ(a) + off, zb = roofZ(b) + off;
+      let za = roofZ(a) + off, zb = roofZ(b) + off;
+      if(prof.form === 'mgable'){ const tp = Math.tan(tiltDeg * Math.PI / 180); const k = Math.min(prof.spans - 1, Math.floor(((a + b) / 2) / prof.spanW)); const pl = (ed.spanPlanes || []).find(p => p.k === k); if(pl){ za = eaveH + pl.h + (a - pl.yF) * tp; zb = eaveH + pl.h + (b - pl.yF) * tp; } else { const s0 = k * prof.spanW; za = eaveH + offN.s + (a - s0) * tp; zb = eaveH + offN.s + (b - s0) * tp; } }
       segs.push([[a, za], [b, zb]]); modTop = Math.max(modTop, za, zb);
       posts.push([[a, roofZ(a)], [a, za]], [[b, roofZ(b)], [b, zb]]);
     });
@@ -3675,8 +3773,11 @@ function drawSideView(g, box, ed, opts){
   g.lineWidth = 2.2; g.strokeStyle = '#000'; g.setLineDash([]);
   if(kind !== 'ground'){
     g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(0), Y(eaveH));
-    if(kind === 'gable' || kind === 'flat'){ g.lineTo(X(half), Y(ridgeH)); }
-    g.lineTo(X(D), Y(eaveH)); g.lineTo(X(D), Y(0)); g.stroke();
+    if((kind === 'gable' || kind === 'flat') && prof.form === 'saw'){ for(let k = 0; k < prof.spans; k++){ const yr = (k + 1) * prof.spanW; g.lineTo(X(yr), Y(ridgeH)); if(k < prof.spans - 1) g.lineTo(X(yr + Math.min(0.6, prof.spanW * 0.08)), Y(eaveH)); } g.lineTo(X(D), Y(eaveH)); }
+    else if((kind === 'gable' || kind === 'flat') && prof.form === 'mgable'){ for(let k = 0; k < prof.spans; k++){ g.lineTo(X(prof.ridges[k]), Y(ridgeH)); g.lineTo(X((k + 1) * prof.spanW), Y(eaveH)); } }
+    else if(kind === 'gable' || kind === 'flat'){ g.lineTo(X(half), Y(ridgeH)); g.lineTo(X(D), Y(eaveH)); }
+    else g.lineTo(X(D), Y(eaveH));
+    g.lineTo(X(D), Y(0)); g.stroke();
     g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(D), Y(0)); g.stroke();
   } else { g.beginPath(); g.moveTo(X(-0.5), Y(0)); g.lineTo(X(D + 0.5), Y(0)); g.stroke(); }
   // 지주(파랑) · 모듈(자홍)
@@ -3687,6 +3788,18 @@ function drawSideView(g, box, ed, opts){
   // 모듈 위 짧은 눈금(모듈 1장 길이 표시)
   g.lineWidth = 1.2; g.strokeStyle = '#C000C0';
   segs.forEach(([a, b]) => { const len = Math.hypot(b[0] - a[0], b[1] - a[1]); const n = Math.max(1, Math.round(len / (panelL * Math.cos(tiltDeg * Math.PI / 180)))); for(let i = 1; i < n; i++){ const t = i / n; const px = X(a[0] + (b[0] - a[0]) * t), py = Y(a[1] + (b[1] - a[1]) * t); g.beginPath(); g.moveTo(px, py - 6); g.lineTo(px, py + 6); g.stroke(); } });
+  // 음영선(초록): 각 묶음 뒤쪽 상단에서 태양고도 θ로 내려오는 선 — 지붕면이나 다음 묶음 앞에 닿을 때까지
+  const shadeDeg = parseFloat(opts.shadeDeg);
+  if(shadeDeg > 0 && kind !== 'ground'){
+    const tanT = Math.tan(shadeDeg * Math.PI / 180);
+    g.lineWidth = 2; g.strokeStyle = '#1DB300'; g.fillStyle = '#1DB300'; g.font = 'bold 20px "Noto Sans KR", sans-serif'; g.textAlign = 'left'; g.textBaseline = 'bottom';
+    segs.forEach(([a, b], i) => {
+      const y1 = b[0], z1 = b[1]; let y = y1, z = z1; const step = 0.1;
+      while(y < D + 2){ y += step; z = z1 - (y - y1) * tanT; if(z <= roofZ(Math.min(y, D)) || z <= 0) break; }
+      g.beginPath(); g.moveTo(X(y1), Y(z1)); g.lineTo(X(Math.min(y, D + 2)), Y(Math.max(0, z))); g.stroke();
+      if(i === 0 || i === segs.length - 1) g.fillText(`${shadeDeg}°`, X(y1) + 14, Y(z1) + 30);
+    });
+  }
   // 치수(빨강)
   const mm = v => Math.round(v * 1000).toLocaleString('ko-KR');
   g.strokeStyle = '#E00000'; g.fillStyle = '#E00000'; g.lineWidth = 1.4; g.font = 'bold 22px "Noto Sans KR", "Malgun Gothic", sans-serif';
@@ -3701,7 +3814,7 @@ function drawSideView(g, box, ed, opts){
   const zEndA = segs[0][0][1], zEndB = segs[segs.length - 1][1][1];
   if(kind !== 'ground'){ if(kind !== 'flat') vdim(X(fa) - 26, eaveH, zEndA, mm(zEndA - eaveH), -1); vdim(X(fb) + 26, eaveH, zEndB, mm(zEndB - eaveH), 1); }
   // 모듈 경사각 표기
-  { const sgm = segs[Math.floor(segs.length / 2)]; const mx = X((sgm[0][0] + sgm[1][0]) / 2), my = Y((sgm[0][1] + sgm[1][1]) / 2); g.fillStyle = '#E00000'; g.font = 'bold 20px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'bottom'; const angTxt = (kind === 'gable') ? `${roofDeg}°(지붕)+모듈 ${tiltDeg}°` : (kind === 'flat' ? `모듈 ${tiltDeg}°` : `${tiltDeg}°`); g.fillText(angTxt, mx, my - 14); }
+  { const sgm = segs[Math.floor(segs.length / 2)]; const mx = X((sgm[0][0] + sgm[1][0]) / 2), my = Y((sgm[0][1] + sgm[1][1]) / 2); g.fillStyle = '#E00000'; g.font = 'bold 20px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'bottom'; const angTxt = (kind === 'gable' && prof.form === 'mgable') ? `모듈 ${tiltDeg}° (수평 기준) · 지붕 ${roofDeg}°` : (kind === 'gable') ? `${roofDeg}°(지붕)+모듈 ${tiltDeg}°` : (kind === 'flat' ? `모듈 ${tiltDeg}°` : `${tiltDeg}°`); g.fillText(angTxt, mx, my - 14); }
   if(fa > 0.02) hdim(0, fa, topPx, mm(fa));
   if(D - fb > 0.02) hdim(fb, D, topPx, mm(D - fb));
   // 보조선(이격 치수까지)
@@ -3755,7 +3868,7 @@ function sideViewPages(){
       const L = letters[i + k] || '?';
       let hs = null;
       const sub0 = `${layoutTypeLabel(grp.ed)} · 적용: ${grp.names.join(', ')}`;
-      try{ drawSideView(g, box, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, title: `"${L}"-"${L}" 측면도 VIEW SCALE 1:1`, sub: '', onHeight: h => { hs = h; } }); }catch(e){ console.warn('side view', e); }
+      const so = sideViewOpts(); try{ drawSideView(g, box, grp.ed, { eaveH: isFinite(eaveH) ? eaveH : 6, roofDeg: isFinite(roofDeg) ? roofDeg : 10, spans: so.spans, form: so.form, shadeDeg: so.shadeDeg, title: `"${L}"-"${L}" 측면도 VIEW SCALE 1:1`, sub: '', onHeight: h => { hs = h; } }); }catch(e){ console.warn('side view', e); }
       const sub = sub0 + (hs && hs.heightSrc ? ` · 처마 ${hs.eaveH.toFixed(2)}m (${hs.heightSrc}${hs.reg && hs.reg.roof ? ' · 지붕 ' + hs.reg.roof : ''})` : '');
       g.fillStyle = '#444'; g.font = '20px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(sub, box.x + box.w / 2, box.y + box.h + 62);
     });
@@ -8219,16 +8332,17 @@ function onGenerateLayoutClick(){
     const mt = (document.getElementById('mountType') || {}).value;
     const added = layoutRegistry.filter(ed => !before.has(ed));
     added.forEach(ed => { ed.genPreset = activePreset; ed.genMount = mt; });
+    if(added.length && (document.getElementById('shadeAuto') || {}).checked){ const so = sideViewOpts(); if(so.shadeDeg > 0) added.forEach(ed => { try{ applyShadeExclusion(ed, so.shadeDeg, so); }catch(e){ console.warn('shade', e); } }); }
     if(added.length){
       const ed = added[added.length - 1];
       const live = ed.modules.filter(m => !m.removed).length;
-      const vents = ed.modules.filter(m => m.vent && m.removed).length;
+      const vents = ed.modules.filter(m => m.vent && m.removed).length; const shadedN = ed.modules.filter(m => m.shaded && m.removed).length;
       const P = activePreset && LAYOUT_PRESETS[activePreset];
       const mtLabel = P ? P.label : ((document.querySelector('#mountType option:checked') || {}).textContent || '');
       const st = document.getElementById('roadviewStatus');
       const ap = ed.autoPick;
       if(lastArchFix){ ed.archFix = lastArchFix; }
-      if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `${ed.archFix ? `📏 건물도형 ${Math.round(ed.archFix.from).toLocaleString('ko-KR')}㎡가 건축물대장 건축면적 ${Math.round(ed.archFix.reg).toLocaleString('ko-KR')}㎡보다 커서 각 변을 ${ed.archFix.d.toFixed(1)}m 안쪽으로 줄인 경계(${Math.round(ed.archFix.to).toLocaleString('ko-KR')}㎡)에 배치 — 추정 경계이므로 실제 지붕과 다르면 "↔ 조정"으로 맞추세요. ` : ''}✅ ${ed.bldName ? ed.bldName + ' · ' : ''}${ap ? `최대 배치 → ${layoutTypeLabel(ed)}` : mtLabel} · ${live.toLocaleString('ko-KR')}장 · ${(live * ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW${vents ? ` · 통풍로 ${vents}` : ''}${ap ? ` — ${ap.orient}(용마루 방위각 ${ap.ridgeAz.toFixed(0)}°) · 비교: ${ap.results.map(r => `${r.label} ${r.n}장`).join(' · ')}` : ''}${ed.autoNote ? ' — ' + ed.autoNote : ''}`; }
+      if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `${ed.archFix ? `📏 건물도형 ${Math.round(ed.archFix.from).toLocaleString('ko-KR')}㎡가 건축물대장 건축면적 ${Math.round(ed.archFix.reg).toLocaleString('ko-KR')}㎡보다 커서 각 변을 ${ed.archFix.d.toFixed(1)}m 안쪽으로 줄인 경계(${Math.round(ed.archFix.to).toLocaleString('ko-KR')}㎡)에 배치 — 추정 경계이므로 실제 지붕과 다르면 "↔ 조정"으로 맞추세요. ` : ''}✅ ${ed.bldName ? ed.bldName + ' · ' : ''}${ap ? `최대 배치 → ${layoutTypeLabel(ed)}` : mtLabel} · ${live.toLocaleString('ko-KR')}장 · ${(live * ed.wattPerPanel / 1000).toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW${vents ? ` · 통풍로 ${vents}` : ''}${shadedN ? ` · ☀ 음영 제외 ${shadedN}장(고도 ${ed.shadeDeg}°)` : ''}${ap ? ` — ${ap.orient}(용마루 방위각 ${ap.ridgeAz.toFixed(0)}°) · 비교: ${ap.results.map(r => `${r.label} ${r.n}장`).join(' · ')}` : ''}${ed.autoNote ? ' — ' + ed.autoNote : ''}`; }
     }
   }
   // 구역 나누기 중이면 다음 구역 안내
