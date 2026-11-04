@@ -1249,7 +1249,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-03s';
+const APP_VERSION = '2026-11-04a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -6353,7 +6353,7 @@ function renderLayoutCards(){
     const area = layoutAreaM2(ed); tArea += area || 0;
     const name = ed.bldName || `${i + 1}동`;
     return `<div class="lay-card" draggable="true" data-gid="${ed.groupId}" ondragstart="layCardDragStart(event)" ondragover="layCardDragOver(event)" ondragleave="this.classList.remove('over')" ondrop="layCardDrop(event)" ondragend="layCardDragEnd(event)">
-      <div class="lc-head"><span style="color:#9A7A3A;font-weight:700;">${i + 1}</span><span class="lc-name" title="${escLand(name)}">${escLand(name)}</span><span class="lc-kw">${fmt(kw)} kW</span></div>
+      <div class="lc-head"><span style="color:#9A7A3A;font-weight:700;">${i + 1}</span><span class="lc-name" title="${escLand(name)}">${escLand(name)}</span>${(ed.bldName && !ed.addrFailed) ? `<button type="button" onclick="layCardSetName(${ed.groupId})" title="주소·이름 고치기" style="font-size:11px;padding:0 5px;border:1px solid var(--card-line);border-radius:5px;background:#fff;cursor:pointer;">✏</button>` : `<button type="button" onclick="layCardSetName(${ed.groupId})" title="${ed.addrFailed ? '주소를 자동으로 찾지 못했습니다 — 직접 적어 주세요' : '주소·이름 적기'}" style="font-size:11px;padding:0 6px;border:1px solid ${ed.addrFailed ? '#B3261E' : 'var(--card-line)'};border-radius:5px;background:${ed.addrFailed ? '#FBE9E7' : '#fff'};color:${ed.addrFailed ? '#B3261E' : 'var(--ink)'};font-weight:700;cursor:pointer;">✏ 주소 입력</button>`}<span class="lc-kw">${fmt(kw)} kW</span></div>
       <div class="lc-sub">${ed.alt ? `<b style="color:#7A0E58;">${ed.alt.label}</b> · ` : ''}${escLand(layoutTypeLabel(ed))} · ${area ? Math.round(area).toLocaleString('ko-KR') + '㎡ (' + Math.round(area / 3.305785).toLocaleString('ko-KR') + '평) · ' : ''}${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}장${(ed.tables || []).length ? ' · 테이블 ' + ed.tables.length + '개' : ''}${ed.archFix ? ` · <span style="color:#B3261E;" title="건물도형 ${Math.round(ed.archFix.from)}㎡ → 건축물대장 건축면적 ${Math.round(ed.archFix.reg)}㎡ 기준으로 경계를 ${ed.archFix.d.toFixed(1)}m 줄임(추정)">경계 대장면적 보정</span>` : ''}</div>
       <div class="lc-btns">
         <label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:${ed.inProposal === false ? '#999' : '#0E5A3A'};border:1px solid var(--card-line);border-radius:5px;padding:1px 6px;background:${ed.inProposal === false ? '#fff' : '#E9F5EE'};" title="체크한 배치만 배치도·측면도·제안서·견적에 들어갑니다"><input type="checkbox" ${ed.inProposal === false ? '' : 'checked'} onchange="layCardToggleProposal(${ed.groupId}, this.checked)" style="margin:0;"> 제안서 포함</label>
@@ -6530,6 +6530,28 @@ function layCardDrop(ev){
 }
 // 동별 용량 라벨 이름: ① 이 경계를 잡을 때 붙은 건물명(구역명) ② 클릭한 필지의 지번 ③ 검색한 필지의 지번 ④ 경계 중심이 들어 있는 필지의 지번
 let boundaryNameRef = null; // { path, name }
+// 추가 공간 등 이름(주소) 없는 배치: 경계 가운데 좌표로 카카오 역지오코딩 → 지번(끝 두 단어)을 이름으로. 못 찾으면 카드·라벨에 "주소 입력" 버튼
+function layoutAutoAddress(ed){
+  if(!ed || !ed.boundary || ed.boundary.length < 3) return;
+  const b = ed.boundary; const lat = b.reduce((a, q) => a + q.getLat(), 0) / b.length, lng = b.reduce((a, q) => a + q.getLng(), 0) / b.length;
+  const fail = why => { ed.addrFailed = why || true; try{ renderLayoutCards(); applyBadge(ed); }catch(e){} };
+  if(typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services){ fail('지도 서비스 없음'); return; }
+  try{
+    new kakao.maps.services.Geocoder().coord2Address(lng, lat, (result, status) => {
+      const jb = (status === kakao.maps.services.Status.OK && result && result[0] && result[0].address) ? result[0].address.address_name : '';
+      if(jb){ ed.bldName = jibunShortOf(jb); ed.addrFull = jb; ed.addrFailed = false; try{ renderLayoutCards(); applyBadge(ed); }catch(e){} }
+      else fail('주소 없음');
+    });
+  }catch(e){ fail(String(e && e.message || e)); }
+}
+function layCardSetName(gid){
+  const ed = layoutByGroup(gid); if(!ed) return;
+  const cur = ed.bldName || '';
+  const v = prompt('이 배치의 주소(또는 이름)를 적어 주세요.\n예: 영도구 대교동 123-4 · 제2공장\n(배치도·동별 집계표·제안서 라벨에 그대로 나옵니다)', cur);
+  if(v === null) return;
+  ed.bldName = v.trim(); ed.addrFailed = false; if(ed.bldName) ed.addrManual = true;
+  try{ renderLayoutCards(); applyBadge(ed); histCheckpoint('배치 이름 입력'); }catch(e){}
+}
 function jibunShortOf(addr){ return String(addr || '').trim().split(/\s+/).slice(-2).join(' '); }
 function layoutNameFor(boundary){
   if(!boundary || boundary.length < 3) return '';
@@ -6854,7 +6876,7 @@ function applyBadge(ed){
   const lats = pts.map(q => q.getLat()); const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
   const pos = new kakao.maps.LatLng(midLat, maxLng);
   const html = `<div class="cap-badge" data-gid="${ed.groupId}" onmousedown="badgeDragStart(event, ${ed.groupId})" title="끌어서 라벨 위치를 옮길 수 있습니다 (더블클릭: 자동 위치로)" ondblclick="badgeUnpin(event, ${ed.groupId})" style="position:relative;transform:translateX(10px);background:#fff;border:2px solid #2048B8;border-radius:6px;padding:4px 10px 4px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25);font-family:'IBM Plex Mono',monospace;white-space:nowrap;text-align:left;cursor:grab;user-select:none;">
-    ${ed.bldName ? `<div style="font-size:10.5px;color:#444;font-family:inherit;">${escLand(ed.bldName)}</div>` : ''}
+    ${ed.bldName ? `<div style="font-size:10.5px;color:#444;font-family:inherit;">${escLand(ed.bldName)}</div>` : ''}${(ed.addrFailed ? `<div onmousedown="event.stopPropagation()" onclick="event.stopPropagation();layCardSetName(${ed.groupId})" style="font-size:10.5px;color:#B3261E;font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;" title="주소를 자동으로 찾지 못했습니다 — 눌러서 직접 입력">✏ 주소 입력</div>` : '')}
     <div style="font-size:17px;font-weight:800;color:#D62020;line-height:1.15;">${kw.toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW</div>
     <div style="font-size:11px;color:#222;">${ed.wattPerPanel}W × ${n.toLocaleString('ko-KR')}EA</div>
     <span onclick="event.stopPropagation();removeSolarLayout(${ed.groupId})" title="이 배치 삭제" style="position:absolute;top:-8px;right:-8px;width:16px;height:16px;line-height:15px;text-align:center;border-radius:50%;background:#2048B8;color:#fff;font-size:10px;cursor:pointer;">✕</span></div>`;
@@ -9591,7 +9613,7 @@ function applyAddSpace(path){
   }catch(e){ console.warn('add space', e); }
   finally{ histMuted = false; addSpaceGen = false; }
   const ed = layoutRegistry.length > before ? layoutRegistry[layoutRegistry.length - 1] : (layoutRegistry.find(e => sameBoundary(e.boundary, path)) || null);
-  if(ed){ ed.name = ed.name || name; }
+  if(ed){ ed.name = ed.name || name; if(!ed.bldName || /^추가 공간 \d+$/.test(ed.bldName)) layoutAutoAddress(ed); }
   const n = ed ? ed.modules.filter(m => !m.removed).length : 0;
   const area = shoelaceArea(path);
   st.style.color = n ? 'var(--ink-soft)' : '#b3402a';
