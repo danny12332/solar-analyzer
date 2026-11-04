@@ -764,7 +764,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
           <button type="button" class="preset-btn" id="addSpaceBtn2" onclick="toggleAddSpaceMode()" style="background:#E3F3E8;border-color:#0B5A2A;color:#0B5A2A;font-weight:700;" title="② 배치 유형을 먼저 고른 뒤, 모듈을 더 넣을 공간의 모서리를 지도에서 차례로 클릭해 그리면 그 공간 안에 그 유형으로 바로 배치됩니다(기존 배치 유지, 별도 동)">➕ 추가 공간 배치</button>
-          <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 오른쪽 클릭하면 완성">✏ 건물 따라 그리기</button>
+          <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 더블클릭하면 완성. 오른쪽 클릭 = 마지막 점 취소">✏ 건물 따라 그리기</button>
           <button type="button" class="preset-btn" id="fitBtn" onclick="startFitOutline()" title="잡힌 테두리를 클릭으로 옮기고(테두리 안 클릭 → 옮길 곳 클릭) 회전·크기 버튼으로 위성사진 건물에 맞춥니다" style="background:#FFD23F;border-color:#E8B800;">✋ 외곽선 맞추기</button>
           <button type="button" class="preset-btn" id="rect3Btn" onclick="toggleGeomTool('rect3')" title="직사각형 지붕: 위성사진에서 지붕 모서리 2개(한 변)를 클릭하고, 반대편 변 위 아무 곳을 클릭하면 정확한 직사각형 경계가 만들어집니다">▭ 3점 사각형</button>
           <button type="button" class="preset-btn" id="align2Btn" onclick="toggleGeomTool('align2')" title="잡힌 테두리가 위치·각도·크기가 다를 때: 테두리 꼭짓점 → 위성사진의 같은 모서리, 다른 꼭짓점 → 위성사진의 같은 모서리 순서로 4번 클릭하면 테두리 전체가 이동·회전·확대되어 맞춰집니다">📌 2점 맞춤</button>
@@ -1097,7 +1097,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <span style="display:inline-flex;align-items:center;gap:2px;"><button type="button" id="delRowBtn" onclick="toggleDelRowMode()" title="모듈을 클릭하면 그 줄 전체 삭제 · 빈 곳을 두 번 클릭해 선을 그으면 선이 지나는 줄을 한꺼번에 삭제 (↶ 이전으로 복구)">🗑 줄 삭제</button><select id="delRowUnit" title="삭제 단위" style="font-size:11px;padding:0 2px;"><option value="table" selected>N단 묶음</option><option value="tier">모듈 1줄</option></select></span>
             <button type="button" id="moveLayoutBtn" onclick="toggleMoveLayoutMode()" title="배치(모듈 묶음)를 클릭해 선택한 뒤 손잡이를 끌거나 화살표로 전체를 이동">✥ 배치 이동</button>
             <button type="button" id="addModBtn" onclick="toggleAddModuleMode()" title="클릭한 자리에 모듈 한 장 추가 (모듈을 클릭하면 한 장씩 제외/복원)">➕ 모듈 추가</button>
-            <button type="button" id="addSpaceBtn" onclick="toggleAddSpaceMode()" style="font-weight:700;color:#0B5A2A;" title="모듈을 더 넣고 싶은 공간의 모서리를 차례로 클릭해 그리면(첫 점 다시 클릭 또는 오른쪽 클릭으로 완성) 그 공간 안에 ② 배치 유형에서 고른 유형으로 바로 배치합니다. 기존 배치는 그대로 두고 별도 동(추가 공간 N)으로 추가되며, 그린 선 끝까지 채웁니다(이격 0)">➕ 추가 공간 배치</button>
+            <button type="button" id="addSpaceBtn" onclick="toggleAddSpaceMode()" style="font-weight:700;color:#0B5A2A;" title="모듈을 더 넣고 싶은 공간의 모서리를 차례로 클릭해 그리면(첫 점 다시 클릭 또는 더블클릭으로 완성, 오른쪽 클릭 = 마지막 점 취소) 그 공간 안에 ② 배치 유형에서 고른 유형으로 바로 배치합니다. 기존 배치는 그대로 두고 별도 동(추가 공간 N)으로 추가되며, 그린 선 끝까지 채웁니다(이격 0)">➕ 추가 공간 배치</button>
             <button type="button" id="fillRectBtn" onclick="toggleFillRectMode()" title="빈 곳의 두 모서리를 클릭하면 그 사각형 안을 가까운 배치의 격자(모듈 크기+간격)에 맞춰 모듈로 채움">▦ 영역 채우기</button>
             <button type="button" id="addRowBtn" onclick="toggleAddRowMode()" title="이격 기준 때문에 못 들어간 줄을 강제로 추가: 줄을 넣을 빈 자리를 클릭하면 가장 가까운 줄과 똑같은 줄이 그 자리에 놓입니다">➕ 줄 추가</button>
             <button type="button" id="moreToolsBtn" onclick="toggleMoreTools()" title="꼭짓점 조정·테이블 추가/제거·영역 제거·지우기">⋯ 더보기</button>
@@ -1249,7 +1249,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-04a';
+const APP_VERSION = '2026-11-04b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2455,7 +2455,7 @@ function ensureKakaoMap(){
     if(mapMode === 'distance'){ toggleDistanceMode(); }
     else if(mapMode === 'area'){ toggleAreaMode(); }
     else if(mapMode === 'radius'){ toggleRadiusMode(); }
-    else if(mapMode === 'trace'){ finishTrace(false); }
+    else if(mapMode === 'trace'){ traceUndoPoint(); }
   });
   // 측정 중 오른쪽 클릭 시 브라우저 기본 우클릭 메뉴가 뜨지 않도록 차단
   container.addEventListener('contextmenu', function(e){
@@ -9593,7 +9593,7 @@ function toggleAddSpaceMode(){
   trace = { pts: [], lat0: null, labels: [], line: null, preview: null, previewLabel: null, addSpace: true };
   const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
   const lab = activePreset && LAYOUT_PRESETS[activePreset] ? LAYOUT_PRESETS[activePreset].label : (activePreset === 'maxfill' ? '최대 배치(유형 자동)' : '현재 설정');
-  st.textContent = `➕ 추가 공간: 모듈을 더 넣을 공간의 모서리를 차례로 클릭하세요(첫 점을 다시 클릭하거나 오른쪽 클릭하면 완성 · Esc 취소). 완성되면 그 공간 안에 "${lab}" 유형으로 바로 배치됩니다(기존 배치 유지, 그린 선 끝까지). 다른 유형으로 하려면 먼저 ② 배치 유형에서 고르세요.`;
+  st.textContent = `➕ 추가 공간: 모듈을 더 넣을 공간의 모서리를 차례로 클릭하세요(첫 점을 다시 클릭하거나 더블클릭하면 완성 · 오른쪽 클릭 = 마지막 점 취소 · Esc 취소). 완성되면 그 공간 안에 "${lab}" 유형으로 바로 배치됩니다(기존 배치 유지, 그린 선 끝까지). 다른 유형으로 하려면 먼저 ② 배치 유형에서 고르세요.`;
 }
 function applyAddSpace(path){
   const st = document.getElementById('roadviewStatus');
@@ -9628,7 +9628,7 @@ function toggleTraceMode(){
   const btn = document.getElementById('traceBtn'); if(btn) btn.classList.add('on');
   trace = { pts: [], lat0: null, labels: [], line: null, preview: null, previewLabel: null };
   const st = document.getElementById('roadviewStatus'); st.style.color = 'var(--ink-soft)';
-  st.textContent = '✏ 지붕 모서리를 차례로 클릭하세요. 두 번째 변부터는 첫 변과 평행·직각으로 자동 보정됩니다(직각 보정 체크 시). 첫 점을 다시 클릭하거나 오른쪽 클릭하면 완성, Esc 또는 버튼을 다시 누르면 취소. 지도를 최대한 확대하면 더 정확합니다.';
+  st.textContent = '✏ 지붕 모서리를 차례로 클릭하세요. 두 번째 변부터는 첫 변과 평행·직각으로 자동 보정됩니다(직각 보정 체크 시). 첫 점을 다시 클릭하거나 더블클릭하면 완성. 잘못 찍으면 오른쪽 클릭(또는 Backspace)으로 마지막 점 취소, Esc 또는 버튼을 다시 누르면 전체 취소. 지도를 최대한 확대하면 더 정확합니다.';
 }
 function traceXY(ll){ return solarToXY(ll, trace.lat0); }
 function traceLL(p){ return solarToLatLng(p.x, p.y, trace.lat0); }
@@ -9686,6 +9686,7 @@ function traceEdgeLabel(a, b, map, live){
 }
 function traceClick(ll){
   if(!trace) return;
+  if(trace.__lastClickAt && Date.now() - trace.__lastClickAt < 350 && trace.pts.length >= 3){ finishTrace(false); return; } trace.__lastClickAt = Date.now();
   if(trace.lat0 === null) trace.lat0 = ll.getLat() * Math.PI / 180;
   if(!trace.pts.length){ trace.pts.push(traceXY(ll)); traceRedraw(); return; }
   const s = traceSnap(ll);
@@ -9694,6 +9695,16 @@ function traceClick(ll){
   if(Math.hypot(s.p.x - last.x, s.p.y - last.y) < 0.2) return; // 같은 자리 중복 클릭 무시
   trace.pts.push(s.p);
   traceRedraw();
+}
+// 오른쪽 클릭(또는 Backspace) = 마지막 점 하나 취소. 점이 없으면 그리기 자체를 취소. 완성은 첫 점을 다시 클릭하거나 더블클릭
+function traceUndoPoint(){
+  if(!trace) return;
+  const st = document.getElementById('roadviewStatus');
+  if(!trace.pts.length){ finishTrace(true); return; }
+  trace.pts.pop();
+  if(!trace.pts.length) trace.lat0 = null;
+  traceRedraw();
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = trace.pts.length ? `↩ 마지막 점을 지웠습니다 (남은 점 ${trace.pts.length}개). 계속 클릭해 이어 그리고, 첫 점을 다시 클릭하거나 더블클릭하면 완성 · 오른쪽 클릭 = 한 점 더 취소 · Esc = 전체 취소` : '↩ 점을 모두 지웠습니다. 다시 첫 모서리부터 클릭하세요 (오른쪽 클릭 한 번 더 = 그리기 취소).'; }
 }
 function traceMove(ll){ if(trace && trace.pts.length){ traceRedraw(traceSnap(ll).p); } }
 // 직각 보정: 처음 변 기준 회전 좌표에서 거의 수평/수직인 변을 정확히 맞춤
@@ -9757,7 +9768,7 @@ function updateBoundaryInfo(){
   el.textContent = (p && p.length >= 3) ? `현재 경계: ${p.length}각형 · ${Math.round(shoelaceArea(p)).toLocaleString('ko-KR')}㎡` : '현재 경계 없음 (주소 검색 시 필지 경계는 토지 노지 배치에만 사용)';
 }
 setInterval(updateBoundaryInfo, 800);
-document.addEventListener('keydown', e => { if(e.key === 'Escape' && mapMode === 'trace') finishTrace(true); });
+document.addEventListener('keydown', e => { if(mapMode !== 'trace') return; if(e.key === 'Escape') finishTrace(true); else if(e.key === 'Backspace' && !/input|textarea|select/i.test((e.target || {}).tagName || '')){ e.preventDefault(); traceUndoPoint(); } });
 function toggleBuildingPickMode(){
   if(mapMode === 'building'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
   setMode('building');
