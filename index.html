@@ -1255,7 +1255,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-06a';
+const APP_VERSION = '2026-11-06b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -8484,6 +8484,8 @@ function shrinkPath(){
   // 모서리 따내기: 바깥 모서리에서 u·v 방향으로 du×dv 직사각형을 잘라내 ㄱ자 모양으로
   Object.entries(E.notch || {}).forEach(([k, nt]) => { if(nt.du > 0 && nt.dv > 0) uv = notchCorner(uv, k, nt.du, nt.dv, { u0: bb.u0 + Math.max(S.L, 0), u1: bb.u1 - Math.max(S.R, 0), v0: bb.v0 + Math.max(S.B, 0), v1: bb.v1 - Math.max(S.T, 0) }); });
   if(uv.length < 3) uv = F.uv0;
+  // 각도 ⟲⟳: 경계도 배치와 함께 가운데 기준으로 돌림(2026-11-06, 예전엔 모듈 축만 돌아감)
+  if(E.rotDeg){ const cx = uv.reduce((a, p) => a + p.x, 0) / uv.length, cy = uv.reduce((a, p) => a + p.y, 0) / uv.length; const r = E.rotDeg * Math.PI / 180; uv = uv.map(p => { const q = rotateXY(p.x - cx, p.y - cy, r); return { x: q.x + cx, y: q.y + cy }; }); }
   return uv.map(p => F.toXY(p)).map(q => solarToLatLng(q.x, q.y, E.lat0));
 }
 function drawShrinkOverlays(){
@@ -8499,7 +8501,7 @@ function drawShrinkOverlays(){
     E.overlays = E.overlays || [];
     E.sideOv = {}; sides.forEach(sd => { const ov = new kakao.maps.CustomOverlay({ map, position: toLL(sd.pos), clickable: true, zIndex: 9000, xAnchor: 0.5, yAnchor: 0.5, content: '' }); E.sideOv[sd.k] = ov; E.overlays.push(ov); });
     E.edgeOv = F.uv0.map((p, i) => { if(!shrinkEdgeMovable(F, i)) return null; const q = F.uv0[(i + 1) % F.uv0.length]; const ov = new kakao.maps.CustomOverlay({ map, position: toLL({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }), clickable: true, zIndex: 9000, xAnchor: 0.5, yAnchor: 0.5, content: '' }); E.overlays.push(ov); return ov; });
-    E.panelOv = new kakao.maps.CustomOverlay({ map, position: toLL({ x: um, y: bb.v1 }), clickable: true, zIndex: 9001, xAnchor: 0.5, yAnchor: 2.1, content: '' }); E.overlays.push(E.panelOv);
+    E.panelOv = new kakao.maps.CustomOverlay({ map, position: toLL({ x: um, y: bb.v0 }), clickable: true, zIndex: 9001, xAnchor: 0.5, yAnchor: 0, content: '' }); E.overlays.push(E.panelOv);
     E.notch = E.notch || {}; E.cornerOv = {};
   }
   // 변 단추 묶음: [안쪽 화살표(노랑)] 값 [바깥 화살표(흰색)] — 안쪽 화살표는 늘 건물 안쪽을 향함
@@ -8518,6 +8520,7 @@ function drawShrinkOverlays(){
   });
   const area = shoelaceArea(cur);
   const sb = (txt, js, title) => `<button type="button" ${act(js)} title="${title}" style="border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;font-weight:800;border-radius:4px;width:28px;height:26px;padding:0;cursor:pointer;font-size:14px;line-height:1;touch-action:none;">${txt}</button>`;
+  { const xyC = cur.map(q => solarToXY(q, E.lat0)); const xyB = E.base.map(q => solarToXY(q, E.lat0)); const yMin = Math.min(...xyC.map(p => p.y), ...xyB.map(p => p.y)) - 2.5, xc = xyB.reduce((a, p) => a + p.x, 0) / xyB.length; E.panelOv.setPosition(solarToLatLng(xc, yMin, E.lat0)); } // 건물(현재·원래 경계) 남쪽 끝 아래 — 옆면 화살표를 가리지 않게(2026-11-06)
   E.panelOv.setContent(`<div onpointerdown="event.stopPropagation();kakao.maps.event.preventMap();" onmousedown="event.stopPropagation();kakao.maps.event.preventMap();" style="display:flex;gap:6px;align-items:center;background:${BLUE};padding:5px 8px;border-radius:8px;color:#fff;font-size:12px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:default;">
     <b>⇲ ${Math.round(area).toLocaleString('ko-KR')}㎡</b><span style="opacity:.5;">|</span>
     <span title="화살표 한 번에 움직이는 거리">단위</span><select id="shrinkStep" onmousedown="event.stopPropagation();kakao.maps.event.preventMap();" onchange="shrinkStepVal()" style="font-size:11px;padding:0 1px;border-radius:4px;border:none;"><option value="0.1">0.1m</option><option value="0.5">0.5m</option><option value="1">1m</option></select><span style="opacity:.5;">|</span>
