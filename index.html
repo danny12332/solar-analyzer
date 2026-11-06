@@ -927,7 +927,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <label id="stdFrameLabel" title="원단 틀(프레임) 하나에 경사 방향으로 넣는 모듈 수. 면 깊이가 남으면 처마 쪽 첫 틀을 작게(예: 2+3+3단)">원단 단 수 <select id="stdFrameRows" style="padding:2px 4px;"><option value="2">2단</option><option value="3" selected>3단</option><option value="4">4단</option><option value="5">5단</option></select></label> <label id="stdFrameNLabel" title="용마루로 나눈 남북 지붕에서 북쪽 면만 단 수를 다르게(예: 남 3단·북 2단). 비우면 남쪽과 같게">북쪽면 <select id="stdFrameRowsN" style="padding:2px 4px;"><option value="">같게</option><option value="1">1단</option><option value="2">2단</option><option value="3">3단</option><option value="4">4단</option></select></label>
             <label id="stdFrameGapLabel" title="틀과 틀 사이 간격(평면). 기본도면 측면도(3+3+3단 등) 실측 약 490~495mm">틀 사이(m) <input id="stdFrameGap" type="number" value="0.5" step="0.05" min="0" style="width:50px;padding:2px 4px;"></label>
             <label id="stdBlockLabel" title="원단: 모듈 N장마다 통풍로 2개(모듈 2장 자리 비움) — 3단 이상 틀에만. 이격을 0보다 크게 넣으면 N장마다 그만큼 띄움(기본 0 = 빈 공간 없음)">모듈 <input id="stdBlock" type="number" value="20" step="1" min="2" style="width:40px;padding:2px 4px;">장마다 통풍로 2개(3단↑) · 이격 <input id="stdBlockGap" type="number" value="0" step="0.1" min="0" style="width:44px;padding:2px 4px;">m</label>
-            <label id="stdParkLabel">주차열 <select id="stdPark" style="padding:2px 4px;"><option value="double" selected>마주보는 2열(10m) + 통로 6m</option><option value="single">1열(5m) + 통로 6m</option></select></label>
+            <label id="stdParkLabel">주차열 <select id="stdPark" style="padding:2px 4px;"><option value="double" selected>마주보는 2열(10m) + 통로 6m</option><option value="single">1열(5m) + 통로 6m</option></select> 형태 <select id="stdParkForm" style="padding:2px 4px;" title="원포스트: 주차면 한 칸(2.5×5m)마다 기둥 1개, 가로 모듈 4장(칸 폭 방향 1장 × 깊이 방향 4줄). 기존: 세로 모듈 2단, 4장(2칸)마다 기둥 구간 0.6m"><option value="onepost" selected>원포스트(한 칸 4장)</option><option value="twobay">2칸 기둥(세로 2단)</option></select></label>
             <label id="stdFlipLabel"><input id="stdFlip" type="checkbox" style="vertical-align:middle;"> 축 90° 바꾸기</label>
             <span id="stdNote" class="hint" style="font-size:11px;"></span>
           </span>
@@ -1255,7 +1255,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-04e';
+const APP_VERSION = '2026-11-06a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -6309,7 +6309,7 @@ const STD_DEFAULTS = {
   insam:       { tilt: 10, setback: 0.7, ridge: 0.3, orient: 'portrait', rows: 2, note: '인삼밭: 모듈 경사 10° · 지붕 끝 700mm · 용마루 끝단 한쪽 300mm · 모듈간격(열 피치) 10° 세로 3,500 / 가로 1,750, 15° 세로 4,000 / 가로 2,000 (단 수 배)' },
   insam_flat:  { tilt: 10, setback: 0.5, ridge: 0, orient: 'portrait', rows: 2, note: '인삼밭 플랫: 지붕 끝 500mm · 용마루를 넘어 건물 폭 전체에 열 배치 · 높이 최대 4m, 용마루 위 500mm(벤츄레이터 있으면 그 위 200mm) · 열 간격 10° 세로 3,500mm × 단 수 (2단 7,000mm = 10-0617 가동 실측)' },
   zero:        { tilt: 10, setback: 0.7, ridge: 0.3, orient: 'landscape', rows: 1, pitch: 1.7, note: '징크판넬·제로솔루션: 가로배치 · 남쪽지붕 = 지붕경사+7° / 북쪽 5° / 동서지붕 10° · 지붕 끝 700mm · 모듈간격 1,700mm · 추가비 전기 1만원/kW' },
-  parking:     { tilt: 10, setback: 0, ridge: 0, orient: 'portrait', note: '주차장: 주차면 5,000×2,500mm · 주차면 2칸마다 기둥 1개(기둥 구간 폭 600mm) · 마주보는 주차라인 사이 통행로 6m 이상' },
+  parking:     { tilt: 10, setback: 0, ridge: 0, orient: 'portrait', note: '주차장: 주차면 5,000×2,500mm · 원포스트 = 한 칸마다 기둥 1개·가로 모듈 4장 / 2칸 기둥 = 세로 2단·기둥 구간 600mm · 마주보는 주차라인 사이 통행로 6m 이상' },
 };
 function applyStdMountUi(mt){
   const isStd = STD_TYPES.includes(mt);
@@ -7988,27 +7988,49 @@ function generateStdLayout(kind){
   } else if(kind === 'parking'){
     // 주차열: 깊이 5m에 세로 모듈 2단(긴 변이 주차면 깊이 방향), 열 방향으로 4장(주차면 2칸)마다 기둥 구간 0.6m
     const double = ((document.getElementById('stdPark') || {}).value || 'double') === 'double';
-    const dY = L * cosT, dX = W;
-    const bandDepth = double ? 10 : 5, aisle = 6;
+    const onePost = ((document.getElementById('stdParkForm') || {}).value || 'onepost') === 'onepost';
+    const bandDepth = double ? 10 : 5, aisle = 6, stallW = 2.5;
     let r = 0;
-    for(let y = Y0 + sb; y + 5 <= Y1 + 1e-6; y += bandDepth + aisle){
-      const bands = double ? [y, y + 5] : [y];
-      bands.forEach((yb, bi) => {
-        if(yb + 5 > Y1 + 1e-6) return;
-        const yStart = yb + (5 - (2 * dY + gap)) / 2; // 주차면 깊이 가운데 정렬
-        let x = X0 + sb, i = 0, grp = 0;
-        while(x + dX <= X1 + 1e-6){
-          for(let k = 0; k < 2; k++){
-            const cr = rect(x, yStart + k * (dY + gap), dX, dY);
-            if(fits(cr)) cands.push({ cr, table: r + '-' + bi + '-' + grp, tier: k });
+    if(onePost){
+      // 원포스트: 주차면 한 칸(2.5×5m)마다 기둥 1개, 가로 모듈(긴 변이 칸 폭 방향) 1장 × 깊이 방향 4줄 = 4장. 칸 피치 2.5m, 모듈은 칸 가운데
+      const dX = L, dY = W * cosT; const rowsN = 4;
+      for(let y = Y0 + sb; y + 5 <= Y1 + 1e-6; y += bandDepth + aisle){
+        const bands = double ? [y, y + 5] : [y];
+        bands.forEach((yb, bi) => {
+          if(yb + 5 > Y1 + 1e-6) return;
+          const yStart = yb + (5 - (rowsN * dY + (rowsN - 1) * gap)) / 2; // 깊이 가운데 정렬
+          for(let sIdx = 0; X0 + sb + sIdx * stallW + stallW <= X1 + 1e-6; sIdx++){
+            const x = X0 + sb + sIdx * stallW + (stallW - dX) / 2;
+            for(let k = 0; k < rowsN; k++){
+              const cr = rect(x, yStart + k * (dY + gap), dX, dY);
+              if(fits(cr)) cands.push({ cr, table: r + '-' + bi + '-' + sIdx, tier: k });
+            }
           }
-          i++;
-          if(i % 4 === 0){ x += dX + 0.6; grp++; } else x += dX + gap;
-        }
-      });
-      r++;
+        });
+        r++;
+      }
+      summary = `주차장 캐노피(원포스트) — ${double ? '마주보는 2열(5m+5m)' : '1열(5m)'} + 통로 6m 반복, 주차면 한 칸(2.5×5m)마다 기둥 1개 · 가로 모듈 4장(칸 폭 1장 × 깊이 4줄)`;
+    } else {
+      const dY = L * cosT, dX = W;
+      for(let y = Y0 + sb; y + 5 <= Y1 + 1e-6; y += bandDepth + aisle){
+        const bands = double ? [y, y + 5] : [y];
+        bands.forEach((yb, bi) => {
+          if(yb + 5 > Y1 + 1e-6) return;
+          const yStart = yb + (5 - (2 * dY + gap)) / 2; // 주차면 깊이 가운데 정렬
+          let x = X0 + sb, i = 0, grp = 0;
+          while(x + dX <= X1 + 1e-6){
+            for(let k = 0; k < 2; k++){
+              const cr = rect(x, yStart + k * (dY + gap), dX, dY);
+              if(fits(cr)) cands.push({ cr, table: r + '-' + bi + '-' + grp, tier: k });
+            }
+            i++;
+            if(i % 4 === 0){ x += dX + 0.6; grp++; } else x += dX + gap;
+          }
+        });
+        r++;
+      }
+      summary = `주차장 캐노피 — ${double ? '마주보는 2열(5m+5m)' : '1열(5m)'} + 통로 6m 반복, 주차면 깊이에 세로 모듈 2단, 모듈 4장(주차면 2칸)마다 기둥 구간 0.6m`;
     }
-    summary = `주차장 캐노피 — ${double ? '마주보는 2열(5m+5m)' : '1열(5m)'} + 통로 6m 반복, 주차면 깊이에 세로 모듈 2단, 모듈 4장(주차면 2칸)마다 기둥 구간 0.6m`;
   }
 
   if(!cands.length){ statusEl.style.color = '#b3402a'; statusEl.textContent = '❌ 이 경계·이격 조건으로는 모듈이 들어가지 않습니다. 경계나 이격·축(90° 바꾸기)을 확인하세요.'; return; }
