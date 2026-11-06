@@ -1255,7 +1255,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-06b';
+const APP_VERSION = '2026-11-06c';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -7930,7 +7930,7 @@ function generateStdLayout(kind){
       res = runWondan(false, tilt); const candsA = cands.splice(0, cands.length), resA = res;
       const nA = candsA.filter(c => !c.vent).length;
       // 면이 좁아 어느 면이든 1줄밖에 못 넣을 때만 대안 검토: 용마루 넘어 플랫 — 입력 경사각과 5°(투영 L·cos5°) 중 많은 쪽
-      const narrow = resA.frameSummary.length < 2 || resA.frameSummary.some(f => f === '1');
+      const narrow = resA.frameSummary.length < 2 || resA.frameSummary.some(f => String(f).replace(/^[남북]\s*/, '') === '1'); // frameSummary는 '남 1'·'북 2+3' 형식(v2026-11-03i부터) — 접두어를 떼고 비교
       let picked = null;
       if(narrow){
         const resB1 = runWondan(true, tilt); const candsB1 = cands.splice(0, cands.length); const nB1 = candsB1.filter(c => !c.vent).length;
