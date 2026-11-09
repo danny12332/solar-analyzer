@@ -771,6 +771,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
           <button type="button" class="preset-btn" id="bldMergeBtn" onclick="toggleBldMergeMode()" title="한 지붕인데 공공 건물도형이 여러 동으로 나뉘어 있을 때: 도형들을 차례로 클릭한 뒤 이 버튼을 다시 누르면 하나로 합쳐(사이 빈 곳 포함) 최대 배치">🔗 건물 합치기</button>
+          <button type="button" class="preset-btn" id="parcelMergeBtn" onclick="mergeClickedParcels()" title="합필: 지도에서 필지를 차례로 클릭해 고른 뒤(주황 테두리) 이 버튼을 누르면 맞닿은 필지를 하나의 사업지 경계로 합쳐 토지 배치를 바로 만듭니다. 같은 필지를 다시 클릭하면 선택이 풀립니다.">🧩 필지 합치기</button>
           <button type="button" class="preset-btn" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
           <button type="button" class="preset-btn" onclick="startFromParcel()" title="검색한 필지 경계를 배치 경계로 가져온 뒤 바로 조정 모드로 — 지붕이 필지를 거의 다 덮는 공장 등에서 노란 네모(변)를 끌어 지붕선에 맞추기">▭ 필지 경계로 시작</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
@@ -1255,7 +1256,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-09a';
+const APP_VERSION = '2026-11-09b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2345,6 +2346,35 @@ function removeClickedParcel(pnu){
   const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `필지 ${c.jibun || ''} 선택 해제. ` + clickedParcelsSummary(); }
 }
 // 클릭해 둔 필지들의 합산: "선택 필지 N개 합계 ㎡(평) — 지번(평) + …"
+// 🧩 필지 합치기(합필): 클릭해 고른 필지(clickedParcels)를 하나의 사업지 경계로 합쳐 토지 배치. 맞닿은(1.5m 이내) 필지만 합쳐짐
+function mergeClickedParcels(){
+  const st = document.getElementById('roadviewStatus');
+  const list = Object.entries(clickedParcels).map(([pnu, c]) => Object.assign({ pnu }, c));
+  if(list.length < 2){ if(st){ st.style.color = '#b3402a'; st.textContent = '🧩 필지 합치기: 지도에서 합칠 필지를 2개 이상 클릭해 고른 뒤(주황 테두리) 다시 누르세요.' + (list.length ? ` 지금 ${list.length}개 선택.` : ''); } return; }
+  let r = null; for(const cell of [0.2, 0.4, 0.8]){ r = mergeBuildingPaths(list.map(c => c.path), 'touch', cell); if(r) break; }
+  if(!r || r.path.length < 3 || r.pieces > 1){ if(st){ st.style.color = '#b3402a'; st.textContent = `🧩 합칠 수 없습니다 — 고른 필지 ${list.length}개가 서로 맞닿아 있지 않습니다(사이가 1.5m 이상). 맞닿은 필지만 고르세요.`; } return; }
+  histCheckpoint('필지 합치기');
+  const path = r.path; const area = shoelaceArea(path);
+  const big = list.slice().sort((a, b) => (b.area || 0) - (a.area || 0))[0];
+  const name = `${big.jibun || '필지'} 외 ${list.length - 1}필지`;
+  list.forEach(c => { try{ removeLayoutsOnOutline(c.path); }catch(e){} removeClickedParcel(c.pnu); });
+  // 합친 경계를 지도에 그리고 배치 경계로
+  const map = ensureKakaoMap();
+  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 3, strokeColor: '#1E2FD0', strokeOpacity: 0.95, strokeStyle: 'solid', fillColor: '#1E2FD0', fillOpacity: 0.08, zIndex: 2 });
+  measureShapes.push(poly); const groupId = registerMeasureGroup([poly]);
+  clickedParcels['merged-' + Date.now()] = { groupId, path: path.slice(), area, jibun: name, members: list.map(c => c.jibun), merged: true };
+  boundaryNameRef = { path: path.slice(), name };
+  lastAreaPolygonPath = path.slice(); currentBoundaryOfficial = false;
+  try{ refreshAlignEdgeOptions(); }catch(e){}
+  // 토지 배치: 고른 유형이 토지면 그대로, 아니면 토지 맞춤
+  const pre = (activePreset && LAYOUT_PRESETS[activePreset] && LAYOUT_PRESETS[activePreset].mount === 'ground') ? activePreset : 'groundauto';
+  const before = layoutRegistry.length;
+  try{ applyLayoutPreset(pre); onGenerateLayoutClick(); }catch(e){ console.warn('parcel merge layout', e); }
+  const ed = layoutRegistry.length > before ? layoutRegistry[layoutRegistry.length - 1] : null;
+  if(ed){ ed.bldName = name; ed.mergedParcels = list.map(c => c.jibun); try{ applyBadge(ed); }catch(e){} }
+  scheduleLayoutCards();
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧩 필지 ${list.length}개(${list.map(c => c.jibun || '?').join(', ')})를 하나의 사업지로 합쳤습니다 — 약 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평)${ed ? ` → ${layoutTypeLabel(ed)} ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장` : ''}. 이름은 라벨의 ✏로 바꿀 수 있고, ↶ 이전으로 되돌릴 수 있습니다.`; }
+}
 function clickedParcelsSummary(){
   const list = Object.values(clickedParcels); if(!list.length) return '';
   const tot = list.reduce((a, c) => a + (c.area || 0), 0);
@@ -10053,13 +10083,13 @@ function makeParcelBldPoly(entry){
 // ===== 건물 도형 합치기 =====
 // 여러 건물 외곽선을 하나로: 가장 큰 도형의 축으로 돌린 0.2m 격자에 칠한 뒤 바깥 테두리를 따라 직각 외곽선을 만듦
 //   mode 'touch': 1.5m 이내 틈만 메움(맞닿은 조각 합치기) · mode 'fill': 사이 빈 곳도 가로·세로로 메움(사용자가 고른 도형 = 한 지붕)
-function mergeBuildingPaths(paths, mode){
+function mergeBuildingPaths(paths, mode, cell){
   const all = paths.flat(); const lat0 = all.reduce((a, q) => a + q.getLat(), 0) / all.length * Math.PI / 180;
   const XY = paths.map(pp => pp.map(q => solarToXY(q, lat0)));
   const big = XY.reduce((a, b) => areaXY(b) > areaXY(a) ? b : a, XY[0]);
   const th = principalAxes(big);
   const R = XY.map(pp => pp.map(q => rotateXY(q.x, q.y, -th)));
-  const cs = 0.2, pad = 8;
+  const cs = cell || 0.2, pad = 8;
   const xs = R.flat().map(q => q.x), ys = R.flat().map(q => q.y);
   const x0 = Math.min(...xs) - pad * cs, y0 = Math.min(...ys) - pad * cs;
   const W = Math.ceil((Math.max(...xs) - x0) / cs) + pad, H = Math.ceil((Math.max(...ys) - y0) / cs) + pad;
