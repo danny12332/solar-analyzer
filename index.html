@@ -1257,7 +1257,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-09d';
+const APP_VERSION = '2026-11-10a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -9024,23 +9024,34 @@ function generateSolarLayout(){
   // 시작 위치(좌우·상하)를 조금씩 옮겨 보며 모듈이 가장 많이 들어가는 격자를 고름
   const fitsCorner = c => pointInPolygonXY(c, polyXY) && (setback <= 0 || distToPolygonBoundary(c, polyXY) >= setback - 0.02);
   // 띠(줄) 하나를 놓는다: x0부터 가로로 훑으며 bandRows단 세로 한 줄씩(안 들어가면 낮은 단으로) — 놓은 장수 반환
-  const placeBand = (x0, y, bandRows, rowIdx, out) => {
+  const placeBand = (x0, y, bandRows, rowIdx, out, flex) => {
       const n0 = out.length;
-      let col = 0, tIdx = 0, run = 0;
+      let col = 0, tIdx = 0, run = 0, runY = null;
+      // flex(마무리 단계): 제자리에 안 들어가는 세로 줄은 앞뒤로 조금씩 옮겨 봄 — 휘거나 좁아지는 띠 모양 필지에서 줄을 경계 따라 계단식(테이블 단위)으로 이어 놓음. 앞 띠와는 열간격(그늘) 유지
+      const prevMods = flex ? out.slice() : null;
+      const clearOfPrev = (xa, xb, ya) => !prevMods || prevMods.every(pm => { const r = pm.cornersRot; const px0 = Math.min(r[0].x, r[1].x), px1 = Math.max(r[0].x, r[1].x), py1 = Math.max(r[2].y, r[0].y); return px1 <= xa + 0.01 || px0 >= xb - 0.01 || ya >= py1 + rowGap - 0.01; });
       let runRows = 0; // 지금 이어지고 있는 테이블의 단 수(단 수가 바뀌면 새 테이블)
       for(let x = x0; x + footprintEW <= xmax + 1e-6; ){
         // N단 세로 한 줄 → 안 들어가면 (N−1)…2단으로 줄여서(앞 맞춤, 안 되면 뒤 맞춤) 자리 채움
         let colMods = [];
         const tryCol = (rows, yStart) => { const cm = []; for(let k = 0; k < rows; k++){ const y0 = yStart + k * (footprintNS + gap), y1 = y0 + footprintNS; const cornersRot = [ {x, y: y0}, {x: x+footprintEW, y: y0}, {x: x+footprintEW, y: y1}, {x, y: y1} ]; const cornersReal = cornersRot.map(c => rotateXY(c.x, c.y, azimuthRad)); if(!cornersReal.every(fitsCorner)) return null; cm.push({ cornersReal, cornersRot, tier: k }); } return cm; };
         const bandDepth = bandRows * footprintNS + (bandRows - 1) * gap;
+        let colY = y;
         for(let rows = bandRows; rows >= Math.min(2, bandRows) && !colMods.length; rows--){
           const depthR = rows * footprintNS + (rows - 1) * gap;
           colMods = tryCol(rows, y) || (rows < bandRows ? tryCol(rows, y + bandDepth - depthR) : null) || [];
+          if(colMods.length) colY = colMods[0].cornersRot[0].y;
+          if(colMods.length && flex && !clearOfPrev(x, x + footprintEW, colY)) colMods = []; // 앞 띠에서 옮겨진 줄과 열간격이 모자라면 이 자리는 안 됨
+        }
+        if(!colMods.length && flex){
+          // 이어지던 줄 높이(runY) 근처부터, 최대 ±(열간격 절반+모듈 한 장) 범위에서 0.2m씩
+          const base = runY !== null ? runY : y; const lim = Math.max(1.0, rowGap / 2 + footprintNS);
+          outer: for(let s2 = 0.2; s2 <= lim + 1e-9; s2 += 0.2){ for(const sg of [1, -1]){ const yy = base + sg * s2; if(!clearOfPrev(x, x + footprintEW, yy)) continue; const cm = tryCol(bandRows, yy); if(cm){ colMods = cm; colY = yy; break outer; } } }
         }
         if(colMods.length){
           const rows = colMods.length;
-          if((run === 0 && col > 0) || (run > 0 && rows !== runRows)){ tIdx++; run = 0; } // 끊겼다 다시 시작하거나 단 수가 바뀌면 새 테이블
-          runRows = rows;
+          if((run === 0 && col > 0) || (run > 0 && (rows !== runRows || (runY !== null && Math.abs(colY - runY) > 0.01)))){ tIdx++; run = 0; } // 끊겼다 다시 시작하거나 단 수·높이가 바뀌면 새 테이블
+          runRows = rows; runY = colY;
           colMods.forEach(m => out.push(Object.assign(m, { row: rowIdx, table: rowIdx + '-' + tIdx, rowsN: rows })));
           run++; if(run >= arrCols){ run = 0; tIdx++; }
         } else if(run > 0){ run = 0; tIdx++; }
@@ -9050,7 +9061,7 @@ function generateSolarLayout(){
       }
       return out.length - n0;
   };
-  const buildGroundCands = (ox, oy, bandsOverride) => {
+  const buildGroundCands = (ox, oy, bandsOverride, refine, flexOn) => {
     const out = []; let rowIdx = 0;
     // 띠(줄) 목록: 기준 단수 띠를 열간격으로 반복하고, 마지막에 남는 깊이에는 들어갈 수 있는 가장 높은 낮은 단(2단 이상) 띠 하나 더
     let bands = bandsOverride;
@@ -9058,7 +9069,13 @@ function generateSolarLayout(){
       for(; y + arrDepth <= ymax + 1e-6; y += pitch) bands.push({ y, rows: arrRows });
       if(bands.length){ const yLast = bands[bands.length - 1].y; const nextY = yLast + pitch; // 앞 띠 그림자(열간격)를 지킨 자리에서 낮은 단
         for(let r = arrRows - 1; r >= 2; r--){ const d = r * footprintNS + (r - 1) * gap; if(nextY + d <= ymax + 1e-6){ bands.push({ y: nextY, rows: r, tail: true }); break; } } } }
-    for(const band of bands){ rowIdx++; placeBand(xmin - setback + ox, band.y, band.rows, rowIdx, out); }
+    for(const band of bands){ rowIdx++;
+      if(!refine){ placeBand(xmin - setback + ox, band.y, band.rows, rowIdx, out); continue; }
+      // 줄마다 시작 위치를 따로 맞춤(2026-11-10): 모든 줄이 같은 격자를 쓰면 경계가 비스듬할 때 줄 끝에 모듈 한 장 폭(약 1.1m)까지 빈틈이 남음 → 줄마다 가장 많이 들어가는 시작점
+      let bestTmp = null; const stepX0 = footprintEW + gap;
+      for(let j = 0; j < 12; j++){ const tmp = out.slice(); const n0 = tmp.length; placeBand(xmin - setback + ox + j * stepX0 / 12 - stepX0 / 2, band.y, band.rows, rowIdx, tmp, !!flexOn); const added = tmp.slice(n0); if(!bestTmp || added.length > bestTmp.length) bestTmp = added; }
+      if(bestTmp) bestTmp.forEach(c => out.push(c));
+    }
     return out;
   };
   // 3단 이상 테이블의 1/4·3/4 자리 가운데 단을 통풍로로 표시(모듈 제외)
@@ -9081,7 +9098,7 @@ function generateSolarLayout(){
     const bands = []; for(let k = 0; k < N; ){ const pk = pick[k]; if(!pk){ k++; continue; } bands.push({ y: y0 + k * dy, rows: pk.R }); k = pk.nk; }
     return { bands, n: best[0] };
   };
-  let cands = [], bestOff = null;
+  let cands = [], bestOff = null, mixBandsUsed = null;
   const stepX = footprintEW + gap;
   const searchBest = () => { let best = [], off = null; const nY = Math.max(1, Math.min(16, Math.ceil(pitch / 0.25))), nX = 6;
     for(let iy = 0; iy < nY; iy++){ for(let ix = 0; ix < nX; ix++){ const ox = setback + ix * stepX / nX, oy = setback + iy * Math.min(pitch, ymax - ymin) / nY; const c = buildGroundCands(ox, oy); if(c.length > best.length){ best = c; off = { ox, oy }; } } }
@@ -9097,7 +9114,7 @@ function generateSolarLayout(){
     const bestT = tries.reduce((a, t) => (t.live > a.live ? t : a), { live: -1 }); // 통풍로를 뺀 실제 장수로 비교, 같으면 낮은 단
     if(mix && mix.live > bestT.live){
       arrRows = Math.max(...mix.bands.map(b => b.rows), 2);
-      cands = mix.cands; bestOff = mix.off;
+      cands = mix.cands; bestOff = mix.off; mixBandsUsed = mix.bands;
       const seq = mix.bands.map(b => b.rows + '단').join('·');
       autoNote = ` 맞춤(단수 섞음): 앞(남)→뒤(북) 띠 ${seq} = ${mix.live}장(통풍로 제외) — 단수 고정 비교: ${tries.map(t => `${t.R}단 ${t.live}장`).join(' · ')}.`;
     } else {
@@ -9106,6 +9123,8 @@ function generateSolarLayout(){
     }
     G = geomFor(arrRows); arrDepth = G.arrDepth; arrHeight = G.arrHeight; shadowLen = G.shadowLen; pitch = G.pitch; rowGap = pitch - arrDepth;
   } else { const r = searchBest(); cands = r.cands; bestOff = r.off; }
+  // 마무리: 고른 격자(띠 위치)는 그대로 두고 줄마다 시작 위치만 다시 맞춰 줄 끝 빈틈을 줄임 — 더 많거나 같을 때만 바꿈
+  if(bestOff){ try{ const bandsUsed = (groundAutoRows && typeof mixBandsUsed !== 'undefined' && mixBandsUsed) ? mixBandsUsed : null; const liveN = list => list.filter(c => !c.vent).length; const before = liveN(cands); let bestR = null; for(const fx of [false, true]){ const rc = buildGroundCands(bestOff.ox, bestOff.oy, bandsUsed, true, fx); markVents(rc); if(!bestR || liveN(rc) > liveN(bestR)) bestR = rc; } if(bestR && liveN(bestR) >= before) cands = bestR; }catch(e){ console.warn('row refine', e); } }
   // 실무 밀도 기준(토지 300평/100kW) 적용
   markVents(cands);
   const targetKw = densityTargetKw(siteAreaM2, false);
