@@ -844,7 +844,8 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <label>설치각도 <input id="sheetTilt" type="text" value="5~10도" style="width:60px;"></label>
           <label>설계자 <input id="sheetDesigner" type="text" style="width:70px;"></label>
           <label><input id="sheetSat" type="checkbox" checked style="vertical-align:middle;"> 위성사진 배경</label>
-          <label title="경계(지붕 끝) 변마다 가장 가까운 모듈 모서리까지의 거리를 mm 치수로 표시 — 지자체 제출용"><input id="sheetDim" type="checkbox" checked style="vertical-align:middle;"> 처마끝 이격 치수(mm) 표시</label>
+          <label title="경계(지붕 끝) 변마다 가장 가까운 모듈 모서리까지의 거리를 mm 치수로 표시 — 필요할 때만 켜세요(기본 꺼짐)"><input id="sheetDim" type="checkbox" style="vertical-align:middle;"> 이격 치수(mm) 표시</label>
+          <label title="배치도에 측면도 단면 기호(&quot;A&quot;–&quot;A&quot; 단면선)를 표시 — 필요할 때만 켜세요(기본 꺼짐)"><input id="sheetSection" type="checkbox" style="vertical-align:middle;"> 단면 기호(A) 표시</label>
           <label title="측면도에 그릴 건물 처마(지붕 바닥) 높이 — 건축물대장·현장 확인값을 넣으세요(가정값)">처마 높이(m) <input id="sideEaveH" type="number" value="6" step="0.5" min="0" style="width:60px;"></label>
           <label title="측면도 지붕 경사각(경사지붕). 평슬라브·토지는 0">지붕 경사(°) <input id="sideRoofDeg" type="number" value="10" step="1" min="0" max="45" style="width:60px;"></label>
           <label title="지붕 형태. 박공 = 가운데 용마루 1개. 연속 박공(M자) = 용마루 N개, 각 스팬이 골에서 올라가 용마루에서 다시 내려옴(11-0311 도면 형태). 톱날 = 각 스팬이 남→북으로 올라가 용마루에서 수직으로 떨어짐">지붕 형태 <select id="sideRoofForm" style="font-size:11.5px;"><option value="gable:1">박공(용마루 1)</option><option value="mgable:2">연속 박공 2</option><option value="mgable:3">연속 박공 3</option><option value="mgable:4">연속 박공 4</option><option value="mgable:5">연속 박공 5</option><option value="mgable:6">연속 박공 6</option><option value="saw:2">톱날 2</option><option value="saw:3">톱날 3</option><option value="saw:4">톱날 4</option><option value="saw:5">톱날 5</option><option value="saw:6">톱날 6</option></select></label>
@@ -1256,7 +1257,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-09c';
+const APP_VERSION = '2026-11-09d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3289,7 +3290,7 @@ async function exportLayoutSheet(fmt, opts){
     L.vents.forEach(m => { const path = m.poly.getPath(); poly(path, '#11AA22', 'rgba(60,220,60,0.75)', 1.6); if(path.length === 4){ const a = toC(path[0].getLat(), path[0].getLng()), b = toC(path[2].getLat(), path[2].getLng()), c2 = toC(path[1].getLat(), path[1].getLng()), d = toC(path[3].getLat(), path[3].getLng()); g.strokeStyle = '#000'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.moveTo(c2.x, c2.y); g.lineTo(d.x, d.y); g.stroke(); } });
   });
   // 3-3) 처마끝 이격 치수(지자체 제출용): 경계 변 → 가장 가까운 모듈 모서리까지의 거리(mm)
-  if((document.getElementById('sheetDim') || {}).checked !== false){
+  if((document.getElementById('sheetDim') || {}).checked === true){ // 기본 꺼짐(2026-11-09 사용자: 이격 표시 전부 안 나오게, 필요하면 체크)
     layouts.forEach(L => {
       if(L.ed.type === 'ground') return; // 토지 배치도는 이격 치수 표기 안 함(2026-11-09 사용자)
       layoutEdgeSetbacks(L.ed, 3.5).slice(0, 6).forEach(dm => {
@@ -3391,8 +3392,8 @@ async function exportLayoutSheet(fmt, opts){
     g.fillStyle = '#E00000'; g.font = 'bold 44px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.fillText(`${kw.toLocaleString('ko-KR', {maximumFractionDigits: 3})}KW`, bx + bw / 2, by + 70);
     g.fillStyle = '#000'; g.font = '22px "Noto Sans KR", "Malgun Gothic", sans-serif'; g.fillText(`(${L.ed.wattPerPanel}W × ${n}EA)`, bx + bw / 2, by + 108);
   });
-  // 4-1) 단면 기호: 측면도 대표 동마다 건물 가운데를 가로지르는 단면선 양 끝에 파란 글자 "A","B"…
-  try{
+  // 4-1) 단면 기호: 측면도 대표 동마다 건물 가운데를 가로지르는 단면선 양 끝에 파란 글자 "A","B"… — 체크했을 때만(2026-11-09 사용자: 수동으로만)
+  if((document.getElementById('sheetSection') || {}).checked === true) try{
     const groups = sideViewGroups(); const letters = 'ABCDEFGHIJKLMNOP';
     groups.forEach((grp, gi) => {
       const ed = grp.ed; if(!ed.boundary || ed.boundary.length < 3) return;
