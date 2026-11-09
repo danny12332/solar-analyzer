@@ -1255,7 +1255,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-06c';
+const APP_VERSION = '2026-11-09a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3224,7 +3224,14 @@ async function exportLayoutSheet(fmt, opts){
   const poly = (path, stroke, fill, lw, dash) => { if(!path || path.length < 2) return; g.beginPath(); path.forEach((q, i) => { const p = toC(q.getLat(), q.getLng()); i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); }); g.closePath(); if(fill){ g.fillStyle = fill; g.fill(); } if(stroke){ g.setLineDash(dash || []); g.lineWidth = lw || 2; g.strokeStyle = stroke; g.stroke(); g.setLineDash([]); } };
   // 2) 필지·건물 경계
   if(lastParcelPath && lastParcelPath.length >= 3) poly(lastParcelPath, '#FFD23F', null, 3, [14, 8]);
-  layouts.forEach(L => poly(L.ed.boundary, '#111', null, 3.2));
+  const sheetGroups = siteGroupsOf(layouts.map(L => L.ed));
+  layouts.forEach(L => { const k = (L.ed.siteGroup || '').trim(); if(k && (sheetGroups.get(k) || []).length > 1) return; poly(L.ed.boundary, '#111', null, 3.2); });
+  // 묶인 사업지: 필지 경계를 합친 바깥 테두리만(안쪽 맞닿은 선은 지움) — 굵은 선을 그린 뒤 경계 안쪽을 지워 바깥 절반만 남김
+  sheetGroups.forEach(members => { if(members.length < 2) return; const oc = document.createElement('canvas'); oc.width = W; oc.height = H; const og = oc.getContext('2d');
+    const pathOf = ed => { og.beginPath(); ed.boundary.forEach((q, i) => { const p = toC(q.getLat(), q.getLng()); i ? og.lineTo(p.x, p.y) : og.moveTo(p.x, p.y); }); og.closePath(); };
+    og.lineJoin = 'round'; og.strokeStyle = '#111'; og.lineWidth = 6.4; members.forEach(ed => { if(ed.boundary && ed.boundary.length >= 3){ pathOf(ed); og.stroke(); } });
+    og.globalCompositeOperation = 'destination-out'; og.fillStyle = '#000'; og.lineWidth = 1.4; members.forEach(ed => { if(ed.boundary && ed.boundary.length >= 3){ pathOf(ed); og.fill(); og.stroke(); } }); // 안쪽 맞닿은 선의 흐린 자국까지 지움
+    g.drawImage(oc, 0, 0); });
   // 2-1) 음영(동지 12/21 · 9시·12시·15시 태양 위치로 계산한 테이블 그림자) — 제안서 조감도용
   if(opts.shadow){
     layouts.forEach(L => {
@@ -3240,6 +3247,7 @@ async function exportLayoutSheet(fmt, opts){
   // 3-3) 처마끝 이격 치수(지자체 제출용): 경계 변 → 가장 가까운 모듈 모서리까지의 거리(mm)
   if((document.getElementById('sheetDim') || {}).checked !== false){
     layouts.forEach(L => {
+      if(L.ed.type === 'ground') return; // 토지 배치도는 이격 치수 표기 안 함(2026-11-09 사용자)
       layoutEdgeSetbacks(L.ed, 3.5).slice(0, 6).forEach(dm => {
         const A = toC(dm.from.getLat(), dm.from.getLng()), Bp = toC(dm.to.getLat(), dm.to.getLng());
         const dx = Bp.x - A.x, dy = Bp.y - A.y, len = Math.hypot(dx, dy); if(len < 0.5) return;
@@ -3313,12 +3321,14 @@ async function exportLayoutSheet(fmt, opts){
   }
   // 4) 동별 용량 상자
   g.textBaseline = 'middle'; g.textAlign = 'center';
+  const doneGroups = new Set();
   layouts.forEach((L, i) => {
-    const pts = L.live.flatMap(m => m.poly.getPath()); if(!pts.length) return;
+    const gk = (L.ed.siteGroup || '').trim(); const gm = gk ? (sheetGroups.get(gk) || []) : [];
+    let liveMods = L.live, name = L.ed.bldName || `${i + 1}동`, n = L.live.length, kw = n * L.ed.wattPerPanel / 1000;
+    if(gm.length > 1){ if(doneGroups.has(gk)) return; doneGroups.add(gk); const gl = layouts.filter(x => (x.ed.siteGroup || '').trim() === gk); liveMods = gl.flatMap(x => x.live); n = liveMods.length; kw = gl.reduce((a, x) => a + x.live.length * x.ed.wattPerPanel / 1000, 0); name = gk; }
+    const pts = liveMods.flatMap(m => m.poly.getPath()); if(!pts.length) return;
     const xs = pts.map(q => toC(q.getLat(), q.getLng()));
     const rx = Math.max(...xs.map(p => p.x)), cy = (Math.min(...xs.map(p => p.y)) + Math.max(...xs.map(p => p.y))) / 2;
-    const n = L.live.length, kw = n * L.ed.wattPerPanel / 1000;
-    const name = L.ed.bldName || `${i + 1}동`;
     const bw = 300, bh = 130;
     let bx = Math.min(rx + 30, M.x + M.w - bw - 10), by = Math.max(M.y + 10, Math.min(cy - bh / 2, M.y + M.h - bh - 10));
     if(L.ed.badgePinned && L.ed.badge && L.ed.badge.getPosition){
@@ -6466,7 +6476,7 @@ function renderLayoutCards(){
     const area = layoutAreaM2(ed); tArea += area || 0;
     const name = ed.bldName || `${i + 1}동`;
     return `<div class="lay-card" draggable="true" data-gid="${ed.groupId}" ondragstart="layCardDragStart(event)" ondragover="layCardDragOver(event)" ondragleave="this.classList.remove('over')" ondrop="layCardDrop(event)" ondragend="layCardDragEnd(event)">
-      <div class="lc-head"><span style="color:#9A7A3A;font-weight:700;">${i + 1}</span><span class="lc-name" title="${escLand(name)}">${escLand(name)}</span>${(ed.bldName && !ed.addrFailed) ? `<button type="button" onclick="layCardSetName(${ed.groupId})" title="주소·이름 고치기" style="font-size:11px;padding:0 5px;border:1px solid var(--card-line);border-radius:5px;background:#fff;cursor:pointer;">✏</button>` : `<button type="button" onclick="layCardSetName(${ed.groupId})" title="${ed.addrFailed ? '주소를 자동으로 찾지 못했습니다 — 직접 적어 주세요' : '주소·이름 적기'}" style="font-size:11px;padding:0 6px;border:1px solid ${ed.addrFailed ? '#B3261E' : 'var(--card-line)'};border-radius:5px;background:${ed.addrFailed ? '#FBE9E7' : '#fff'};color:${ed.addrFailed ? '#B3261E' : 'var(--ink)'};font-weight:700;cursor:pointer;">✏ 주소 입력</button>`}<span class="lc-kw">${fmt(kw)} kW</span></div>
+      <div class="lc-head"><span style="color:#9A7A3A;font-weight:700;">${i + 1}</span><span class="lc-name" title="${escLand(name)}">${escLand(name)}</span>${(ed.bldName && !ed.addrFailed) ? `<button type="button" onclick="layCardSetName(${ed.groupId})" title="주소·이름 고치기" style="font-size:11px;padding:0 5px;border:1px solid var(--card-line);border-radius:5px;background:#fff;cursor:pointer;">✏</button>` : `<button type="button" onclick="layCardSetName(${ed.groupId})" title="${ed.addrFailed ? '주소를 자동으로 찾지 못했습니다 — 직접 적어 주세요' : '주소·이름 적기'}" style="font-size:11px;padding:0 6px;border:1px solid ${ed.addrFailed ? '#B3261E' : 'var(--card-line)'};border-radius:5px;background:${ed.addrFailed ? '#FBE9E7' : '#fff'};color:${ed.addrFailed ? '#B3261E' : 'var(--ink)'};font-weight:700;cursor:pointer;">✏ 주소 입력</button>`}<button type="button" onclick="layCardSetGroup(${ed.groupId})" title="여러 필지를 하나의 사업지로 묶기(같은 이름끼리 한 구획·용량 상자 하나)" style="font-size:11px;padding:0 5px;border:1px solid ${ed.siteGroup ? '#0E5A3A' : 'var(--card-line)'};border-radius:5px;background:${ed.siteGroup ? '#E9F5EE' : '#fff'};color:${ed.siteGroup ? '#0E5A3A' : 'var(--ink)'};cursor:pointer;white-space:nowrap;">🔗${ed.siteGroup ? ' ' + escLand(ed.siteGroup) : ''}</button><span class="lc-kw">${fmt(kw)} kW</span></div>
       <div class="lc-sub">${ed.alt ? `<b style="color:#7A0E58;">${ed.alt.label}</b> · ` : ''}${escLand(layoutTypeLabel(ed))} · ${area ? Math.round(area).toLocaleString('ko-KR') + '㎡ (' + Math.round(area / 3.305785).toLocaleString('ko-KR') + '평) · ' : ''}${ed.wattPerPanel}W × ${live.toLocaleString('ko-KR')}장${(ed.tables || []).length ? ' · 테이블 ' + ed.tables.length + '개' : ''}${ed.archFix ? ` · <span style="color:#B3261E;" title="건물도형 ${Math.round(ed.archFix.from)}㎡ → 건축물대장 건축면적 ${Math.round(ed.archFix.reg)}㎡ 기준으로 경계를 ${ed.archFix.d.toFixed(1)}m 줄임(추정)">경계 대장면적 보정</span>` : ''}</div>
       <div class="lc-btns">
         <label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:${ed.inProposal === false ? '#999' : '#0E5A3A'};border:1px solid var(--card-line);border-radius:5px;padding:1px 6px;background:${ed.inProposal === false ? '#fff' : '#E9F5EE'};" title="체크한 배치만 배치도·측면도·제안서·견적에 들어갑니다"><input type="checkbox" ${ed.inProposal === false ? '' : 'checked'} onchange="layCardToggleProposal(${ed.groupId}, this.checked)" style="margin:0;"> 제안서 포함</label>
@@ -6656,6 +6666,21 @@ function layoutAutoAddress(ed){
       else fail('주소 없음');
     });
   }catch(e){ fail(String(e && e.message || e)); }
+}
+// ===== 🔗 사업지 묶기: 여러 필지(배치)를 하나의 사업지로 — ed.siteGroup 이름이 같은 배치끼리 배치도에서 구획 하나(바깥 테두리만)·용량 상자 하나로, 지도 라벨도 하나로 =====
+function siteGroupsOf(list){
+  const m = new Map(); (list || layoutRegistry).forEach(ed => { const k = (ed.siteGroup || '').trim(); if(!k) return; if(!m.has(k)) m.set(k, []); m.get(k).push(ed); });
+  return m;
+}
+function layCardSetGroup(gid){
+  const ed = layoutByGroup(gid); if(!ed) return;
+  const names = [...siteGroupsOf().keys()];
+  const v = prompt(`이 배치를 묶을 사업지 이름을 적어 주세요.\n같은 이름을 적은 배치끼리 배치도·지도에서 구획 하나, 용량 상자 하나로 표시됩니다.\n비우면 묶기를 풉니다.${names.length ? '\n\n지금 있는 사업지: ' + names.join(', ') : ''}`, ed.siteGroup || names[0] || ed.bldName || '');
+  if(v === null) return;
+  histCheckpoint('사업지 묶기');
+  ed.siteGroup = v.trim();
+  try{ layoutRegistry.forEach(e => applyBadge(e)); renderLayoutCards(); }catch(e){}
+  const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; const n = ed.siteGroup ? (siteGroupsOf().get(ed.siteGroup) || []).length : 0; st.textContent = ed.siteGroup ? `🔗 사업지 "${ed.siteGroup}" — 배치 ${n}개를 한 구획으로 표시합니다. 다른 필지 카드에서도 🔗 를 눌러 같은 이름을 적으면 함께 묶입니다.` : '🔗 묶기를 풀었습니다.'; }
 }
 function layCardSetName(gid){
   const ed = layoutByGroup(gid); if(!ed) return;
@@ -6980,16 +7005,21 @@ function refreshLayoutLabel(ed){ if(!ed) return; if(ed.type === 'roof') updateRo
 function applyBadge(ed){
   if(!ed || !ed.modules) return;
   const map = ensureKakaoMap();
-  const live = ed.modules.filter(m => !m.removed);
-  const n = live.length, kw = n * ed.wattPerPanel / 1000;
+  let live = ed.modules.filter(m => !m.removed);
+  let n = live.length, kw = n * ed.wattPerPanel / 1000;
   if(ed.label && ed.label.setMap) ed.label.setMap(null); // 기존 상단 라벨은 숨김
+  const grpMembers = ed.siteGroup ? (siteGroupsOf().get(ed.siteGroup.trim()) || [ed]) : null;
+  if(grpMembers && grpMembers.length > 1){
+    if(grpMembers[0] !== ed){ if(ed.badge && ed.badge.setMap) ed.badge.setMap(null); return; } // 묶인 사업지는 첫 배치에만 라벨
+    live = grpMembers.flatMap(e => e.modules.filter(m => !m.removed)); n = live.length; kw = grpMembers.reduce((a, e) => a + e.modules.filter(m => !m.removed).length * e.wattPerPanel / 1000, 0);
+  }
   const pts = (live.length ? live : ed.modules).flatMap(m => m.poly.getPath());
   if(!pts.length) return;
   const maxLng = Math.max(...pts.map(q => q.getLng()));
   const lats = pts.map(q => q.getLat()); const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
   const pos = new kakao.maps.LatLng(midLat, maxLng);
   const html = `<div class="cap-badge" data-gid="${ed.groupId}" onmousedown="badgeDragStart(event, ${ed.groupId})" title="끌어서 라벨 위치를 옮길 수 있습니다 (더블클릭: 자동 위치로)" ondblclick="badgeUnpin(event, ${ed.groupId})" style="position:relative;transform:translateX(10px);background:#fff;border:2px solid #2048B8;border-radius:6px;padding:4px 10px 4px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25);font-family:'IBM Plex Mono',monospace;white-space:nowrap;text-align:left;cursor:grab;user-select:none;">
-    ${ed.bldName ? `<div style="font-size:10.5px;color:#444;font-family:inherit;">${escLand(ed.bldName)}</div>` : ''}${(ed.addrFailed ? `<div onmousedown="event.stopPropagation()" onclick="event.stopPropagation();layCardSetName(${ed.groupId})" style="font-size:10.5px;color:#B3261E;font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;" title="주소를 자동으로 찾지 못했습니다 — 눌러서 직접 입력">✏ 주소 입력</div>` : '')}
+    ${(grpMembers && grpMembers.length > 1) ? `<div style="font-size:10.5px;color:#0E5A3A;font-weight:700;font-family:inherit;">🔗 ${escLand(ed.siteGroup)} (${grpMembers.length}필지)</div>` : (ed.bldName ? `<div onmousedown="event.stopPropagation()" onclick="event.stopPropagation();layCardSetName(${ed.groupId})" title="눌러서 주소·이름 고치기" style="font-size:10.5px;color:#444;font-family:inherit;cursor:pointer;">${escLand(ed.bldName)} ✏</div>` : '')}${(ed.addrFailed ? `<div onmousedown="event.stopPropagation()" onclick="event.stopPropagation();layCardSetName(${ed.groupId})" style="font-size:10.5px;color:#B3261E;font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;" title="주소를 자동으로 찾지 못했습니다 — 눌러서 직접 입력">✏ 주소 입력</div>` : '')}
     <div style="font-size:17px;font-weight:800;color:#D62020;line-height:1.15;">${kw.toLocaleString('ko-KR', {maximumFractionDigits: 2})}kW</div>
     <div style="font-size:11px;color:#222;">${ed.wattPerPanel}W × ${n.toLocaleString('ko-KR')}EA</div>
     <span onclick="event.stopPropagation();removeSolarLayout(${ed.groupId})" title="이 배치 삭제" style="position:absolute;top:-8px;right:-8px;width:16px;height:16px;line-height:15px;text-align:center;border-radius:50%;background:#2048B8;color:#fff;font-size:10px;cursor:pointer;">✕</span></div>`;
