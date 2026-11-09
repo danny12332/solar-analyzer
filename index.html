@@ -773,6 +773,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="preset-btn" id="bldMergeBtn" onclick="toggleBldMergeMode()" title="한 지붕인데 공공 건물도형이 여러 동으로 나뉘어 있을 때: 도형들을 차례로 클릭한 뒤 이 버튼을 다시 누르면 하나로 합쳐(사이 빈 곳 포함) 최대 배치">🔗 건물 합치기</button>
           <button type="button" class="preset-btn" id="parcelMergeBtn" onclick="mergeClickedParcels()" title="합필: 지도에서 필지를 차례로 클릭해 고른 뒤(주황 테두리) 이 버튼을 누르면 맞닿은 필지를 하나의 사업지 경계로 합쳐 토지 배치를 바로 만듭니다. 같은 필지를 다시 클릭하면 선택이 풀립니다.">🧩 필지 합치기</button>
           <button type="button" class="preset-btn" onclick="mergeAdjacentLandLayouts()" title="이미 만든 토지 배치 중 서로 맞닿은 필지를 모두 찾아 경계 하나로 합쳐 다시 배치(필지 사이 이격이 없어짐). 도로 등으로 떨어진 필지는 그대로">🧩 인접 토지 모두 합치기</button>
+          <button type="button" class="preset-btn" onclick="optimizeLandAzimuth()" title="지도에 있는 토지 배치를 모두 같은 방위로 −45°~+45° 돌려 보며 합계 장수가 가장 많은 방위로 다시 배치(필지마다 방향이 달라지지 않음)">🧭 여러 필지 같은 방향 최적화</button>
           <button type="button" class="preset-btn" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
           <button type="button" class="preset-btn" onclick="startFromParcel()" title="검색한 필지 경계를 배치 경계로 가져온 뒤 바로 조정 모드로 — 지붕이 필지를 거의 다 덮는 공장 등에서 노란 네모(변)를 끌어 지붕선에 맞추기">▭ 필지 경계로 시작</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
@@ -1258,7 +1259,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-10c';
+const APP_VERSION = '2026-11-10d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -6662,18 +6663,58 @@ function layCardRelayout(gid){
   scheduleLayoutCards();
 }
 // 토지 배치 방위 돌리기: 배치 전체를 정남 기준 ±45° 안에서 5°씩(또는 정남으로) 다시 배치
+// 토지 배치 방위 회전 — 토지 배치가 여러 개면 모두 같은 각도로 돌림(사용자 2026-11-10: 여러 필지는 반드시 같은 방향)
 function layCardAz(gid, delta){
   const ed = layoutByGroup(gid); if(!ed || ed.type !== 'ground' || !ed.boundary || ed.boundary.length < 3) return;
   const from = Math.round((ed.azRad || 0) * 1800 / Math.PI) / 10; const to = delta === null ? 0 : Math.max(-45, Math.min(45, Math.round((from + delta) * 10) / 10));
-  if(to === from) return;
-  const fromN = ed.modules.filter(m => !m.removed).length, prevCmp = ed.azCmp, nm = ed.bldName, grp = ed.siteGroup, mp = ed.mergedParcels, pre = ed.preset || ed.genPreset;
-  histCheckpoint(`방위 ${from}°→${to}°`); histMuted = true;
-  try{ if(pre && LAYOUT_PRESETS[pre]) applyLayoutPreset(pre); layoutAxisLockDeg = to; layCardRelayoutInner(gid); }
-  catch(e){ console.warn('az relayout', e); } finally { layoutAxisLockDeg = null; histMuted = false; }
-  const ne = layoutRegistry[layoutRegistry.length - 1];
-  if(ne && ne !== ed){ if(nm) ne.bldName = nm; if(grp) ne.siteGroup = grp; if(mp) ne.mergedParcels = mp; ne.preset = ne.preset || pre; ne.azCmp = { fromN: prevCmp ? prevCmp.fromN : fromN, diff: ne.modules.filter(m => !m.removed).length - (prevCmp ? prevCmp.fromN : fromN) }; try{ applyBadge(ne); }catch(e){} }
+  const land = layoutRegistry.filter(e => e.type === 'ground' && e.boundary && e.boundary.length >= 3);
+  setLandAzAll(land.map(e => e.groupId), to, `방위 ${from}°→${to}°`);
+}
+function landAzDeg(ed){ return Math.round((ed.azRad || 0) * 1800 / Math.PI) / 10; }
+// 고른 토지 배치들을 같은 방위(to°)로 다시 배치 → { before, after }
+function setLandAzAll(gids, to, histLabel){
+  const items = gids.map(g => layoutByGroup(g)).filter(Boolean);
+  const before = items.reduce((a, e) => a + e.modules.filter(m => !m.removed).length, 0);
+  if(items.every(e => landAzDeg(e) === to)){ return { before, after: before }; }
+  histCheckpoint(histLabel || `방위 ${to}°`); histMuted = true; let after = 0; const per = [];
+  try{
+    items.forEach(ed => {
+      const fromN = ed.modules.filter(m => !m.removed).length;
+      if(landAzDeg(ed) === to){ after += fromN; per.push(`${ed.bldName || '토지'} ${fromN}`); return; }
+      const prevCmp = ed.azCmp, nm = ed.bldName, grp = ed.siteGroup, mp = ed.mergedParcels, pre = ed.preset || ed.genPreset;
+      try{ if(pre && LAYOUT_PRESETS[pre]) applyLayoutPreset(pre); layoutAxisLockDeg = to; layCardRelayoutInner(ed.groupId); }
+      catch(e){ console.warn('az relayout', e); } finally { layoutAxisLockDeg = null; }
+      const ne = layoutRegistry[layoutRegistry.length - 1];
+      if(ne && ne !== ed){ if(nm) ne.bldName = nm; if(grp) ne.siteGroup = grp; if(mp) ne.mergedParcels = mp; ne.preset = ne.preset || pre; const n = ne.modules.filter(m => !m.removed).length; ne.azCmp = { fromN: prevCmp ? prevCmp.fromN : fromN, diff: n - (prevCmp ? prevCmp.fromN : fromN) }; try{ applyBadge(ne); }catch(e){} after += n; per.push(`${nm || '토지'} ${n}`); }
+    });
+  } finally { histMuted = false; }
   scheduleLayoutCards();
-  const st = document.getElementById('roadviewStatus'); if(st && ne){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧭 방위 ${from}° → ${to}°(0 = 정남) 다시 배치: ${fromN.toLocaleString('ko-KR')}장 → ${ne.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장. ↶ 이전으로 되돌릴 수 있습니다.`; }
+  const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧭 토지 배치 ${items.length}개 모두 방위 ${to}°(0 = 정남${to ? `, ${to > 0 ? '남→동' : '남→서'} ${Math.abs(to)}°` : ''})로 다시 배치: ${before.toLocaleString('ko-KR')}장 → ${after.toLocaleString('ko-KR')}장 (${per.join(' · ')}). ↶ 이전으로 되돌릴 수 있습니다.`; }
+  return { before, after };
+}
+// 🧭 여러 필지 같은 방향 최적화: 모든 토지 배치를 같은 방위로 −45°~+45°(5° 간격 → 가장 좋은 곳 ±4° 1° 간격) 계산해 합계 장수가 가장 많은 방위로 다시 배치
+let groundCountOnly = null;
+async function optimizeLandAzimuth(){
+  const st = document.getElementById('roadviewStatus');
+  const land = layoutRegistry.filter(e => e.type === 'ground' && e.boundary && e.boundary.length >= 3);
+  if(!land.length){ if(st){ st.style.color = '#b3402a'; st.textContent = '🧭 토지 배치가 없습니다. 먼저 필지에 토지 배치를 만드세요.'; } return; }
+  const items = land.map(ed => ({ gid: ed.groupId, boundary: ed.boundary.slice(), pre: ed.preset || ed.genPreset, name: ed.bldName || '토지' }));
+  const saveB = lastAreaPolygonPath, azEl = document.getElementById('panelAzimuth'), saveAz = azEl ? azEl.value : null, savePre = activePreset;
+  const cache = new Map();
+  const evalAt = deg => { if(cache.has(deg)) return cache.get(deg); let n = 0, g = 0; const per = [];
+    items.forEach(it => { try{ if(it.pre && LAYOUT_PRESETS[it.pre]) applyLayoutPreset(it.pre); lastAreaPolygonPath = it.boundary; layoutAxisLockDeg = deg; groundCountOnly = { n: 0, g: 0 }; generateSolarLayout(); n += groundCountOnly.n; g += groundCountOnly.g; per.push(groundCountOnly.n); }catch(e){ console.warn('az eval', e); per.push(0); } finally { groundCountOnly = null; layoutAxisLockDeg = null; } });
+    const r = { deg, n, g, per }; cache.set(deg, r); return r; };
+  const better = (a, b) => !b || a.n > b.n || (a.n === b.n && (a.g > b.g || (a.g === b.g && Math.abs(a.deg) < Math.abs(b.deg))));
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  let best = null; const coarse = []; for(let d = -45; d <= 45; d += 5) coarse.push(d);
+  try{
+    for(let k = 0; k < coarse.length; k++){ if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧭 같은 방향 최적화 계산 중… ${coarse[k]}° (${k + 1}/${coarse.length})`; } await tick(); const r = evalAt(coarse[k]); if(better(r, best)) best = r; }
+    const c0 = best.deg; for(let d = c0 - 4; d <= c0 + 4; d++){ if(d < -45 || d > 45 || cache.has(d)) continue; if(st) st.textContent = `🧭 같은 방향 최적화 — ${c0}° 주변 1° 간격 확인 중… ${d}°`; await tick(); const r = evalAt(d); if(better(r, best)) best = r; }
+  } finally { lastAreaPolygonPath = saveB; if(azEl && saveAz !== null) azEl.value = saveAz; if(savePre && LAYOUT_PRESETS[savePre]) try{ applyLayoutPreset(savePre); }catch(e){} }
+  const south = evalAt(0);
+  lastAreaPolygonPath = saveB;
+  const res = setLandAzAll(items.map(it => it.gid), best.deg, `같은 방향 최적화 ${best.deg}°`);
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧭 같은 방향 최적화: 토지 배치 ${items.length}개를 모두 방위 ${best.deg}°(0 = 정남${best.deg ? `, ${best.deg > 0 ? '남→동' : '남→서'} ${Math.abs(best.deg)}°` : ''})로 배치 — 합계 ${res.before.toLocaleString('ko-KR')}장 → ${res.after.toLocaleString('ko-KR')}장 (${items.map((it, i) => `${it.name} ${best.per[i]}`).join(' · ')}; 정남이면 ${south.n.toLocaleString('ko-KR')}장). −45°~+45° 5° 간격 + 최적 주변 1° 간격 비교. ↶ 이전으로 되돌릴 수 있습니다.`; }
 }
 // 🧩 인접 토지 배치 모두 합치기: 서로 맞닿은(1.5m 이내) 토지 배치 필지를 묶어 경계 하나로 다시 배치 — 필지 사이 3m 이격이 없어져 더 많이 들어감
 function mergeAdjacentLandLayouts(){
@@ -9046,7 +9087,7 @@ function generateSolarLayout(){
   const azimuthRad = azimuthDeg * Math.PI/180;
 
   const map = ensureKakaoMap();
-  replaceLayoutOnSameBoundary(lastAreaPolygonPath);
+  if(!groundCountOnly) replaceLayoutOnSameBoundary(lastAreaPolygonPath);
 
   const lat0Rad = lastAreaPolygonPath.reduce((s,p)=>s+p.getLat(),0) / lastAreaPolygonPath.length * Math.PI/180;
   const polyXY = lastAreaPolygonPath.map(p => solarToXY(p, lat0Rad)); // 실제 위치 기준(경계 이격 판정용)
@@ -9182,15 +9223,23 @@ function generateSolarLayout(){
   if(groundAlign === 'grid'){
     const colStep = footprintEW + gap, W = arrCols * footprintEW + (arrCols - 1) * gap, TP = W + arrSideGap;
     const minPart = Math.min(arrCols, Math.max(3, Math.ceil(arrCols / 4)));
+    // 테이블 하나 자리: R단이 안 들어가면 (R−1)…1단으로(사용자 2026-11-10: 꼭 2단이 아니어도 남는 자리 채움) — 같은 줄 띠 안에서 앞·가운데·뒤 맞춤, 열 격자는 그대로
     const buildGrid = (R, oxF, oyF) => {
-      const g = geomFor(R); const out = []; let rowIdx = 0, partial = 0;
-      for(let y = ymin + oyF; y + g.arrDepth <= ymax + 1e-6; y += g.pitch){ rowIdx++;
+      const g = geomFor(R); const out = []; let rowIdx = 0, partial = 0; const sY = footprintNS + gap;
+      const depth1 = footprintNS;
+      for(let y = ymin + oyF; y + depth1 <= ymax + 1e-6; y += g.pitch){ rowIdx++;
         for(let xc = xmin + oxF - TP, c = 0; xc < xmax; xc += TP, c++){
-          const cols = []; for(let j = 0; j < arrCols; j++){ const x = xc + j * colStep; let cm = []; for(let k = 0; k < R && cm; k++){ const y0 = y + k * (footprintNS + gap), y1 = y0 + footprintNS; const cr = [ {x, y: y0}, {x: x + footprintEW, y: y0}, {x: x + footprintEW, y: y1}, {x, y: y1} ]; const re = cr.map(q => rotateXY(q.x, q.y, azimuthRad)); if(!re.every(fitsCorner)) cm = null; else cm.push({ cornersReal: re, cornersRot: cr, tier: k }); } cols.push(cm); }
-          let pre = 0; while(pre < arrCols && cols[pre]) pre++;
-          let suf = 0; while(suf < arrCols && cols[arrCols - 1 - suf]) suf++;
-          let use = null; if(pre === arrCols) use = cols; else { const n = Math.max(pre, suf); if(n >= minPart){ use = pre >= suf ? cols.slice(0, pre) : cols.slice(arrCols - suf); partial++; } }
-          if(use) use.forEach(cm => cm.forEach(m => out.push(Object.assign(m, { row: rowIdx, table: rowIdx + '-' + c, rowsN: R }))));
+          const fit = []; for(let j = 0; j < arrCols; j++){ const x = xc + j * colStep; const fj = []; for(let m = 0; m < R; m++){ const y0 = y + m * sY, y1 = y0 + footprintNS; const cr = [ {x, y: y0}, {x: x + footprintEW, y: y0}, {x: x + footprintEW, y: y1}, {x, y: y1} ]; const re = cr.map(q => rotateXY(q.x, q.y, azimuthRad)); fj.push(re.every(fitsCorner) ? { cornersReal: re, cornersRot: cr } : null); } fit.push(fj); }
+          let best = null;
+          for(let r = R; r >= 1; r--) for(let m0 = 0; m0 + r <= R; m0++){
+            const ok = j => { for(let m = m0; m < m0 + r; m++) if(!fit[j][m]) return false; return true; };
+            let pre = 0; while(pre < arrCols && ok(pre)) pre++;
+            let suf = 0; while(suf < arrCols && ok(arrCols - 1 - suf)) suf++;
+            let js = null; if(pre === arrCols) js = [...Array(arrCols).keys()]; else { const n = Math.max(pre, suf); if(n >= minPart) js = pre >= suf ? [...Array(pre).keys()] : [...Array(suf).keys()].map(k => arrCols - suf + k); }
+            if(js && (!best || js.length * r > best.n)) best = { n: js.length * r, r, m0, js };
+          }
+          if(best){ if(best.r < R || best.js.length < arrCols) partial++;
+            best.js.forEach(jj => { for(let m = best.m0; m < best.m0 + best.r; m++){ const f = fit[jj][m]; out.push({ cornersReal: f.cornersReal, cornersRot: f.cornersRot, tier: m - best.m0, row: rowIdx, table: rowIdx + '-' + c, rowsN: best.r }); } }); }
         } }
       return { out, partial };
     };
@@ -9211,6 +9260,7 @@ function generateSolarLayout(){
   const targetKw = densityTargetKw(siteAreaM2, false);
   const targetCount = Math.floor(targetKw * 1000 / wattPerPanel);
   const { chosen } = pickByTarget(cands.filter(c => !c.vent), targetCount, wattPerPanel);
+  if(groundCountOnly){ groundCountOnly.n = chosen.length; groundCountOnly.g = cands.filter(c => !c.vent).length; return; } // 🧭 방향 최적화용 장수만 계산(그리지 않음)
   const ventChosen = cands.filter(c => c.vent && chosen.some(k => k.table === c.table)); // 선택된 테이블의 통풍로 자리
   ventChosen.forEach(c => chosen.push(c));
   const panelShapes = [];
