@@ -1259,7 +1259,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-10f';
+const APP_VERSION = '2026-11-10g';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -3091,7 +3091,7 @@ function removeSolarLayout(id){
 // ===== 배치 유형 프리셋: 배치 대상·모듈 방향·단 수·각도·이격을 한 번에 설정 (값은 실무 기본값이며 설정 줄에서 바로 수정 가능) =====
 const LAYOUT_PRESETS = {
   ground4:  { mount: 'ground',  orient: 'portrait', rows: 4, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 4단' },
-  groundauto: { mount: 'ground', orient: 'portrait', rows: 3, auto: true, tilt: 10, setback: 3, cols: 20, label: '토지 노지 맞춤(2·3단 자동)' },
+  groundauto: { mount: 'ground', orient: 'portrait', rows: 3, auto: true, tilt: 10, setback: 3, cols: 20, label: '토지 노지 맞춤(2단 + 남는 자리 1단)' },
   ground2:  { mount: 'ground',  orient: 'portrait', rows: 2, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 2단' },
   ground3:  { mount: 'ground',  orient: 'portrait', rows: 3, tilt: 10, setback: 3,   cols: 20, label: '토지 노지 3단' },
   slab:     { mount: 'slab',    orient: 'portrait',  rows: 2, tilt: 8,  setback: 0.5, aisle: 0.6, label: '평슬라브 경사거치' },
@@ -6727,20 +6727,28 @@ async function optimizeOneLand(gid){
   const saveB = lastAreaPolygonPath, azEl = document.getElementById('panelAzimuth'), saveAz = azEl ? azEl.value : null, savePre = activePreset;
   const tick = () => new Promise(r => setTimeout(r, 0));
   const better = (a, b) => !b || a.n > b.n || (a.n === b.n && (a.mode === 'grid' && b.mode !== 'grid' || (a.mode === b.mode && (a.g > b.g || (a.g === b.g && Math.abs(a.deg) < Math.abs(b.deg))))));
-  let best = null; const tried = []; const MODES = [['grid', '정렬 배치']]; // 최대 채움(free)은 좁은 띠에서 세로 줄이 계단처럼 어긋나 시공 불가 형태가 나와 제외(2026-11-10 확인)
+  let best = null, sp1 = null; const tried = [], allR = []; const MODES = [['grid', '정렬 배치']]; // 최대 채움(free)은 좁은 띠에서 세로 줄이 계단처럼 어긋나 시공 불가 형태가 나와 제외(2026-11-10 확인)
   try{
     for(const [mode, ml] of MODES){ let bm = null; const seen = new Set();
-      for(let d = -45; d <= 45; d += 5){ if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ ${it.name} 최대 배치 계산 중… ${ml} ${d}°`; } await tick(); seen.add(d); const r = Object.assign({ deg: d, mode }, landCountAt(it, d, mode)); if(better(r, bm)) bm = r; }
-      const c0 = bm.deg; for(let d = c0 - 4; d <= c0 + 4; d++){ if(d < -45 || d > 45 || seen.has(d)) continue; if(st) st.textContent = `⚡ ${it.name} 최대 배치 — ${ml} ${c0}° 주변 확인 중… ${d}°`; await tick(); const r = Object.assign({ deg: d, mode }, landCountAt(it, d, mode)); if(better(r, bm)) bm = r; }
-      tried.push({ ml, r: bm }); if(better(bm, best)) best = bm; }
+      for(let d = -45; d <= 45; d += 5){ if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ ${it.name} 최대 배치 계산 중… ${ml} ${d}°`; } await tick(); seen.add(d); const r = Object.assign({ deg: d, mode }, landCountAt(it, d, mode)); allR.push(r); if(better(r, bm)) bm = r; }
+      const c0 = bm.deg; for(let d = c0 - 4; d <= c0 + 4; d++){ if(d < -45 || d > 45 || seen.has(d)) continue; if(st) st.textContent = `⚡ ${it.name} 최대 배치 — ${ml} ${c0}° 주변 확인 중… ${d}°`; await tick(); seen.add(d); const r = Object.assign({ deg: d, mode }, landCountAt(it, d, mode)); allR.push(r); if(better(r, bm)) bm = r; }
+      // 정남 쪽으로 1° 간격 더 확인(95% 이상 중 정남에 가까운 각도 찾기)
+      let p0 = southPick(allR).pick.deg; for(let k = 1; k <= 4; k++){ const d = p0 - Math.sign(p0) * k; if(!p0 || seen.has(d) || Math.sign(d) !== Math.sign(p0) && d !== 0) continue; await tick(); seen.add(d); const r = Object.assign({ deg: d, mode }, landCountAt(it, d, mode)); allR.push(r); }
+      tried.push({ ml, r: bm }); }
+    sp1 = southPick(allR); best = sp1.pick;
   } finally { lastAreaPolygonPath = saveB; if(azEl && saveAz !== null) azEl.value = saveAz; if(savePre && LAYOUT_PRESETS[savePre]) try{ applyLayoutPreset(savePre); }catch(e){} }
   histCheckpoint(`${it.name} 최대 배치`); histMuted = true; let ne = null;
   try{ ne = relayoutLand(ed, best.deg, best.mode); } finally { histMuted = false; }
   scheduleLayoutCards();
   const n = ne ? ne.modules.filter(m => !m.removed).length : fromN;
   const others = layoutRegistry.filter(e => e.type === 'ground' && e !== ne && e.boundary).map(e => landAzDeg(e)).filter(d => d !== best.deg);
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ ${it.name} 최대 배치: ${fromN.toLocaleString('ko-KR')}장(방위 ${fromDeg}°) → ${n.toLocaleString('ko-KR')}장 — ${best.mode === 'grid' ? '정렬 배치' : '최대 채움'}, 방위 ${best.deg}°(0 = 정남${best.deg ? `, ${best.deg > 0 ? '남→동' : '남→서'} ${Math.abs(best.deg)}°` : ''}). −45°~+45° 5° 간격 + 최고 주변 1° 간격 비교(정렬 배치).${others.length ? ` ⚠ 다른 토지 배치와 방향이 다릅니다(다른 필지 ${[...new Set(others)].join('°, ')}°) — 같은 방향이 필요하면 "🧭 여러 필지 같은 방향 최적화"를 누르세요.` : ''} ↶ 이전으로 되돌릴 수 있습니다.`; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ ${it.name} 최대 배치: ${fromN.toLocaleString('ko-KR')}장(방위 ${fromDeg}°) → ${n.toLocaleString('ko-KR')}장 — ${best.mode === 'grid' ? '정렬 배치' : '최대 채움'}, 방위 ${best.deg}°(0 = 정남${best.deg ? `, ${best.deg > 0 ? '남→동' : '남→서'} ${Math.abs(best.deg)}°` : ''}). −45°~+45° 5° 간격 + 최고 주변 1° 간격 비교(정렬 배치).${southPrefTxt(sp1)}${others.length ? ` ⚠ 다른 토지 배치와 방향이 다릅니다(다른 필지 ${[...new Set(others)].join('°, ')}°) — 같은 방향이 필요하면 "🧭 여러 필지 같은 방향 최적화"를 누르세요.` : ''} ↶ 이전으로 되돌릴 수 있습니다.`; }
 }
+// 정남 우선(사용자 2026-11-10): 장수가 최고치의 95% 이상인 각도 중 정남(0°)에 가장 가까운 각도
+const SOUTH_PREF_RATIO = 0.95;
+function southPick(list){ const mx = Math.max(...list.map(r => r.n)); const max = list.filter(r => r.n === mx).sort((a, b) => Math.abs(a.deg) - Math.abs(b.deg))[0];
+  const pick = list.filter(r => r.n >= mx * SOUTH_PREF_RATIO).sort((a, b) => Math.abs(a.deg) - Math.abs(b.deg) || b.n - a.n || a.deg - b.deg)[0]; return { pick, max }; }
+const southPrefTxt = sp => sp.pick.deg === sp.max.deg ? '' : ` 정남 우선: 최고 ${sp.max.n.toLocaleString('ko-KR')}장(${sp.max.deg}°)의 ${Math.round(SOUTH_PREF_RATIO * 100)}% 이상 중 정남에 가장 가까운 ${sp.pick.deg}°(${sp.pick.n.toLocaleString('ko-KR')}장) 선택.`;
 // 🧭 여러 필지 같은 방향 최적화: 모든 토지 배치를 같은 방위로 −45°~+45°(5° 간격 → 가장 좋은 곳 ±4° 1° 간격) 계산해 합계 장수가 가장 많은 방위로 다시 배치
 let groundCountOnly = null;
 async function optimizeLandAzimuth(){
@@ -6760,10 +6768,14 @@ async function optimizeLandAzimuth(){
     for(let k = 0; k < coarse.length; k++){ if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧭 같은 방향 최적화 계산 중… ${coarse[k]}° (${k + 1}/${coarse.length})`; } await tick(); const r = evalAt(coarse[k]); if(better(r, best)) best = r; }
     const c0 = best.deg; for(let d = c0 - 4; d <= c0 + 4; d++){ if(d < -45 || d > 45 || cache.has(d)) continue; if(st) st.textContent = `🧭 같은 방향 최적화 — ${c0}° 주변 1° 간격 확인 중… ${d}°`; await tick(); const r = evalAt(d); if(better(r, best)) best = r; }
   } finally { lastAreaPolygonPath = saveB; if(azEl && saveAz !== null) azEl.value = saveAz; if(savePre && LAYOUT_PRESETS[savePre]) try{ applyLayoutPreset(savePre); }catch(e){} }
+  // 정남 쪽으로 1° 간격 더 확인 후 95% 이상 중 정남에 가장 가까운 각도
+  try{ const p0 = southPick([...cache.values()]).pick.deg; for(let k = 1; k <= 4 && p0; k++){ const d = p0 - Math.sign(p0) * k; if(cache.has(d)) continue; if(st) st.textContent = `🧭 같은 방향 최적화 — 정남 쪽 ${d}° 확인 중…`; await tick(); evalAt(d); } }
+  finally { lastAreaPolygonPath = saveB; if(azEl && saveAz !== null) azEl.value = saveAz; if(savePre && LAYOUT_PRESETS[savePre]) try{ applyLayoutPreset(savePre); }catch(e){} }
+  const spA = southPick([...cache.values()]); best = spA.pick;
   const south = evalAt(0);
   lastAreaPolygonPath = saveB;
   const res = setLandAzAll(items.map(it => it.gid), best.deg, `같은 방향 최적화 ${best.deg}°`);
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧭 같은 방향 최적화: 토지 배치 ${items.length}개를 모두 방위 ${best.deg}°(0 = 정남${best.deg ? `, ${best.deg > 0 ? '남→동' : '남→서'} ${Math.abs(best.deg)}°` : ''})로 배치 — 합계 ${res.before.toLocaleString('ko-KR')}장 → ${res.after.toLocaleString('ko-KR')}장 (${items.map((it, i) => `${it.name} ${best.per[i]}`).join(' · ')}; 정남이면 ${south.n.toLocaleString('ko-KR')}장). −45°~+45° 5° 간격 + 최적 주변 1° 간격 비교. ↶ 이전으로 되돌릴 수 있습니다.`; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧭 같은 방향 최적화: 토지 배치 ${items.length}개를 모두 방위 ${best.deg}°(0 = 정남${best.deg ? `, ${best.deg > 0 ? '남→동' : '남→서'} ${Math.abs(best.deg)}°` : ''})로 배치 — 합계 ${res.before.toLocaleString('ko-KR')}장 → ${res.after.toLocaleString('ko-KR')}장 (${items.map((it, i) => `${it.name} ${best.per[i]}`).join(' · ')}; 정남이면 ${south.n.toLocaleString('ko-KR')}장). −45°~+45° 5° 간격 + 최적 주변 1° 간격 비교.${southPrefTxt(spA)} ↶ 이전으로 되돌릴 수 있습니다.`; }
 }
 // 🧩 인접 토지 배치 모두 합치기: 서로 맞닿은(1.5m 이내) 토지 배치 필지를 묶어 경계 하나로 다시 배치 — 필지 사이 3m 이격이 없어져 더 많이 들어감
 function mergeAdjacentLandLayouts(){
@@ -9226,7 +9238,7 @@ function generateSolarLayout(){
     return list.filter(c => !c.vent).length; };
   // 맞춤(단수 자동): 앞(남)→뒤(북)로 띠마다 2단·3단 중 무엇을 놓을지 동적계획법으로 골라 장수 최대 — 띠 사이는 그 띠의 자기그늘 열간격, 마지막 띠 뒤는 비우지 않음
   const dpBands = (ox) => {
-    const dy = 0.1, RS = [2, 3]; // 토지 자동 배치는 2단·3단만(사용자 기준 2026-10-22) — 4단 이상은 ② 유형에서 직접 선택
+    const dy = 0.1, RS = [2]; // 토지 자동 배치는 2단(사용자 2026-11-10, 이전 2026-10-22엔 2·3단) — 3단 이상은 ② 유형에서 직접 선택
     const y0 = ymin - setback, N = Math.max(0, Math.ceil((ymax - y0) / dy)) + 1;
     const gm = {}; RS.forEach(R => { gm[R] = geomFor(R); });
     const cache = new Map();
@@ -9251,7 +9263,7 @@ function generateSolarLayout(){
   else if(groundAutoRows){
     // 맞춤: 띠마다 2단·3단을 섞어 장수 최대(동적계획법) — 비교용으로 단수 고정(2·3단) 결과도 계산
     const tries = [];
-    for(const R of [2, 3]){ arrRows = R; G = geomFor(R); arrDepth = G.arrDepth; arrHeight = G.arrHeight; shadowLen = G.shadowLen; pitch = G.pitch; rowGap = pitch - arrDepth; const r = searchBest(); tries.push({ R, n: r.cands.length, r }); }
+    for(const R of [2]){ arrRows = R; G = geomFor(R); arrDepth = G.arrDepth; arrHeight = G.arrHeight; shadowLen = G.shadowLen; pitch = G.pitch; rowGap = pitch - arrDepth; const r = searchBest(); tries.push({ R, n: r.cands.length, r }); }
     let mix = null;
     for(let ix = 0; ix < 6; ix++){ const ox = setback + ix * stepX / 6; const d = dpBands(ox); const c = buildGroundCands(ox, 0, d.bands); if(!mix || c.length > mix.cands.length) mix = { cands: c, off: { ox, oy: 0 }, bands: d.bands }; }
     tries.forEach(t => { t.live = markVents(t.r.cands); }); if(mix) mix.live = markVents(mix.cands);
@@ -9292,7 +9304,8 @@ function generateSolarLayout(){
         } }
       return { out, partial };
     };
-    const Rs = groundAutoRows ? [2, 3] : [arrRows]; let gBest = null; const gTries = [];
+    // 토지 자동(맞춤)은 2단 + 남는 자리 1단(사용자 2026-11-10)
+    const Rs = groundAutoRows ? [2] : [arrRows]; let gBest = null; const gTries = [];
     for(const R of Rs){ const g = geomFor(R); let bR = null; const nY = Math.max(1, Math.min(16, Math.ceil(g.pitch / 0.25))), nX = 12;
       for(let iy = 0; iy < nY; iy++) for(let ix = 0; ix < nX; ix++){ const r = buildGrid(R, ix * TP / nX, iy * g.pitch / nY); const live = markVents(r.out); if(!bR || live > bR.live || (live === bR.live && r.partial < bR.partial)) bR = { R, live, partial: r.partial, cands: r.out }; }
       gTries.push(bR); if(!gBest || bR.live > gBest.live) gBest = bR; }
@@ -10472,7 +10485,7 @@ function autoLayoutAfterSearchInner(){
         applyLayoutPreset('groundauto'); forceGroundOnce = true;
         try{ onGenerateLayoutClick(); } finally { forceGroundOnce = false; }
         const ed = layoutRegistry[layoutRegistry.length - 1];
-        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 없는 토지 → 토지 노지 맞춤(2·3단 자동) · 필지 끝 3m 이격 자동 배치${ed ? ' ' + ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR') + '장' : ''}. 유형은 동별 카드에서 바꿀 수 있습니다.`; }
+        if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `⚡ 건물 없는 토지 → 토지 노지 맞춤(2단 + 남는 자리 1단) · 필지 끝 3m 이격 자동 배치${ed ? ' ' + ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR') + '장' : ''}. 유형은 동별 카드에서 바꿀 수 있습니다.`; }
       }
     }catch(e){ console.warn('auto on enter', e); }
     return;
