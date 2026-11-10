@@ -1259,7 +1259,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-10i';
+const APP_VERSION = '2026-11-10j';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -11817,18 +11817,21 @@ const SETBACK_LAW_NOTICE = `<p class="hint" style="margin:8px 0 0;color:#8a6d1f;
 
 // 한전 결과창 맨 위에 붙는 한전 문의 전화 한 줄 (실사 자료의 "한전선로용량 관련" 항목)
 // 한 줄 요약(실제 여유용량 기준, MW): "남구미변전소 144.3MW, #2 MTR-39.6MW, 이화DL-8.3MW" — 후보 선로가 여럿이면 줄마다
-function kepcoOneLiner(list){
+// 한 줄 요약(사용자 2026-11-10 형식): "고창변전소 0MW, #4 MTR-0MW, 고창DL-0MW 출력제어조건부-0MW 26년11월10일확인" + 다른 지번으로 조회했으면 조회 지번
+function kepcoOneLinerText(list, info){
   if(!Array.isArray(list) || !list.length) return '';
   const mw = v => { const n = Number(v) || 0; const m = n / 1000; return (Math.abs(m) >= 100 ? Math.round(m) : Math.round(m * 10) / 10).toLocaleString('ko-KR') + 'MW'; };
-  const rows = list.map(r => {
-    const ctrlOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0;
-    const ctrl = Math.max(14000 - Number(r.DL_PWR), 0);
-    const base = `<b>${escLand(r.SUBST_NM ?? '-')}변전소 ${mw(r.VOL_1)}, #${escLand(r.MTR_NO ?? '-')} MTR-${mw(r.VOL_2)}, ${escLand(r.DL_NM ?? '-')}DL-${mw(r.VOL_3)}</b>`;
-    const extra = ctrlOk && ctrl > Number(r.VOL_3) ? ` <span class="sum-muted" style="font-size:11px;">(출력제어 조건부 ${mw(ctrl)})</span>` : '';
-    return base + extra;
-  });
-  const copyTxt = list.map(r => { const ctrlOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0; const ctrl = Math.max(14000 - Number(r.DL_PWR), 0); return `${r.SUBST_NM ?? '-'}변전소 ${mw(r.VOL_1)}, #${r.MTR_NO ?? '-'} MTR-${mw(r.VOL_2)}, ${r.DL_NM ?? '-'}DL-${mw(r.VOL_3)}` + (ctrlOk && ctrl > Number(r.VOL_3) ? ` (출력제어 조건부 ${mw(ctrl)})` : ''); }).join(' / ');
-  return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--surface-2);border-left:3px solid var(--sky-deep);border-radius:0 4px 4px 0;font-size:12.5px;line-height:1.6;">${rows.join('<br>')} <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText(${JSON.stringify(copyTxt).replace(/"/g, '&quot;')}).then(() => { this.textContent = '복사됨'; setTimeout(() => this.textContent = '복사', 1200); })" style="border:1px solid var(--card-line);background:#fff;border-radius:4px;padding:0 6px;font-size:11px;cursor:pointer;vertical-align:middle;">복사</button><br><span class="sum-muted" style="font-size:11px;">실제 여유용량 기준(변전소·주변압기·배전선로), kW → MW</span></p>`;
+  const d = (info && info.date) || new Date();
+  const dateTxt = `${String(d.getFullYear()).slice(2)}년${d.getMonth() + 1}월${d.getDate()}일확인`;
+  const lines = list.map(r => { const ctrlOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0; const ctrl = ctrlOk ? Math.max(14000 - Number(r.DL_PWR), 0) : 0;
+    return `${r.SUBST_NM ?? '-'}변전소 ${mw(r.VOL_1)}, #${r.MTR_NO ?? '-'} MTR-${mw(r.VOL_2)}, ${r.DL_NM ?? '-'}DL-${mw(r.VOL_3)} 출력제어조건부-${mw(ctrl)}`; });
+  let t = lines.join(' / ') + ' ' + dateTxt;
+  if(info && !info.exact && info.usedAddr) t += ` (조회지번: ${info.usedAddr} — 입력 지번 ${info.inputJibun}은 한전ON에 없어 근처 지번으로 조회)`;
+  return t;
+}
+function kepcoOneLiner(list, info){
+  const t = kepcoOneLinerText(list, info); if(!t) return '';
+  return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--surface-2);border-left:3px solid var(--sky-deep);border-radius:0 4px 4px 0;font-size:12.5px;line-height:1.6;"><b>${escLand(t)}</b> <button type="button" onclick="copyText(this, ${escLand(JSON.stringify(t))})" style="border:1px solid var(--card-line);background:#fff;border-radius:4px;padding:0 6px;font-size:11px;cursor:pointer;vertical-align:middle;">복사</button><br><span class="sum-muted" style="font-size:11px;">실제 여유용량 기준(변전소·주변압기·배전선로·출력제어 조건부), kW → MW · 날짜 = 조회한 날</span></p>`;
 }
 // 글자를 끌어 선택하거나 한 번 클릭하면 통째로 선택되는 글 + 📋 복사 단추
 function copyableText(t){ const raw = String(t); return `<span class="copy-text" title="끌어서 선택하거나 클릭하면 통째로 선택됩니다">${escLand(raw)}</span> <button type="button" class="copy-btn" onclick="copyText(this, ${JSON.stringify(raw).replace(/"/g, '&quot;')})" title="복사">📋</button>`; }
@@ -12386,7 +12389,8 @@ async function checkKepcoCapacityInner(){
     const usedAddr = [regionTxt, matched.lidong, matched.li, matched.jibun].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
     const levelTxt = matchLevel === 'exact' ? '입력 지번 그대로' : matchLevel === 'sameArea' ? `근처 지번(입력 지번 ${jibun}이 한전ON에 없어 같은 ${admin.li ? '리' : '동'}의 가장 가까운 등록 지번)` : matchLevel === 'siblingLi' ? '근처 지번(같은 면의 다른 리)' : '근처 지번(같은 시·군·구의 다른 동·읍·면)';
     const fmtN = v => Number(v).toLocaleString('ko-KR');
-    const copyLines = [`[한전ON 배전망 여유용량 조회] 조회일시 ${qDate}`, `입력 주소: ${addr}`, `조회 지번: ${usedAddr} — ${levelTxt}`];
+    const oneInfo = { date: now, exact: matchLevel === 'exact', usedAddr, inputJibun: jibun };
+    const copyLines = [kepcoOneLinerText(list, oneInfo), `[한전ON 배전망 여유용량 조회] 조회일시 ${qDate}`, `입력 주소: ${addr}`, `조회 지번: ${usedAddr} — ${levelTxt}`];
     list.forEach((r, i) => { const cA = (Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0) ? Math.max(DL_CTRL_CAPA - Number(r.DL_PWR), 0) : 0;
       copyLines.push(`${list.length > 1 ? `[선로 후보 ${i + 1}] ` : ''}변전소 ${r.SUBST_NM ?? '-'} / 주변압기 #${r.MTR_NO ?? '-'} / 배전선로 ${r.DL_NM ?? '-'}`);
       copyLines.push(`  실제 여유용량(kW): 변전소 ${fmtN(r.VOL_1)} · 주변압기 ${fmtN(r.VOL_2)} · 배전선로 ${fmtN(r.VOL_3)} · 출력제어 조건부 ${fmtN(cA)}`); });
@@ -12404,7 +12408,7 @@ async function checkKepcoCapacityInner(){
       <div class="reco ${ok ? '' : 'warn'}" style="margin-top:0;position:relative;">
         <span onclick="closeResultPanel('kepcoResult')" style="position:absolute;top:2px;right:2px;cursor:pointer;font-weight:bold;color:var(--ink-soft);padding:2px 6px;">✕</span>
         ${kepcoPhoneLine(admin)}
-        ${kepcoOneLiner(list)}
+        ${kepcoOneLiner(list, oneInfo)}
         ${reinforceNote}
         ${regionNote}
         ${levelNote}
