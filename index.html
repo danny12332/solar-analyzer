@@ -102,6 +102,55 @@
   .rail::-webkit-scrollbar-thumb{background:#BFD0DE;border-radius:3px;}
   .main-col{display:flex;flex-direction:column;gap:18px;min-width:0;}
 
+
+  /* ===== 새 화면 구성(ui2, 2026-11-11 리모델링 시안): 배치도 탭을 단계별로 접는 작업대 + 넓은 지도. body.ui2일 때만 적용 — 이전 화면은 그대로 ===== */
+  .wb-sec > summary{display:none;}
+  .wb-more-toggle{display:none;}
+  body.ui2 .wb-more-toggle{display:inline-block;order:50;}
+  body.ui2 #stepBar:not(.wb-open) .wb-more{display:none;}
+  body.ui2 #stepBar .wb-more{order:40;}
+  body.ui2 #stepBar > label, body.ui2 #stepBar > #boundaryInfo, body.ui2 #stepBar > #offsetInfo{order:60;}
+  body.ui2 #stepBar > #boundaryInfo{flex-basis:100%;}
+  body.ui2[data-rail="railPaneLayout"] header.top .meta{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap;}
+  body.ui2[data-rail="railPaneLayout"] header.top .meta br{display:none;}
+  @media (max-width:900px){ body.ui2[data-rail="railPaneLayout"] header.top .meta{flex-wrap:wrap;justify-content:flex-start;} body.ui2[data-rail="railPaneLayout"]{--header-h:76px;} }
+  body.ui2[data-rail="railPaneLayout"] header.top .hdr-btn{margin:0 !important;white-space:nowrap;}
+  body.ui2 #railPaneLayout .lay-addr-box label[for="layAddress"]{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+  body.ui2 .wb-sec{border:1px solid var(--card-line);border-radius:10px;margin:0 0 8px;background:#fff;overflow:hidden;}
+  body.ui2 .wb-sec > summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;font-weight:700;font-size:13.5px;color:var(--ink);list-style:none;user-select:none;}
+  body.ui2 .wb-sec > summary::-webkit-details-marker{display:none;}
+  body.ui2 .wb-sec > summary::after{content:'▾';margin-left:2px;color:var(--ink-soft);font-size:12px;}
+  body.ui2 .wb-sec[open] > summary{background:var(--sun-tint);border-bottom:1px solid #F1DFB4;}
+  body.ui2 .wb-sec[open] > summary::after{content:'▴';}
+  body.ui2 .wb-sec > summary:hover{background:var(--surface-2);}
+  body.ui2 .wb-sec[open] > summary:hover{background:var(--sun-tint);}
+  body.ui2 .wb-sec .wb-t{flex:none;}
+  body.ui2 .wb-sec .wb-chip{margin-left:auto;font-weight:500;font-size:12px;color:var(--ink-soft);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  body.ui2 .wb-sec .wb-chip.on{color:var(--forest);font-weight:700;}
+  body.ui2 .wb-sec > .panel-bar{background:transparent;border:0;border-radius:0;margin:0;padding:10px 12px 12px;}
+  body.ui2 .wb-sec > .panel-bar > span:first-child{display:none;}
+  body.ui2 .wb-sec > .auto-lay-box{margin:10px 12px 8px !important;}
+  body.ui2 .wb-sec > p.hint{margin:0 12px 10px !important;}
+  body.ui2 #railPaneLayout > .card{display:flex;flex-direction:column;padding:12px;}
+  body.ui2 #railPaneLayout > .card > h2{display:none;}
+  body.ui2 #railPaneLayout .lay-addr-box{padding:10px !important;margin:0 0 8px !important;}
+  body.ui2 #railPaneLayout .lay-addr-box > h2{display:none;}
+  body.ui2 #railPaneLayout .lay-sum{position:sticky;top:0;z-index:2;margin:0 0 8px;}
+  body.ui2 #railPaneLayout .wb-sec[data-wb="auto"]{order:20;}
+  body.ui2 #railPaneLayout > .card > .opt-row{order:30;}
+  body.ui2[data-rail="railPaneLayout"]{--header-h:54px;}
+  body.ui2[data-rail="railPaneLayout"] header.top{padding-top:6px;padding-bottom:6px;}
+  body.ui2[data-rail="railPaneLayout"] header.top .eyebrow, body.ui2[data-rail="railPaneLayout"] header.top .hdr-market, body.ui2[data-rail="railPaneLayout"] header.top .meta-note, body.ui2[data-rail="railPaneLayout"] header.top .sunmark{display:none;}
+  body.ui2[data-rail="railPaneLayout"] header.top h1{font-size:18px;}
+  body.ui2[data-rail="railPaneLayout"] .shell{padding:8px 8px 24px;}
+  body.ui2[data-rail="railPaneLayout"] .app-grid{grid-template-columns:minmax(300px,348px) 1fr;gap:8px;}
+  body.ui2[data-rail="railPaneLayout"] .rail{top:calc(var(--header-h) + 8px);max-height:calc(100vh - var(--header-h) - 16px);gap:8px;}
+  body.ui2[data-rail="railPaneLayout"] #mapEmbedWrap{padding:8px;}
+  body.ui2[data-rail="railPaneLayout"] #mapEmbedWrap .map-head h2{display:none;}
+  body.ui2[data-rail="railPaneLayout"] #mapEmbedWrap .map-head{margin-bottom:6px;}
+  body.ui2[data-rail="railPaneLayout"] #kakaoMap{height:max(480px, calc(100vh - var(--header-h) - 84px));}
+  @media (max-width:980px){ body.ui2[data-rail="railPaneLayout"] .app-grid{grid-template-columns:1fr;} body.ui2[data-rail="railPaneLayout"] #kakaoMap{height:60vh;} body.ui2 #railPaneLayout .lay-sum{position:static;} }
+
   /* 왼쪽 패널 탭: 컨설팅 · 배치도 · 제안서 */
   .rail-tabs{position:sticky;top:0;z-index:3;display:flex;gap:2px;background:#1C2430;border-radius:var(--r-md);padding:4px;box-shadow:var(--shadow);}
   .rail-tab-btn{flex:1;border:none;background:transparent;color:#B8C2CE;font-family:inherit;font-size:14px;font-weight:700;padding:9px 6px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;}
@@ -503,8 +552,9 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
   </a>
   <div class="meta">
     <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
-    기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
-    <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b>
+    <button type="button" class="hdr-btn" id="ui2Btn" onclick="ui2Toggle()" style="display:none;margin-right:6px;background:#fff;color:#1C2430;" title="새 화면 구성과 이전 화면 구성을 바꿔 봄(작업 내용은 그대로)">↩ 이전 화면</button>
+    <span class="meta-note">기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
+    <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b></span>
   </div>
 </header>
 <div id="newWorkModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(10,20,30,.45);align-items:center;justify-content:center;padding:16px;">
@@ -729,6 +779,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
         </div>
         <div class="lay-sum" id="laySum"><b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span></div>
         <div id="recoCard" style="display:none;margin:0 0 10px;"></div>
+        <details class="wb-sec" open data-wb="auto"><summary><span class="wb-t">⚙ 자동 배치 설정</span><span class="wb-chip" id="wbChipauto"></span></summary>
         <div class="auto-lay-box" style="display:grid;grid-template-columns:minmax(0,1fr);gap:4px;font-size:12px;color:#7A4E05;background:#FFF4DC;border:1px solid #F0C36D;border-radius:6px;padding:7px 9px;margin:0 0 10px;">
           <label style="display:flex;align-items:flex-start;gap:6px;font-weight:700;" title="주소를 검색하고 배치도 탭에 들어가면: 필지 안에 건물이 있으면 건물마다 추천 유형(대장 지붕·용마루 방향 기준)으로, 건물이 없으면 토지 노지 3단·끝 3m로 배치합니다. 지도 클릭으로는 배치하지 않습니다"><input type="checkbox" id="autoOnEnter" checked onchange="try{localStorage.setItem('solarAutoEnter', this.checked ? '1' : '0')}catch(e){}" style="margin-top:2px;"> ⚡ 배치도 탭에 들어가면 자동 배치<br><span style="font-weight:400;font-size:11px;">건물 → 건물마다 추천 유형 · 토지 → 노지 3단(끝 3m)</span></label>
           <div style="display:none;">
@@ -761,26 +812,31 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           </div>
         </div>
         <p class="hint" style="margin:0 0 10px;">주소를 검색하고 이 탭에 들어오면 건물/토지를 인식해 자동 배치합니다. 지도 클릭으로는 배치하지 않고, 건물(하늘색 점선)을 클릭하면 🧭 배치 추천만 뜹니다. 직접 하려면 ① 경계를 잡고 → ② 배치 유형 → ③ 배치 생성. 배치(모듈 묶음)와 건물 테두리는 지도에서 바로 끌어 옮길 수 있고, 용량 라벨도 끌어서 옮깁니다.</p>
+        </details>
+        <details class="wb-sec" open data-wb="1"><summary><span class="wb-t">① 경계 잡기</span><span class="wb-chip" id="wbChip1"></span></summary>
         <div class="panel-bar" id="stepBar" style="gap:6px;">
           <span>① 경계</span>
           <button type="button" class="preset-btn" id="addSpaceBtn2" onclick="toggleAddSpaceMode()" style="background:#E3F3E8;border-color:#0B5A2A;color:#0B5A2A;font-weight:700;" title="② 배치 유형을 먼저 고른 뒤, 모듈을 더 넣을 공간의 모서리를 지도에서 차례로 클릭해 그리면 그 공간 안에 그 유형으로 바로 배치됩니다(기존 배치 유지, 별도 동)">➕ 추가 공간 배치</button>
           <button type="button" class="preset-btn" id="traceBtn" onclick="toggleTraceMode()" title="위성사진의 건물(지붕) 모서리를 차례로 클릭해 따라 그립니다. 선이 직각·처음 변과 평행하게 자동 보정되고, 첫 점을 다시 누르거나 더블클릭하면 완성. 오른쪽 클릭 = 마지막 점 취소">✏ 건물 따라 그리기</button>
-          <button type="button" class="preset-btn" id="fitBtn" onclick="startFitOutline()" title="잡힌 테두리를 클릭으로 옮기고(테두리 안 클릭 → 옮길 곳 클릭) 회전·크기 버튼으로 위성사진 건물에 맞춥니다" style="background:#FFD23F;border-color:#E8B800;">✋ 외곽선 맞추기</button>
-          <button type="button" class="preset-btn" id="rect3Btn" onclick="toggleGeomTool('rect3')" title="직사각형 지붕: 위성사진에서 지붕 모서리 2개(한 변)를 클릭하고, 반대편 변 위 아무 곳을 클릭하면 정확한 직사각형 경계가 만들어집니다">▭ 3점 사각형</button>
-          <button type="button" class="preset-btn" id="align2Btn" onclick="toggleGeomTool('align2')" title="잡힌 테두리가 위치·각도·크기가 다를 때: 테두리 꼭짓점 → 위성사진의 같은 모서리, 다른 꼭짓점 → 위성사진의 같은 모서리 순서로 4번 클릭하면 테두리 전체가 이동·회전·확대되어 맞춰집니다">📌 2점 맞춤</button>
+          <button type="button" class="preset-btn wb-more" id="fitBtn" onclick="startFitOutline()" title="잡힌 테두리를 클릭으로 옮기고(테두리 안 클릭 → 옮길 곳 클릭) 회전·크기 버튼으로 위성사진 건물에 맞춥니다" style="background:#FFD23F;border-color:#E8B800;">✋ 외곽선 맞추기</button>
+          <button type="button" class="preset-btn wb-more" id="rect3Btn" onclick="toggleGeomTool('rect3')" title="직사각형 지붕: 위성사진에서 지붕 모서리 2개(한 변)를 클릭하고, 반대편 변 위 아무 곳을 클릭하면 정확한 직사각형 경계가 만들어집니다">▭ 3점 사각형</button>
+          <button type="button" class="preset-btn wb-more" id="align2Btn" onclick="toggleGeomTool('align2')" title="잡힌 테두리가 위치·각도·크기가 다를 때: 테두리 꼭짓점 → 위성사진의 같은 모서리, 다른 꼭짓점 → 위성사진의 같은 모서리 순서로 4번 클릭하면 테두리 전체가 이동·회전·확대되어 맞춰집니다">📌 2점 맞춤</button>
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
-          <button type="button" class="preset-btn" id="bldMergeBtn" onclick="toggleBldMergeMode()" title="한 지붕인데 공공 건물도형이 여러 동으로 나뉘어 있을 때: 도형들을 차례로 클릭한 뒤 이 버튼을 다시 누르면 하나로 합쳐(사이 빈 곳 포함) 최대 배치">🔗 건물 합치기</button>
-          <button type="button" class="preset-btn" id="parcelMergeBtn" onclick="mergeClickedParcels()" title="합필: 지도에서 필지를 차례로 클릭해 고른 뒤(주황 테두리) 이 버튼을 누르면 맞닿은 필지를 하나의 사업지 경계로 합쳐 토지 배치를 바로 만듭니다. 같은 필지를 다시 클릭하면 선택이 풀립니다.">🧩 필지 합치기</button>
-          <button type="button" class="preset-btn" onclick="mergeAdjacentLandLayouts()" title="이미 만든 토지 배치 중 서로 맞닿은 필지를 모두 찾아 경계 하나로 합쳐 다시 배치(필지 사이 이격이 없어짐). 도로 등으로 떨어진 필지는 그대로">🧩 인접 토지 모두 합치기</button>
-          <button type="button" class="preset-btn" onclick="optimizeLandAzimuth()" title="지도에 있는 토지 배치를 모두 같은 방위로 −45°~+45° 돌려 보며 합계 장수가 가장 많은 방위로 다시 배치(필지마다 방향이 달라지지 않음)">🧭 여러 필지 같은 방향 최적화</button>
-          <button type="button" class="preset-btn" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
+          <button type="button" class="preset-btn wb-more" id="bldMergeBtn" onclick="toggleBldMergeMode()" title="한 지붕인데 공공 건물도형이 여러 동으로 나뉘어 있을 때: 도형들을 차례로 클릭한 뒤 이 버튼을 다시 누르면 하나로 합쳐(사이 빈 곳 포함) 최대 배치">🔗 건물 합치기</button>
+          <button type="button" class="preset-btn wb-more" id="parcelMergeBtn" onclick="mergeClickedParcels()" title="합필: 지도에서 필지를 차례로 클릭해 고른 뒤(주황 테두리) 이 버튼을 누르면 맞닿은 필지를 하나의 사업지 경계로 합쳐 토지 배치를 바로 만듭니다. 같은 필지를 다시 클릭하면 선택이 풀립니다.">🧩 필지 합치기</button>
+          <button type="button" class="preset-btn wb-more" onclick="mergeAdjacentLandLayouts()" title="이미 만든 토지 배치 중 서로 맞닿은 필지를 모두 찾아 경계 하나로 합쳐 다시 배치(필지 사이 이격이 없어짐). 도로 등으로 떨어진 필지는 그대로">🧩 인접 토지 모두 합치기</button>
+          <button type="button" class="preset-btn wb-more" onclick="optimizeLandAzimuth()" title="지도에 있는 토지 배치를 모두 같은 방위로 −45°~+45° 돌려 보며 합계 장수가 가장 많은 방위로 다시 배치(필지마다 방향이 달라지지 않음)">🧭 여러 필지 같은 방향 최적화</button>
+          <button type="button" class="preset-btn wb-more" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
+          <button type="button" class="preset-btn wb-more-toggle" onclick="this.parentElement.classList.toggle('wb-open'); this.textContent = this.parentElement.classList.contains('wb-open') ? '▴ 도구 접기' : '⋯ 도구 더 보기';" title="외곽선 맞추기·3점 사각형·2점 맞춤·건물/필지 합치기·방향 최적화·구역 나누기">⋯ 도구 더 보기</button>
           <button type="button" class="preset-btn" onclick="startFromParcel()" title="검색한 필지 경계를 배치 경계로 가져온 뒤 바로 조정 모드로 — 지붕이 필지를 거의 다 덮는 공장 등에서 노란 네모(변)를 끌어 지붕선에 맞추기">▭ 필지 경계로 시작</button>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="따라 그릴 때 선을 처음 변과 평행/직각으로 맞춤(±12°)"><input type="checkbox" id="traceOrtho" checked style="vertical-align:middle;"> 직각 보정</label>
           <label style="font-size:11.5px;color:var(--ink-soft);" title="경계 변 길이(m) 라벨 표시. 변이 많은 건물은 5m 이상 변만 표시"><input type="checkbox" id="edgeLenChk" style="vertical-align:middle;" onchange="toggleEdgeLabels()"> 변 길이</label>
           <span id="boundaryInfo" style="font-weight:600;color:var(--ink);font-size:12px;"></span>
           <span id="offsetInfo" style="font-size:11px;color:#7A4E05;"></span>
         </div>
+        </details>
+        <details class="wb-sec" open data-wb="2"><summary><span class="wb-t">② 배치 유형 → ③ 배치 생성</span><span class="wb-chip" id="wbChip2"></span></summary>
         <div class="panel-bar" id="presetBar" style="gap:6px;">
           <span>② 배치 유형</span>
           <span class="grp">건물</span>
@@ -825,10 +881,14 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="preset-btn" onclick="resetAllLayout()" title="배치·경계·구역을 모두 지우고 주소 검색 직후 상태로 (실수로 눌러도 ↶ 이전으로 복구 가능)" style="color:#b3402a;border-color:#e3b3a8;">⟲ 원상복구</button>
           </span>
         </div>
+        </details>
+        <details class="wb-sec" open data-wb="4"><summary><span class="wb-t">④ 배치한 동 목록 · 편집</span><span class="wb-chip" id="wbChip4"></span></summary>
         <div class="panel-bar" id="layCardsBar" style="flex-direction:column;align-items:stretch;">
           <span>④ 배치한 동 목록 <small style="font-weight:400;color:#9A7A3A;">(카드를 끌어 순서 변경 — 도면의 동 번호 순서)</small></span>
           <div class="lay-cards" id="layCards"><div class="lay-empty">아직 배치가 없습니다.</div></div>
         </div>
+        </details>
+        <details class="wb-sec" open data-wb="5"><summary><span class="wb-t">⑤ 부속물 (사다리 · 전기실)</span><span class="wb-chip" id="wbChip5"></span></summary>
         <div class="panel-bar" id="annotBar" style="gap:6px;">
           <span>⑤ 부속물 (사다리 · 전기실 등)</span>
           <button type="button" class="preset-btn" id="annotLadderBtn" onclick="startAnnot('ladder')" title="켠 뒤 지도에서 놓을 자리를 클릭 — 사다리 기호(기본 0.6×1.2m). 놓은 뒤 끌어서 옮길 수 있습니다">🪜 사다리</button>
@@ -839,6 +899,8 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <label title="배치(모듈 줄) 방향에 맞춰 돌림. 비우면 가장 가까운 배치의 방향"><input id="annotAlign" type="checkbox" checked style="vertical-align:middle;"> 배치 방향에 맞춤</label>
           <div class="annot-list" id="annotList"></div>
         </div>
+        </details>
+        <details class="wb-sec" open data-wb="6"><summary><span class="wb-t">⑥ 도면 설정 · 저장</span><span class="wb-chip" id="wbChip6"></span></summary>
         <div class="panel-bar" id="laySaveBar" style="gap:6px;flex-wrap:wrap;">
           <span>⑥ 도면 설정 · 저장</span>
           <label>공사명(주소) <input id="sheetProject" type="text" style="width:220px;" placeholder="비우면 검색한 주소"></label>
@@ -870,6 +932,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <span id="sheetStatus" class="hint" style="font-size:11px;display:none;"></span>
           <span id="laySaveStatus" class="hint" style="font-size:11px;flex-basis:100%;"></span>
         </div>
+        </details>
         <div class="opt-row">
         <details id="layoutHelp" style="margin:0;">
           <summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#2048B8;padding:2px;">❓ 사용 방법</summary>
@@ -1259,7 +1322,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-11b';
+const APP_VERSION = '2026-11-11d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2049,10 +2112,50 @@ function decoratePresetButtons(){
     b.innerHTML = presetThumbSvg(m[1]) + '<span>' + b.textContent.trim() + '</span>';
   });
 }
+// ===== 새 화면 구성(ui2) — 리모델링 시안(2026-11-11). index_new.html은 UI2_DEFAULT = true로 만든 같은 파일. 헤더 "↩ 이전 화면"으로 바로 되돌림 =====
+const UI2_DEFAULT = true;
+const UI2_KEY = UI2_DEFAULT ? 'solarUi2New' : 'solarUi2';
+function ui2Avail(){ return UI2_DEFAULT || /[?&]ui=new\b/.test(location.search); }
+function ui2On(){ if(!ui2Avail()) return false; try{ const v = localStorage.getItem(UI2_KEY); if(v === '1') return true; if(v === '0') return false; }catch(e){} return true; }
+function ui2Relayout(){ setTimeout(() => { try{ if(typeof kakaoMapObj !== 'undefined' && kakaoMapObj) kakaoMapObj.relayout(); }catch(e){} }, 80); }
+function ui2Apply(){
+  const on = ui2On(); document.body.classList.toggle('ui2', on);
+  const b = document.getElementById('ui2Btn'); if(b){ b.style.display = ui2Avail() ? '' : 'none'; b.textContent = on ? '↩ 이전 화면' : '✨ 새 화면'; }
+  const secs = [...document.querySelectorAll('#railPaneLayout .wb-sec')];
+  if(!on){ secs.forEach(d => { d.open = true; }); ui2Relayout(); return; }
+  if(!ui2Apply.bound){ ui2Apply.bound = true;
+    // 번호 단계는 하나만 펼침(⚙ 자동 배치 설정은 따로)
+    secs.forEach(d => d.addEventListener('toggle', () => { if(!document.body.classList.contains('ui2') || !d.open || d.dataset.wb === 'auto') return; secs.forEach(o => { if(o !== d && o.dataset.wb !== 'auto') o.open = false; }); }));
+    setInterval(ui2Tick, 500);
+  }
+  const au = secs.find(d => d.dataset.wb === 'auto'); if(au) au.open = false;
+  ui2Tick.stage = null; ui2Tick(); ui2Relayout();
+}
+function ui2Toggle(){ try{ localStorage.setItem(UI2_KEY, ui2On() ? '0' : '1'); }catch(e){} ui2Apply(); }
+// 0.5초마다: 단계(경계 없음 → ①, 경계만 → ②, 배치 있음 → ④)가 바뀌면 그 단계를 펼치고, 단계 제목 옆에 현재 상태를 적음
+function ui2Tick(){
+  if(!document.body.classList.contains('ui2')) return;
+  const hasB = !!(typeof lastAreaPolygonPath !== 'undefined' && lastAreaPolygonPath && lastAreaPolygonPath.length >= 3);
+  const lays = (typeof layoutRegistry !== 'undefined') ? layoutRegistry : [];
+  const stage = lays.length ? '4' : (hasB ? '2' : '1');
+  if(stage !== ui2Tick.stage){ ui2Tick.stage = stage; document.querySelectorAll('#railPaneLayout .wb-sec').forEach(d => { if(d.dataset.wb !== 'auto') d.open = d.dataset.wb === stage; }); }
+  const set = (k, txt, on) => { const el = document.getElementById('wbChip' + k); if(el && el.textContent !== txt){ el.textContent = txt; } if(el) el.classList.toggle('on', !!on); };
+  let area = 0; try{ if(hasB) area = shoelaceArea(lastAreaPolygonPath); }catch(e){}
+  set('1', hasB ? `${Math.round(area).toLocaleString('ko-KR')}㎡ 잡힘` : '경계 없음', hasB);
+  const pl = (typeof activePreset !== 'undefined' && activePreset && LAYOUT_PRESETS[activePreset]) ? LAYOUT_PRESETS[activePreset].label : '';
+  set('2', pl || '유형 선택 전', !!pl);
+  let n = 0, kw = 0; lays.forEach(e => { try{ const c = e.modules.filter(m => !m.removed).length; n += c; kw += c * (e.wattPerPanel || 0) / 1000; }catch(x){} });
+  set('4', lays.length ? `${lays.length}개 · ${kw.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}kW` : '배치 없음', lays.length > 0);
+  let an = 0; try{ an = (typeof annots !== 'undefined' && annots) ? annots.length : 0; }catch(e){}
+  set('5', an ? `${an}개` : '', an > 0);
+  set('auto', (document.getElementById('autoOnEnter') || {}).checked ? '켜짐' : '꺼짐', false);
+}
+window.addEventListener('DOMContentLoaded', () => { try{ ui2Apply(); }catch(e){ console.warn('ui2', e); } });
 function switchRailTab(paneId){
   document.querySelectorAll('#railTabs .rail-tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-pane') === paneId));
   document.querySelectorAll('.rail > .rail-pane').forEach(p => p.classList.toggle('active', p.id === paneId));
   document.body.setAttribute('data-rail', paneId);
+  if(document.body.classList.contains('ui2')) ui2Relayout();
   if(paneId === 'railPaneLayout' && typeof autoLayoutPending !== 'undefined' && autoLayoutPending){ autoLayoutPending = false; setTimeout(() => { try{ autoLayoutAfterSearch(); }catch(e){} }, 50); }
   const rail = document.querySelector('.rail'); if(rail) rail.scrollTop = 0;
   if(paneId === 'railPaneProposal'){ setTimeout(() => { try{ pptRefreshSnap(); }catch(e){} }, 300); }
