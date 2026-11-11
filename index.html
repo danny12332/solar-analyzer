@@ -1259,7 +1259,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-11a';
+const APP_VERSION = '2026-11-11b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2475,6 +2475,7 @@ function ensureKakaoMap(){
     else if(mapMode === 'delrow'){ if(Date.now() - (window.__shapeClickAt || 0) >= 300) delRowClick(mouseEvent.latLng); }
     else if(mapMode === 'trace'){ traceClick(mouseEvent.latLng); }
     else if(mapMode === 'editadd'){ editAddVertexAt(mouseEvent.latLng); }
+    else if(mapMode === 'editcut'){ editCutClick(mouseEvent.latLng); }
     else if(mapMode === 'sheetwin'){ sheetWinClick(mouseEvent.latLng); }
     else if(mapMode === 'delrect'){ rectDeleteClick(mouseEvent.latLng); }
     else if(mapMode === 'delline' || mapMode === 'movelayout' || mapMode === 'delmod'){ handleModuleModeClick(mouseEvent.latLng); }
@@ -2640,7 +2641,7 @@ function setMode(mode){
   // 측정 모드일 때는 마우스 커서를 손 모양 대신 정밀 조준용 십자(crosshair)로 변경
   const mapEl = document.getElementById('kakaoMap');
   if(mapEl){
-    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot','fillrect','bldmerge','dellasso'].includes(mode));
+    mapEl.classList.toggle('measuring', ['distance','area','radius','building','addmod','addtable','delrect','delline','trace','editadd','editcut','movelayout','sheetwin','delmod','splitzone','addrow','delrow','rect3','align2','fitoutline','annot','fillrect','bldmerge','dellasso'].includes(mode));
     if(mode !== 'annot') annotPending = null;
     try{ annotBtnState(); }catch(e){}
     [['rect3Btn','rect3'],['align2Btn','align2'],['addModBtn','addmod'],['fillRectBtn','fillrect'],['addRowBtn','addrow'],['delRowBtn','delrow'],['addTableBtn','addtable'],['delLineBtn','delline'],['delRectBtn','delrect'],['delLassoBtn','dellasso'],['moveLayoutBtn','movelayout'],['delModBtn','delmod']].forEach(([id, md]) => {
@@ -7186,7 +7187,7 @@ function removeLayoutsOnOutline(boundary){
     if(!ed.boundary || ed.boundary.length < 3) continue;
     const E = XY(ed.boundary);
     if(sameBoundary(ed.boundary, boundary) || (pointInPolygonXY(cen(E), B) && pointInPolygonXY(cB, E))){
-      removed.push({ preset: ed.genPreset || null, mount: ed.genMount || null, live: ed.modules.filter(m => !m.removed).length });
+      removed.push({ preset: ed.genPreset || ed.preset || null, mount: ed.genMount || null, live: ed.modules.filter(m => !m.removed).length });
       try{ removeMeasureGroup(ed.groupId); }catch(e){}
       layoutRegistry.splice(i, 1);
     }
@@ -8761,6 +8762,8 @@ function drawShrinkOverlays(){
     <span>전체</span>${sb('−', 'shrinkAll(1)', '네 옆면을 모두 안쪽으로 한 칸')}${sb('+', 'shrinkAll(-1)', '네 옆면을 모두 바깥으로 한 칸')}<span style="opacity:.5;">|</span>
     <span title="모듈 배치 각도(원래 각도 유지, 안 맞으면 직접 돌리기)">각도</span>${sb('⟲', 'shrinkRotate(0.5)', '배치를 반시계로 0.5°')}<span style="min-width:30px;text-align:center;font-weight:800;">${E.rotDeg ? (E.rotDeg > 0 ? '+' : '') + E.rotDeg + '°' : '0°'}</span>${sb('⟳', 'shrinkRotate(-0.5)', '배치를 시계로 0.5°')}<span style="opacity:.5;">|</span>
     ${sb('↺', 'shrinkReset()', '모두 0으로(줄이기 전 경계·각도)')}<span style="opacity:.5;">|</span>
+    <button type="button" ${act('shrinkToEdit(true)')} title="공장 면적에 들어가지 않는 부분을 선으로 잘라냄(지금까지 줄인 경계에서 이어서)" style="border:1px solid rgba(255,255,255,.6);background:transparent;color:#fff;font-weight:800;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:12px;touch-action:none;">✂ 자르기</button>
+    <button type="button" ${act('shrinkToEdit(false)')} title="꼭짓점·변을 직접 끌어 외곽선 전체를 자유롭게 편집(지금까지 줄인 경계에서 이어서)" style="border:1px solid rgba(255,255,255,.6);background:transparent;color:#fff;font-weight:800;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:12px;touch-action:none;">✏ 자유 편집</button><span style="opacity:.5;">|</span>
     <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(true)" style="border:none;background:#FFD23F;color:#5A3A00;font-weight:800;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;">완료</button>
     <button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();endShrinkOutline(false)" style="border:none;background:transparent;color:#fff;opacity:.85;border-radius:4px;padding:3px 4px;cursor:pointer;font-size:12px;" title="줄이기 전으로">취소</button></div>`);
   const sel = document.getElementById('shrinkStep'); if(sel) sel.value = E.stepVal || '0.5';
@@ -8770,6 +8773,8 @@ function shrinkStepVal(){ const v = parseFloat((document.getElementById('shrinkS
 function shrinkNotchOpen(k){ const E = shrinkEdit; if(!E) return; E.notchOpen = k; const st = shrinkStepVal(); const nt = E.notch[k]; if(!(nt.du > 0)) nt.du = Math.max(st, 1); if(!(nt.dv > 0)) nt.dv = Math.max(st, 1); applyShrink(); }
 function shrinkNotch(k, which, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); const nt = E.notch[k]; nt[which] = Math.max(0, Math.round((nt[which] + dir * st) * 100) / 100); if(!(nt.du > 0) || !(nt.dv > 0)){ nt.du = 0; nt.dv = 0; if(E.notchOpen === k) E.notchOpen = null; } applyShrink(); }
 function shrinkSide(k, dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; applyShrink(); }
+// 줄이기 → 지금 경계 그대로 자유 편집(↔ 조정) 또는 ✂ 자르기로 넘어감
+function shrinkToEdit(cut){ if(!shrinkEdit) return; endShrinkOutline(true); startBuildingEdit(cut === true); }
 function shrinkEdgeOpen(i){ const E = shrinkEdit; if(!E) return; E.openEdge = (i >= 0 && E.openEdge !== i) ? i : null; drawShrinkOverlays(); }
 function shrinkEdge(i, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); E.d[i] = Math.round((E.d[i] + dir * st) * 100) / 100; applyShrink(); }
 function shrinkRotate(deg){ const E = shrinkEdit; if(!E) return; if(E.axTarget === null){ const ed = layoutRegistry.find(e => e.__shrinkOf === E); if(ed && typeof ed.azRad === 'number') E.axTarget = ed.azRad * 180 / Math.PI - (E.rotDeg || 0); } if(E.axTarget === null) return; E.rotDeg = Math.round(((E.rotDeg || 0) + deg) * 10) / 10; applyShrink(); }
@@ -8793,7 +8798,7 @@ function applyShrink(){
       gen(target);
       if(target !== null){ const ne = layoutRegistry[layoutRegistry.length - 1]; if(ne && typeof ne.azRad === 'number' && angOff(ne.azRad * 180 / Math.PI, target) > 1){ try{ removeMeasureGroup(ne.groupId); }catch(x){} layoutRegistry.splice(layoutRegistry.length - 1, 1); gen(target - 90); } }
     } catch(x){ console.warn('shrink relayout', x); } finally { histMuted = was; layoutAxisLockDeg = null; }
-    const ed = layoutRegistry[layoutRegistry.length - 1]; if(ed && sameBoundary(ed.boundary, path)) ed.__shrinkOf = E;
+    const ed = layoutRegistry[layoutRegistry.length - 1]; if(ed && sameBoundary(ed.boundary, path)){ ed.__shrinkOf = E; ed.genPreset = ed.genPreset || E.preset; ed.genMount = ed.genMount || (document.getElementById('mountType') || {}).value; }
   }
   scheduleLayoutCards();
   drawShrinkOverlays();
@@ -9542,7 +9547,7 @@ setInterval(() => {
 }, 400);
 const EDGE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect x="2" y="2" width="10" height="10" rx="2" fill="#FFD23F" stroke="#C2148A" stroke-width="2"/></svg>');
 // ===== ↔ 경계 조정: 꼭짓점 끌기 · 변(노란 네모) 끌어 평행 이동 · 전체 이동 · 회전 · 꼭짓점 추가/삭제 · 사각형으로 · 직각 보정 =====
-function startBuildingEdit(){
+function startBuildingEdit(startCut){
   if((!lastAreaPolygonPath || lastAreaPolygonPath.length < 3) && lastParcelPath && lastParcelPath.length >= 3) lastAreaPolygonPath = lastParcelPath.slice();
   if(!lastAreaPolygonPath || lastAreaPolygonPath.length < 3){ const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = '#b3402a'; st.textContent = '❌ 조정할 경계가 없습니다. ① "✏ 건물 따라 그리기" 또는 "🏢 건물 자동 선택"을 먼저 하세요.'; } return; }
   if(mapMode === 'trace') finishTrace(true);
@@ -9560,7 +9565,7 @@ function startBuildingEdit(){
   const mk = (pos, img, size, z) => new kakao.maps.Marker({ map, position: pos, draggable: true, image: new kakao.maps.MarkerImage(img, new kakao.maps.Size(size, size), { offset: new kakao.maps.Point(size / 2, size / 2) }), zIndex: z || 10 });
   const label = new kakao.maps.CustomOverlay({ position: original[0], content: '', yAnchor: 1.25, clickable: true, zIndex: 30 });
   label.setMap(map);
-  bldEdit = { regen, origRef, poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: (v, noSnap) => { if(!noSnap) snap(); P = v; rebuild(); editPreviewLayout(); }, undo: [], snap: () => snap(), toLL, toXY, addMode: false, moved: { dx: 0, dy: 0 }, name: currentBoundaryName, fromOfficial: !!currentBoundaryOfficial };
+  bldEdit = { regen, origRef, poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: (v, noSnap) => { if(!noSnap) snap(); bldEdit.cutOther = null; P = v; rebuild(); editPreviewLayout(); }, undo: [], snap: () => snap(), toLL, toXY, addMode: false, moved: { dx: 0, dy: 0 }, name: currentBoundaryName, fromOfficial: !!currentBoundaryOfficial };
   const centroidXY = () => ({ x: P.reduce((s, q) => s + q.x, 0) / P.length, y: P.reduce((s, q) => s + q.y, 0) / P.length });
   // ↶ 한 단계: 끌기·버튼으로 모양을 바꾸기 직전 상태를 쌓아 둠(같은 모양은 겹쳐 쌓지 않음)
   const snap = () => { const u = bldEdit.undo, cur = JSON.stringify(P); if(!u.length || u[u.length - 1] !== cur){ u.push(cur); if(u.length > 80) u.shift(); } };
@@ -9588,6 +9593,7 @@ function startBuildingEdit(){
       <span style="white-space:nowrap;margin-right:2px;">↔ ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평) · 꼭짓점 ${P.length}개${pv ? ` · <b style="color:#FFD23F;">${pv.n.toLocaleString('ko-KR')}장 ${pv.kw.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}kW</b>` : ''}</span>
       ${btn('↶ 한 단계', 'editUndoStep()', '방금 바꾼 것 하나를 되돌림')}${sep}
       ${btn('▭ 사각형', 'editToRect()', '복잡한 외곽선을 가장 긴 변 기준의 사각형으로 바꾼 뒤 노란 네모(변)를 끌어 지붕에 맞추기')}${btn('◇ 단순화', 'editSimplify()', '자잘한 꼭짓점을 줄임 — 누를 때마다 더 많이 줄어듦')}${sep}
+      ${btn(bldEdit.cut ? '✂ 자르는 중 (그만)' : '✂ 자르기', 'editToggleCut()', '공장 면적에 들어가지 않는 부분을 선으로 잘라냄: 외곽선 위 한 점 클릭 → 자를 선을 따라 클릭 → 외곽선 위 다른 점 클릭', !!bldEdit.cut)}${bldEdit.cutOther ? btn('⇄ 반대쪽 남기기', 'editCutSwap()', '방금 자른 선의 반대쪽 조각을 남김') : ''}${sep}
       <span style="opacity:.7;">회전</span>${btn('⟲', `editRotate(${bldEdit.rotStep || 1})`, '반시계로 회전')}${btn('⟳', `editRotate(-${bldEdit.rotStep || 1})`, '시계로 회전')}${btn((bldEdit.rotStep || 1) + '°', 'editRotStep()', '회전 한 번에 돌리는 각도(1° ↔ 0.2°)')}
       ${btn(bldEdit.more ? '▴ 접기' : '⋯', 'editMore()', '직각 보정·변 길이·배치 미리보기')}
       ${bldEdit.more ? btn('⊾ 직각', 'editOrtho()', '거의 직각인 모서리를 정확히 90°로') + btn(bldEdit.showLen ? '📏 길이 끄기' : '📏 길이', 'editToggleLen()', '변 길이 표시') + (hasRegen ? btn(bldEdit.previewOff ? '👁 배치 보기' : '👁 배치 숨김', 'editTogglePreview()', '모양을 바꿀 때마다 같은 유형으로 다시 배치해 보여 줌(끄면 완료할 때만 배치)') : '') + btn('처음으로', 'editReset()', '조정 전 경계로') : ''}
@@ -9639,6 +9645,7 @@ function startBuildingEdit(){
   bldEdit.setLabel = () => draw();
   rebuild();
   editPreviewLayout();
+  if(startCut === true){ editToggleCut(); return; }
   const st = document.getElementById('roadviewStatus');
   st.style.color = 'var(--ink-soft)';
   st.textContent = '↔ 경계 조정: 흰 점 = 꼭짓점 끌기 · 노란 네모 = 변 평행 이동 · 선 위를 클릭 = 꼭짓점 추가 · 흰 점 오른쪽 클릭 = 삭제 · 가운데 손잡이 = 전체 이동. 모양이 많이 다르면 "▭ 사각형"으로 바꾼 뒤 변을 끌어 맞추세요. 바꿀 때마다 배치가 다시 만들어지고 장수가 라벨에 나옵니다. 잘못 바꿨으면 "↶ 한 단계".';
@@ -9665,6 +9672,47 @@ function editSimplify(){
   bldEdit.setP(out);
   if(st) st.textContent = `◇ 꼭짓점 ${P.length}개 → ${out.length}개로 줄였습니다(오차 ${tols[bldEdit.simpLv - 1]}m 이내). 한 번 더 누르면 더 줄입니다. 되돌리려면 "↶ 한 단계".`;
 }
+// ===== ✂ 자르기(조정 중, 사용자 2026-11-11): 외곽선 위 한 점 → (자를 선을 따라 클릭) → 외곽선 위 다른 점. 그 선으로 외곽선을 둘로 나눠 넓은 쪽을 남김(⇄ 반대쪽 남기기 가능) =====
+function editCutClear(){ const E = bldEdit; if(!E || !E.cut) return; [E.cut.line, E.cut.dot].forEach(o => { try{ o && o.setMap(null); }catch(e){} }); E.cut = null; }
+function editToggleCut(){
+  const E = bldEdit; if(!E) return; const st = document.getElementById('roadviewStatus');
+  if(E.cut){ editCutClear(); setMode('normal'); E.setLabel(); if(st) st.textContent = '✂ 자르기를 그만두었습니다.'; return; }
+  if(E.addMode) editToggleAdd();
+  E.cut = { pts: [], line: null, dot: null }; setMode('editcut'); E.setLabel();
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '✂ 자르기: ① 자를 선이 시작되는 외곽선 위 한 점을 클릭 → ② 꺾이는 곳이 있으면 건물 안쪽에서 차례로 클릭 → ③ 외곽선 위 다른 점을 클릭하면 그 선으로 잘라 넓은 쪽을 남깁니다(반대쪽이 필요하면 "⇄ 반대쪽 남기기"). 여러 번 이어서 자를 수 있습니다.'; }
+}
+function editCutNearest(q){ const P = bldEdit.P(); let best = null; for(let i = 0; i < P.length; i++){ const A = P[i], B = P[(i + 1) % P.length]; const ex = B.x - A.x, ey = B.y - A.y, L2 = ex * ex + ey * ey || 1; const t = Math.max(0, Math.min(1, ((q.x - A.x) * ex + (q.y - A.y) * ey) / L2)); const pt = { x: A.x + ex * t, y: A.y + ey * t }; const d = Math.hypot(pt.x - q.x, pt.y - q.y); if(!best || d < best.d) best = { d, i, t, pt }; } return best; }
+function editCutClick(ll){
+  const E = bldEdit; if(!E || !E.cut) return; const C = E.cut; const q = E.toXY(ll); const map = ensureKakaoMap();
+  let mPerPx = 0.2; try{ const pr = map.getProjection(); const a = pr.containerPointFromCoords(ll), b = pr.containerPointFromCoords(E.toLL({ x: q.x + 10, y: q.y })); const px = Math.hypot(b.x - a.x, b.y - a.y); if(px > 0) mPerPx = 10 / px; }catch(e){}
+  const near = editCutNearest(q); const st = document.getElementById('roadviewStatus');
+  if(!C.pts.length){ // 시작점은 항상 가장 가까운 외곽선 위로 붙임
+    C.pts.push({ x: near.pt.x, y: near.pt.y, i: near.i, t: near.t });
+    C.dot = new kakao.maps.CustomOverlay({ map, position: E.toLL(near.pt), xAnchor: 0.5, yAnchor: 0.5, zIndex: 40, content: '<div style="width:12px;height:12px;border-radius:50%;background:#FFD23F;border:2px solid #5A3A00;pointer-events:none;"></div>' });
+    if(st) st.textContent = '✂ 시작점을 잡았습니다. 꺾이는 곳은 건물 안쪽에서 클릭하고, 끝낼 때는 외곽선 위 다른 점을 클릭하세요.';
+  } else if(near.d <= 14 * mPerPx){
+    C.pts.push({ x: near.pt.x, y: near.pt.y, i: near.i, t: near.t });
+    editCutApply(); return;
+  } else C.pts.push({ x: q.x, y: q.y });
+  const path = C.pts.map(p => E.toLL(p));
+  if(!C.line) C.line = new kakao.maps.Polyline({ map, path, strokeWeight: 3, strokeColor: '#FFD23F', strokeOpacity: 1, strokeStyle: 'shortdash', zIndex: 39 }); else C.line.setPath(path);
+}
+function editCutApply(){
+  const E = bldEdit; const C = E.cut; const P = E.P(); const n = P.length; const st = document.getElementById('roadviewStatus');
+  const S = C.pts[0], T = C.pts[C.pts.length - 1], mid = C.pts.slice(1, -1).map(p => ({ x: p.x, y: p.y }));
+  const fwd = (from, to) => { let cnt = ((to.i - from.i) % n + n) % n; if(from.i === to.i && from.t > to.t) cnt = n; const out = []; for(let k = 1; k <= cnt; k++) out.push({ x: P[(from.i + k) % n].x, y: P[(from.i + k) % n].y }); return out; };
+  const clean = arr => arr.filter((p, k) => { const q = arr[(k - 1 + arr.length) % arr.length]; return Math.hypot(p.x - q.x, p.y - q.y) > 0.02; });
+  const sp = { x: S.x, y: S.y }, tp = { x: T.x, y: T.y };
+  const A = clean([sp].concat(mid, [tp], fwd(T, S)));               // 선 S→T 뒤 T에서 앞으로 돌아 S까지
+  const B = clean([tp].concat(mid.slice().reverse(), [sp], fwd(S, T))); // 선 T→S 뒤 S에서 앞으로 돌아 T까지
+  const aA = A.length >= 3 ? areaXY(A) : 0, aB = B.length >= 3 ? areaXY(B) : 0;
+  [C.line, C.dot].forEach(o => { try{ o && o.setMap(null); }catch(e){} }); E.cut = { pts: [], line: null, dot: null }; // 이어서 또 자를 수 있게 모드는 유지
+  if(!(aA > 1) || !(aB > 1)){ E.setLabel(); if(st){ st.style.color = '#b3402a'; st.textContent = '✂ 잘라낼 조각이 너무 작거나(1㎡ 이하) 선이 외곽선과 겹칩니다. 시작점부터 다시 클릭하세요.'; } return; }
+  const keep = aA >= aB ? A : B, other = aA >= aB ? B : A;
+  E.cutOther = null; E.setP(keep); E.cutOther = other.map(p => ({ x: p.x, y: p.y })); E.setLabel();
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `✂ 잘랐습니다 — 남긴 쪽 ${Math.round(Math.max(aA, aB)).toLocaleString('ko-KR')}㎡, 잘라낸 쪽 ${Math.round(Math.min(aA, aB)).toLocaleString('ko-KR')}㎡${E.pv ? ` · ${E.pv.n.toLocaleString('ko-KR')}장` : ''}. 반대쪽을 남기려면 "⇄ 반대쪽 남기기", 되돌리려면 "↶ 한 단계". 이어서 다른 곳도 자를 수 있고, 끝나면 "완료".`; }
+}
+function editCutSwap(){ const E = bldEdit; if(!E || !E.cutOther) return; const cur = E.P().map(p => ({ x: p.x, y: p.y })), oth = E.cutOther; E.cutOther = null; E.setP(oth); E.cutOther = cur; E.setLabel(); }
 function editTogglePreview(){ if(!bldEdit) return; bldEdit.previewOff = !bldEdit.previewOff; editPreviewLayout(); }
 // 조정 중 배치 미리보기: 조정 전에 이 건물에 있던 배치 유형으로, 지금 모양에 다시 배치(끌기를 놓을 때·버튼을 누를 때)
 function editPreviewClear(){ for(let k = layoutRegistry.length - 1; k >= 0; k--){ const e = layoutRegistry[k]; if(e.__editPreview){ try{ removeMeasureGroup(e.groupId); }catch(x){} if(layoutRegistry[k] === e) layoutRegistry.splice(k, 1); } } }
@@ -9728,7 +9776,7 @@ function cancelBuildingEdit(){
   if(!bldEdit) return;
   const orig = bldEdit.original.slice();
   stopBuildingEdit();
-  if(mapMode === 'editadd') setMode('normal');
+  if(mapMode === 'editadd' || mapMode === 'editcut') setMode('normal');
   // 조정 시작 전 상태(배치 포함)로 정확히 되돌림
   if(histStack.length && histStack[histStack.length - 1].label === '꼭짓점 조정'){ histRestore(histStack.pop()); updateHistButtons(); }
   else { drawConfirmedOutline(orig, ''); addOutlineEdgeLabels(orig); }
@@ -9736,7 +9784,8 @@ function cancelBuildingEdit(){
 }
 function stopBuildingEdit(){
   if(!bldEdit) return;
-  editPreviewClear();
+  editPreviewClear(); editCutClear();
+  if(mapMode === 'editcut') mapMode = 'normal';
   bldEdit.poly.setMap(null); if(bldEdit.origRef) bldEdit.origRef.setMap(null); bldEdit.handles.forEach(h => h.setMap(null)); (bldEdit.edgeHandles || []).forEach(h => h.setMap(null)); bldEdit.edgeLabels.forEach(o => o.setMap(null)); bldEdit.label.setMap(null);
   if(mapMode === 'editadd') mapMode = 'normal';
   if(bldEdit.moveHandle) bldEdit.moveHandle.setMap(null);
@@ -9744,7 +9793,7 @@ function stopBuildingEdit(){
 }
 function finishBuildingEdit(){
   if(!bldEdit) return;
-  if(mapMode === 'editadd') setMode('normal');
+  if(mapMode === 'editadd' || mapMode === 'editcut'){ editCutClear(); setMode('normal'); }
   const path = bldEdit.path.slice();
   const mv = bldEdit.moved, keepName = bldEdit.name, official = bldEdit.fromOfficial;
   const regen = (bldEdit.regen || []).find(r => r.preset || r.mount) || null;
@@ -9795,7 +9844,7 @@ function drawConfirmedOutline(path, name, extra){
   const lab = new kakao.maps.CustomOverlay({ position: top, content: '', yAnchor: 1.4, clickable: true });
   lab.setMap(map); measureShapes.push(lab); shapes.push(lab);
   bldPickGroupId = registerMeasureGroup(shapes);
-  lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:6px;background:rgba(194,20,138,.92);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><button type="button" onclick="event.stopPropagation();startFitOutline()" style="border:none;background:#FFD23F;color:#5A3A00;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="클릭으로 테두리를 옮기고 회전해 위성사진 건물에 맞추기">✋ 맞추기</button><button type="button" onclick="event.stopPropagation();startBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="위성사진 건물과 다르면 꼭짓점·변·회전으로 맞추기">↔ 조정</button><button type="button" onclick="event.stopPropagation();startShrinkOutline()" style="border:none;background:#fff;color:#1A5FB4;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="건물 모양보다 크면 변마다(또는 전체) 안쪽으로 줄이고, 배치를 바로 다시 만듦">⇲ 줄이기</button>${closeBtnHtml(`histCheckpoint('경계 삭제'); removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
+  lab.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;align-items:center;gap:6px;background:rgba(194,20,138,.92);color:#fff;padding:3px 8px;border-radius:4px;font-size:11.5px;white-space:nowrap;"><span>🏢 ${name ? escLand(name) + ' ' : ''}${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / 3.305785).toLocaleString('ko-KR')}평)${extra || ''}</span><button type="button" onclick="event.stopPropagation();startFitOutline()" style="border:none;background:#FFD23F;color:#5A3A00;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="클릭으로 테두리를 옮기고 회전해 위성사진 건물에 맞추기">✋ 맞추기</button><button type="button" onclick="event.stopPropagation();startBuildingEdit()" style="border:none;background:#fff;color:#C2148A;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="위성사진 건물과 다르면 꼭짓점·변·회전으로 맞추기">↔ 조정</button><button type="button" onclick="event.stopPropagation();startBuildingEdit(true)" style="border:none;background:#fff;color:#7A4E05;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="공장 면적에 들어가지 않는 부분을 선으로 잘라내기">✂ 자르기</button><button type="button" onclick="event.stopPropagation();startShrinkOutline()" style="border:none;background:#fff;color:#1A5FB4;font-weight:700;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:11px;" title="건물 모양보다 크면 변마다(또는 전체) 안쪽으로 줄이고, 배치를 바로 다시 만듦">⇲ 줄이기</button>${closeBtnHtml(`histCheckpoint('경계 삭제'); removeMeasureGroup(${bldPickGroupId}); bldPickGroupId=null; lastAreaPolygonPath=null;`)}</div>`);
   lastAreaPolygonPath = path.slice();
 }
 // ===== ✋ 외곽선 맞추기: 클릭으로 이동(잡기→놓기) + 회전·크기 버튼 + 방향키 =====
