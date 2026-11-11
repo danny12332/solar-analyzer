@@ -551,8 +551,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
     </span>
   </a>
   <div class="meta">
-    <button type="button" class="hdr-btn" onclick="newWorkOpen()" title="지금 작업(주소·배치도·도면 설정·제안서 편집·파워플래너·견적)을 비우고 새 주소로 처음부터 시작" style="margin-right:6px;background:#fff;color:#1b2a3a;">🆕 새 작업</button>    <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
-    <button type="button" class="hdr-btn" id="ui2Btn" onclick="ui2Toggle()" style="display:none;margin-right:6px;background:#fff;color:#1C2430;" title="새 화면 구성과 이전 화면 구성을 바꿔 봄(작업 내용은 그대로)">↩ 이전 화면</button>
+        <button type="button" class="hdr-btn" onclick="startEaisAutomation()" title="주소를 복사하고 세움터를 엽니다 (직접 발급 안내)">📄 건축물대장 및 현황도 발급</button> <button type="button" class="hdr-btn" onclick="openIrosRegistry()" title="지번 주소를 복사하고 인터넷등기소를 엽니다 (열람·발급 → 부동산 → 열람·발급, 소재지에 붙여넣기)" style="margin-left:6px;">🏠 등기부등본(인터넷등기소)</button><br>
     <span class="meta-note">기준일 2026.09 · 국가 법령·고시 + 실무자료 기준<br>
     <b>이격거리: 도로 폐지 / 주거지 200m 상한 — 2026.9.18부터 시행 중</b></span>
   </div>
@@ -1322,7 +1321,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-11d';
+const APP_VERSION = '2026-11-11e';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2116,7 +2115,7 @@ function decoratePresetButtons(){
 const UI2_DEFAULT = true;
 const UI2_KEY = UI2_DEFAULT ? 'solarUi2New' : 'solarUi2';
 function ui2Avail(){ return UI2_DEFAULT || /[?&]ui=new\b/.test(location.search); }
-function ui2On(){ if(!ui2Avail()) return false; try{ const v = localStorage.getItem(UI2_KEY); if(v === '1') return true; if(v === '0') return false; }catch(e){} return true; }
+function ui2On(){ return true; } // 새 화면으로 고정(사용자 2026-11-11: 이전 화면 전환 없앰)
 function ui2Relayout(){ setTimeout(() => { try{ if(typeof kakaoMapObj !== 'undefined' && kakaoMapObj) kakaoMapObj.relayout(); }catch(e){} }, 80); }
 function ui2Apply(){
   const on = ui2On(); document.body.classList.toggle('ui2', on);
@@ -2151,6 +2150,8 @@ function ui2Tick(){
   set('auto', (document.getElementById('autoOnEnter') || {}).checked ? '켜짐' : '꺼짐', false);
 }
 window.addEventListener('DOMContentLoaded', () => { try{ ui2Apply(); }catch(e){ console.warn('ui2', e); } });
+// F5 = 새 작업(확인 창) — 머리띠의 '새 작업' 버튼을 없애고 단축키로만(사용자 2026-11-11). 그냥 새로 고침은 Ctrl+F5 / Ctrl+R
+window.addEventListener('keydown', ev => { if(ev.key !== 'F5' || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return; ev.preventDefault(); try{ const m = document.getElementById('newWorkModal'); if(m && m.style.display !== 'none' && m.style.display !== '') return; newWorkOpen(); }catch(e){ console.warn('F5 new work', e); } });
 function switchRailTab(paneId){
   document.querySelectorAll('#railTabs .rail-tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-pane') === paneId));
   document.querySelectorAll('.rail > .rail-pane').forEach(p => p.classList.toggle('active', p.id === paneId));
