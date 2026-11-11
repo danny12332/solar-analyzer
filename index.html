@@ -1259,7 +1259,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-10k';
+const APP_VERSION = '2026-11-11a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2463,6 +2463,7 @@ function ensureKakaoMap(){
   window.__mapClickHandler = function(mouseEvent){
     if(mapMode === 'rect3' || mapMode === 'align2'){ geomToolClick(mouseEvent.latLng); return; }
     if(mapMode === 'fitoutline'){ fitClick(mouseEvent.latLng); return; }
+    if(bldEdit && mapMode === 'normal' && editClickNearEdge(mouseEvent.latLng)) return;
     if(mapMode === 'distance'){ addDistancePoint(mouseEvent.latLng); }
     else if(mapMode === 'area'){ addAreaPoint(mouseEvent.latLng); }
     else if(mapMode === 'radius'){ addRadiusPoint(mouseEvent.latLng); }
@@ -8634,7 +8635,7 @@ function startShrinkOutline(){
   }
   shrinkEdit = { base: from, lat0: from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180, d: from.map(() => 0), name: currentBoundaryName, preset: ed ? (ed.preset || ed.genPreset) : null, overlays: [], axTarget: (ed && typeof ed.azRad === 'number') ? ed.azRad * 180 / Math.PI : null, rotDeg: 0 };
   drawShrinkOverlays();
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⇲ 경계 줄이기: 옆면마다 노란 화살표 = 안쪽으로 한 칸(줄이기), 흰 화살표 = 바깥으로 한 칸(늘리기). 분홍은 ㄱ자 안쪽 변. 위 막대에서 한 칸 크기(단위)·전체 −/+·↺ 처음으로. 바꿀 때마다 배치가 같은 유형으로 다시 만들어집니다. 끝나면 "완료".'; }
+  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⇲ 경계 줄이기: 옆면마다 노란 화살표 = 안쪽으로 한 칸(줄이기), 흰 화살표 = 바깥으로 한 칸(늘리기). 분홍 점은 ㄱ자 안쪽 변(누르면 그 변의 화살표가 펼쳐짐). 아래 막대에서 한 칸 크기(단위)·전체 −/+·↺ 처음으로. 바꿀 때마다 배치가 같은 유형으로 다시 만들어집니다. 끝나면 "완료".'; }
 }
 // 축 기준 좌표: 건물 긴 변 방향(u)·직각(v). 옆면(좌·우·앞·뒤)은 이 축과 나란한 직선으로만 옮김 — 대각선 변은 잘리기만 하고 삼각형으로 늘어나지 않음
 function shrinkFrame(E){
@@ -8746,7 +8747,10 @@ function drawShrinkOverlays(){
     if(!ov) return; const a = F.uv0[i], b = F.uv0[(i + 1) % F.uv0.length];
     const sgnA = (() => { let s2 = 0; for(let k = 0; k < F.uv0.length; k++){ const u = F.uv0[k], v = F.uv0[(k + 1) % F.uv0.length]; s2 += u.x * v.y - v.x * u.y; } return s2 > 0 ? 1 : -1; })();
     const inUV = { x: -(b.y - a.y) * sgnA, y: (b.x - a.x) * sgnA }; const L = Math.hypot(inUV.x, inUV.y) || 1; const n = dirXY(inUV.x / L, inUV.y / L);
-    ov.setContent(wrapBox(order(n, btn(arrowOf(n.x, n.y), `shrinkEdge(${i}, 1)`, '이 안쪽 변을 안쪽으로 한 칸', true, '#7A0E58'), labOf(E.d[i]), btn(arrowOf(-n.x, -n.y), `shrinkEdge(${i}, -1)`, '이 안쪽 변을 바깥으로 한 칸', false, '#7A0E58')), PINK));
+    // 안쪽 변 단추는 작은 점으로 접어 두고(2026-11-11: 변이 많으면 단추가 겹쳐 가려짐), 점을 누른 변 하나만 펼침
+    if(E.openEdge !== i){ ov.setZIndex && ov.setZIndex(8990); ov.setContent(`<button type="button" ${act(`shrinkEdgeOpen(${i})`)} title="이 안쪽 변 옮기기(누르면 화살표가 펼쳐짐)" style="border:2px solid #fff;background:${PINK};color:#fff;font-weight:800;border-radius:999px;min-width:22px;height:22px;padding:0 5px;cursor:pointer;font-size:10.5px;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.35);touch-action:none;">${E.d[i] ? `${E.d[i] > 0 ? '−' : '+'}${Math.abs(E.d[i]).toFixed(1)}` : '•'}</button>`); return; }
+    ov.setZIndex && ov.setZIndex(9002);
+    ov.setContent(wrapBox(order(n, btn(arrowOf(n.x, n.y), `shrinkEdge(${i}, 1)`, '이 안쪽 변을 안쪽으로 한 칸', true, '#7A0E58'), labOf(E.d[i]), btn(arrowOf(-n.x, -n.y), `shrinkEdge(${i}, -1)`, '이 안쪽 변을 바깥으로 한 칸', false, '#7A0E58')) + btn('✕', 'shrinkEdgeOpen(-1)', '접기', false, '#7A0E58'), PINK));
   });
   const area = shoelaceArea(cur);
   const sb = (txt, js, title) => `<button type="button" ${act(js)} title="${title}" style="border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;font-weight:800;border-radius:4px;width:28px;height:26px;padding:0;cursor:pointer;font-size:14px;line-height:1;touch-action:none;">${txt}</button>`;
@@ -8766,6 +8770,7 @@ function shrinkStepVal(){ const v = parseFloat((document.getElementById('shrinkS
 function shrinkNotchOpen(k){ const E = shrinkEdit; if(!E) return; E.notchOpen = k; const st = shrinkStepVal(); const nt = E.notch[k]; if(!(nt.du > 0)) nt.du = Math.max(st, 1); if(!(nt.dv > 0)) nt.dv = Math.max(st, 1); applyShrink(); }
 function shrinkNotch(k, which, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); const nt = E.notch[k]; nt[which] = Math.max(0, Math.round((nt[which] + dir * st) * 100) / 100); if(!(nt.du > 0) || !(nt.dv > 0)){ nt.du = 0; nt.dv = 0; if(E.notchOpen === k) E.notchOpen = null; } applyShrink(); }
 function shrinkSide(k, dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; applyShrink(); }
+function shrinkEdgeOpen(i){ const E = shrinkEdit; if(!E) return; E.openEdge = (i >= 0 && E.openEdge !== i) ? i : null; drawShrinkOverlays(); }
 function shrinkEdge(i, dir){ const E = shrinkEdit; if(!E) return; const st = shrinkStepVal(); E.d[i] = Math.round((E.d[i] + dir * st) * 100) / 100; applyShrink(); }
 function shrinkRotate(deg){ const E = shrinkEdit; if(!E) return; if(E.axTarget === null){ const ed = layoutRegistry.find(e => e.__shrinkOf === E); if(ed && typeof ed.azRad === 'number') E.axTarget = ed.azRad * 180 / Math.PI - (E.rotDeg || 0); } if(E.axTarget === null) return; E.rotDeg = Math.round(((E.rotDeg || 0) + deg) * 10) / 10; applyShrink(); }
 function shrinkAll(dir){ const E = shrinkEdit; if(!E) return; shrinkFrame(E); const st = shrinkStepVal(); ['L', 'R', 'B', 'T'].forEach(k => { E.side[k] = Math.round((E.side[k] + dir * st) * 100) / 100; }); applyShrink(); }
@@ -9555,8 +9560,10 @@ function startBuildingEdit(){
   const mk = (pos, img, size, z) => new kakao.maps.Marker({ map, position: pos, draggable: true, image: new kakao.maps.MarkerImage(img, new kakao.maps.Size(size, size), { offset: new kakao.maps.Point(size / 2, size / 2) }), zIndex: z || 10 });
   const label = new kakao.maps.CustomOverlay({ position: original[0], content: '', yAnchor: 1.25, clickable: true, zIndex: 30 });
   label.setMap(map);
-  bldEdit = { regen, origRef, poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: v => { P = v; rebuild(); }, toLL, toXY, addMode: false, moved: { dx: 0, dy: 0 }, name: currentBoundaryName, fromOfficial: !!currentBoundaryOfficial };
+  bldEdit = { regen, origRef, poly, path: original.slice(), handles: [], edgeHandles: [], edgeLabels: [], label, moveHandle: null, original, P: () => P, setP: (v, noSnap) => { if(!noSnap) snap(); P = v; rebuild(); editPreviewLayout(); }, undo: [], snap: () => snap(), toLL, toXY, addMode: false, moved: { dx: 0, dy: 0 }, name: currentBoundaryName, fromOfficial: !!currentBoundaryOfficial };
   const centroidXY = () => ({ x: P.reduce((s, q) => s + q.x, 0) / P.length, y: P.reduce((s, q) => s + q.y, 0) / P.length });
+  // ↶ 한 단계: 끌기·버튼으로 모양을 바꾸기 직전 상태를 쌓아 둠(같은 모양은 겹쳐 쌓지 않음)
+  const snap = () => { const u = bldEdit.undo, cur = JSON.stringify(P); if(!u.length || u[u.length - 1] !== cur){ u.push(cur); if(u.length > 80) u.shift(); } };
   const draw = () => {
     const path = P.map(toLL);
     poly.setPath(path);
@@ -9575,13 +9582,16 @@ function startBuildingEdit(){
     const topPt = path.reduce((m, q) => (q.getLat() > m.getLat() ? q : m), path[0]);
     label.setPosition(topPt);
     const btn = (txt, js, title, strong) => `<button type="button" onmousedown="kakao.maps.event.preventMap();" onclick="event.stopPropagation();${js}" title="${title}" style="border:none;background:${strong ? '#fff' : 'rgba(255,255,255,.18)'};color:${strong ? '#C2148A' : '#fff'};font-weight:700;border-radius:3px;padding:2px 7px;cursor:pointer;font-size:11.5px;">${txt}</button>`;
-    label.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:520px;background:#C2148A;color:#fff;padding:5px 8px;border-radius:5px;font-size:11.5px;box-shadow:0 2px 8px rgba(0,0,0,.25);">
-      <span style="white-space:nowrap;margin-right:2px;">↔ ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평)</span>
-      <span style="opacity:.6;">회전</span>${btn('⟲', `editRotate(${bldEdit.rotStep || 1})`, '반시계로 회전')}${btn('⟳', `editRotate(-${bldEdit.rotStep || 1})`, '시계로 회전')}${btn((bldEdit.rotStep || 1) + '°', 'editRotStep()', '회전 한 번에 돌리는 각도(1° ↔ 0.2°)')}
-      ${btn('▭ 사각형', 'editToRect()', '복잡한 외곽선을 가장 긴 변 기준의 사각형으로')}
-      ${btn(bldEdit.more ? '▴ 접기' : '⋯ 더보기', 'editMore()', '꼭짓점 추가·직각 보정·변 길이')}
-      ${bldEdit.more ? btn(bldEdit.addMode ? '➕ 추가 중' : '➕ 꼭짓점', 'editToggleAdd()', '켠 뒤 변 근처를 클릭하면 꼭짓점 추가(꼭짓점 오른쪽 클릭 = 삭제)') + btn('⊾ 직각', 'editOrtho()', '거의 직각인 모서리를 정확히 90°로') + btn(bldEdit.showLen ? '📏 길이 끄기' : '📏 길이', 'editToggleLen()', '변 길이 표시') : ''}
-      <span style="flex:1"></span>${btn('되돌리기', 'editReset()', '조정 전 경계로')}${btn('취소', 'cancelBuildingEdit()', '조정을 버리고 원래 경계로')}${btn('완료', 'finishBuildingEdit()', '이 경계로 확정', true)}
+    const pv = bldEdit.pv; const hasRegen = (bldEdit.regen || []).some(r => r.preset || r.mount);
+    const sep = '<span style="opacity:.45;">|</span>';
+    label.setContent(`<div onmousedown="kakao.maps.event.preventMap();" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:560px;background:#C2148A;color:#fff;padding:5px 8px;border-radius:5px;font-size:11.5px;box-shadow:0 2px 8px rgba(0,0,0,.25);">
+      <span style="white-space:nowrap;margin-right:2px;">↔ ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평) · 꼭짓점 ${P.length}개${pv ? ` · <b style="color:#FFD23F;">${pv.n.toLocaleString('ko-KR')}장 ${pv.kw.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}kW</b>` : ''}</span>
+      ${btn('↶ 한 단계', 'editUndoStep()', '방금 바꾼 것 하나를 되돌림')}${sep}
+      ${btn('▭ 사각형', 'editToRect()', '복잡한 외곽선을 가장 긴 변 기준의 사각형으로 바꾼 뒤 노란 네모(변)를 끌어 지붕에 맞추기')}${btn('◇ 단순화', 'editSimplify()', '자잘한 꼭짓점을 줄임 — 누를 때마다 더 많이 줄어듦')}${sep}
+      <span style="opacity:.7;">회전</span>${btn('⟲', `editRotate(${bldEdit.rotStep || 1})`, '반시계로 회전')}${btn('⟳', `editRotate(-${bldEdit.rotStep || 1})`, '시계로 회전')}${btn((bldEdit.rotStep || 1) + '°', 'editRotStep()', '회전 한 번에 돌리는 각도(1° ↔ 0.2°)')}
+      ${btn(bldEdit.more ? '▴ 접기' : '⋯', 'editMore()', '직각 보정·변 길이·배치 미리보기')}
+      ${bldEdit.more ? btn('⊾ 직각', 'editOrtho()', '거의 직각인 모서리를 정확히 90°로') + btn(bldEdit.showLen ? '📏 길이 끄기' : '📏 길이', 'editToggleLen()', '변 길이 표시') + (hasRegen ? btn(bldEdit.previewOff ? '👁 배치 보기' : '👁 배치 숨김', 'editTogglePreview()', '모양을 바꿀 때마다 같은 유형으로 다시 배치해 보여 줌(끄면 완료할 때만 배치)') : '') + btn('처음으로', 'editReset()', '조정 전 경계로') : ''}
+      <span style="flex:1"></span>${btn('취소', 'cancelBuildingEdit()', '조정을 버리고 원래 경계로')}${btn('완료', 'finishBuildingEdit()', '이 경계로 확정', true)}
     </div>`);
   };
   const rebuild = () => {
@@ -9589,10 +9599,11 @@ function startBuildingEdit(){
     bldEdit.handles = P.map((q, i) => {
       const h = mk(toLL(q), HANDLE_IMG, 16, 11);
       const upd = () => { P[i] = toXY(h.getPosition()); draw(); };
+      kakao.maps.event.addListener(h, 'dragstart', snap);
       kakao.maps.event.addListener(h, 'drag', upd);
-      kakao.maps.event.addListener(h, 'dragend', upd);
+      kakao.maps.event.addListener(h, 'dragend', () => { upd(); editPreviewLayout(); });
       // 꼭짓점 오른쪽 클릭 = 삭제
-      kakao.maps.event.addListener(h, 'rightclick', () => { if(P.length > 3){ P.splice(i, 1); rebuild(); } });
+      kakao.maps.event.addListener(h, 'rightclick', () => { if(P.length > 3){ snap(); P.splice(i, 1); rebuild(); editPreviewLayout(); } });
       return h;
     });
     bldEdit.edgeHandles = P.map((q, i) => {
@@ -9600,7 +9611,7 @@ function startBuildingEdit(){
       const h = mk(toLL({ x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 }), EDGE_IMG, 14, 10);
       if(Math.hypot(B.x - A.x, B.y - A.y) < 3) h.setMap(null); // 짧은 변은 변 손잡이 숨김(화면 단순화)
       let start = null;
-      kakao.maps.event.addListener(h, 'dragstart', () => { start = { a: Object.assign({}, P[i]), b: Object.assign({}, P[(i + 1) % P.length]), m: toXY(h.getPosition()) }; });
+      kakao.maps.event.addListener(h, 'dragstart', () => { snap(); start = { a: Object.assign({}, P[i]), b: Object.assign({}, P[(i + 1) % P.length]), m: toXY(h.getPosition()) }; });
       const upd = () => {
         if(!start) return;
         const cur = toXY(h.getPosition());
@@ -9612,7 +9623,7 @@ function startBuildingEdit(){
         draw();
       };
       kakao.maps.event.addListener(h, 'drag', upd);
-      kakao.maps.event.addListener(h, 'dragend', () => { upd(); start = null; draw(); });
+      kakao.maps.event.addListener(h, 'dragend', () => { upd(); start = null; draw(); editPreviewLayout(); });
       return h;
     });
     draw();
@@ -9621,14 +9632,16 @@ function startBuildingEdit(){
   const mv = mk(toLL(centroidXY()), MOVE_IMG, 28, 12);
   bldEdit.moveHandle = mv;
   let mvLast = null;
-  kakao.maps.event.addListener(mv, 'dragstart', () => { mvLast = toXY(mv.getPosition()); });
+  kakao.maps.event.addListener(mv, 'dragstart', () => { snap(); mvLast = toXY(mv.getPosition()); });
   const moveAll = () => { if(!mvLast) mvLast = toXY(mv.getPosition()); const c = toXY(mv.getPosition()); const dx = c.x - mvLast.x, dy = c.y - mvLast.y; P = P.map(q => ({ x: q.x + dx, y: q.y + dy })); bldEdit.moved.dx += dx; bldEdit.moved.dy += dy; mvLast = c; draw(); };
   kakao.maps.event.addListener(mv, 'drag', moveAll);
-  kakao.maps.event.addListener(mv, 'dragend', () => { moveAll(); mvLast = null; });
+  kakao.maps.event.addListener(mv, 'dragend', () => { moveAll(); mvLast = null; editPreviewLayout(); });
+  bldEdit.setLabel = () => draw();
   rebuild();
+  editPreviewLayout();
   const st = document.getElementById('roadviewStatus');
   st.style.color = 'var(--ink-soft)';
-  st.textContent = '↔ 경계 조정: 흰 점 = 꼭짓점 끌기 · 노란 네모 = 변 평행 이동 · 가운데 손잡이 = 전체 이동 · 라벨의 ⟲⟳ = 회전. 다 맞으면 "완료".';
+  st.textContent = '↔ 경계 조정: 흰 점 = 꼭짓점 끌기 · 노란 네모 = 변 평행 이동 · 선 위를 클릭 = 꼭짓점 추가 · 흰 점 오른쪽 클릭 = 삭제 · 가운데 손잡이 = 전체 이동. 모양이 많이 다르면 "▭ 사각형"으로 바꾼 뒤 변을 끌어 맞추세요. 바꿀 때마다 배치가 다시 만들어지고 장수가 라벨에 나옵니다. 잘못 바꿨으면 "↶ 한 단계".';
 }
 function editRotate(deg){
   if(!bldEdit) return;
@@ -9636,9 +9649,59 @@ function editRotate(deg){
   const a = deg * Math.PI / 180;
   bldEdit.setP(P.map(q => { const r = rotateXY(q.x - c.x, q.y - c.y, a); return { x: c.x + r.x, y: c.y + r.y }; }));
 }
-function editRotStep(){ if(!bldEdit) return; bldEdit.rotStep = (bldEdit.rotStep || 1) === 1 ? 0.2 : 1; bldEdit.setP(bldEdit.P()); }
-function editMore(){ if(!bldEdit) return; bldEdit.more = !bldEdit.more; if(!bldEdit.more && bldEdit.addMode) editToggleAdd(); bldEdit.setP(bldEdit.P()); }
-function editToggleLen(){ if(!bldEdit) return; bldEdit.showLen = !bldEdit.showLen; bldEdit.setP(bldEdit.P()); }
+// ↶ 한 단계 되돌리기(조정 중)
+function editUndoStep(){ if(!bldEdit || !bldEdit.undo.length) return; const prev = JSON.parse(bldEdit.undo.pop()); bldEdit.setP(prev, true); }
+// ◇ 단순화: Douglas–Peucker — 누를 때마다 허용 오차 0.5 → 1 → 2 → 3 → 5m (사각형까지는 줄이지 않음: 최소 4점)
+function editSimplify(){
+  if(!bldEdit) return; const P = bldEdit.P(); if(P.length <= 4) return;
+  const rdp = (arr, tol) => { const keep = new Array(arr.length).fill(false); keep[0] = keep[arr.length - 1] = true; const stack = [[0, arr.length - 1]];
+    while(stack.length){ const [a, b] = stack.pop(); const dx = arr[b].x - arr[a].x, dy = arr[b].y - arr[a].y, L = Math.hypot(dx, dy) || 1; let md = -1, mi = -1; for(let k = a + 1; k < b; k++){ const d = Math.abs((arr[k].x - arr[a].x) * dy - (arr[k].y - arr[a].y) * dx) / L; if(d > md){ md = d; mi = k; } } if(md > tol){ keep[mi] = true; stack.push([a, mi], [mi, b]); } }
+    return arr.filter((_, k) => keep[k]); };
+  const run = tol => { let far = 0, fd = -1; P.forEach((q, k) => { const d = (q.x - P[0].x) ** 2 + (q.y - P[0].y) ** 2; if(d > fd){ fd = d; far = k; } }); const A = rdp(P.slice(0, far + 1), tol), B = rdp(P.slice(far).concat([P[0]]), tol); return A.concat(B.slice(1, -1)); };
+  const tols = [0.5, 1, 2, 3, 5]; let out = null;
+  for(let lv = bldEdit.simpLv || 0; lv < tols.length; lv++){ const r = run(tols[lv]); bldEdit.simpLv = lv + 1; if(r.length >= 4 && r.length < P.length){ out = r; break; } }
+  const st = document.getElementById('roadviewStatus');
+  if(!out){ if(st) st.textContent = '◇ 더 줄일 꼭짓점이 없습니다(오차 5m까지 확인). 더 단순하게 하려면 "▭ 사각형".'; return; }
+  bldEdit.setP(out);
+  if(st) st.textContent = `◇ 꼭짓점 ${P.length}개 → ${out.length}개로 줄였습니다(오차 ${tols[bldEdit.simpLv - 1]}m 이내). 한 번 더 누르면 더 줄입니다. 되돌리려면 "↶ 한 단계".`;
+}
+function editTogglePreview(){ if(!bldEdit) return; bldEdit.previewOff = !bldEdit.previewOff; editPreviewLayout(); }
+// 조정 중 배치 미리보기: 조정 전에 이 건물에 있던 배치 유형으로, 지금 모양에 다시 배치(끌기를 놓을 때·버튼을 누를 때)
+function editPreviewClear(){ for(let k = layoutRegistry.length - 1; k >= 0; k--){ const e = layoutRegistry[k]; if(e.__editPreview){ try{ removeMeasureGroup(e.groupId); }catch(x){} if(layoutRegistry[k] === e) layoutRegistry.splice(k, 1); } } }
+function editPreviewLayout(){
+  const E = bldEdit; if(!E) return;
+  editPreviewClear(); E.pv = null;
+  const rg = (E.regen || []).find(r => r.preset || r.mount);
+  if(rg && !E.previewOff && E.path && E.path.length >= 3 && shoelaceArea(E.path) > 4){
+    const was = histMuted; histMuted = true; const stEl = document.getElementById('roadviewStatus'), keepTxt = stEl ? stEl.textContent : '', keepCol = stEl ? stEl.style.color : '';
+    try{
+      lastAreaPolygonPath = E.path.slice(); currentBoundaryOfficial = false;
+      if(rg.preset && LAYOUT_PRESETS[rg.preset]) applyLayoutPreset(rg.preset); else if(rg.mount){ document.getElementById('mountType').value = rg.mount; onMountTypeChange(); }
+      const before = new Set(layoutRegistry);
+      onGenerateLayoutClickInner();
+      layoutRegistry.filter(e => !before.has(e)).forEach(e => { e.__editPreview = true; e.genPreset = rg.preset || null; e.genMount = rg.mount || null; const n = e.modules.filter(m => !m.removed).length; E.pv = { n: (E.pv ? E.pv.n : 0) + n, kw: (E.pv ? E.pv.kw : 0) + n * e.wattPerPanel / 1000 }; });
+    } catch(x){ console.warn('edit preview', x); } finally { histMuted = was; lastAreaPolygonPath = E.path.slice(); if(stEl){ stEl.textContent = keepTxt; stEl.style.color = keepCol; } }
+  }
+  if(bldEdit === E) E.setLabel && E.setLabel();
+  scheduleLayoutCards();
+}
+// 조정 중 선 위(화면 14px 이내, 꼭짓점에서 12px 이상)를 클릭하면 그 자리에 꼭짓점 추가 → true
+function editClickNearEdge(ll){
+  if(!bldEdit) return false; const P = bldEdit.P(); const q = bldEdit.toXY(ll);
+  let bi = -1, bd = Infinity; for(let i = 0; i < P.length; i++){ const d = distPointToSegment(q, P[i], P[(i + 1) % P.length]); if(d < bd){ bd = d; bi = i; } }
+  if(bi < 0) return false;
+  let mPerPx = 0.2; try{ const pr = ensureKakaoMap().getProjection(); const a = pr.containerPointFromCoords(ll), b = pr.containerPointFromCoords(bldEdit.toLL({ x: q.x + 10, y: q.y })); const px = Math.hypot(b.x - a.x, b.y - a.y); if(px > 0) mPerPx = 10 / px; }catch(e){}
+  if(bd > 14 * mPerPx) return false;
+  if(P.some(v => Math.hypot(v.x - q.x, v.y - q.y) < 12 * mPerPx)) return false;
+  // 클릭한 점을 변 위로 내려서 끼움
+  const A = P[bi], B = P[(bi + 1) % P.length]; const ex = B.x - A.x, ey = B.y - A.y, L2 = ex * ex + ey * ey || 1; const t = Math.max(0, Math.min(1, ((q.x - A.x) * ex + (q.y - A.y) * ey) / L2));
+  const np = P.slice(); np.splice(bi + 1, 0, { x: A.x + ex * t, y: A.y + ey * t });
+  bldEdit.setP(np);
+  return true;
+}
+function editRotStep(){ if(!bldEdit) return; bldEdit.rotStep = (bldEdit.rotStep || 1) === 1 ? 0.2 : 1; bldEdit.setLabel(); }
+function editMore(){ if(!bldEdit) return; bldEdit.more = !bldEdit.more; if(!bldEdit.more && bldEdit.addMode) editToggleAdd(); bldEdit.setLabel(); }
+function editToggleLen(){ if(!bldEdit) return; bldEdit.showLen = !bldEdit.showLen; bldEdit.setLabel(); }
 function editOrtho(){ if(bldEdit) bldEdit.setP(orthogonalizeXY(bldEdit.P().map(q => ({ x: q.x, y: q.y })))); }
 function editReset(){ if(bldEdit) bldEdit.setP(bldEdit.original.map(bldEdit.toXY)); }
 // 가장 긴 변 방향으로 돌린 좌표에서 감싸는 최소 사각형
@@ -9673,6 +9736,7 @@ function cancelBuildingEdit(){
 }
 function stopBuildingEdit(){
   if(!bldEdit) return;
+  editPreviewClear();
   bldEdit.poly.setMap(null); if(bldEdit.origRef) bldEdit.origRef.setMap(null); bldEdit.handles.forEach(h => h.setMap(null)); (bldEdit.edgeHandles || []).forEach(h => h.setMap(null)); bldEdit.edgeLabels.forEach(o => o.setMap(null)); bldEdit.label.setMap(null);
   if(mapMode === 'editadd') mapMode = 'normal';
   if(bldEdit.moveHandle) bldEdit.moveHandle.setMap(null);
