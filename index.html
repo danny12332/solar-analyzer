@@ -1321,7 +1321,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-11e';
+const APP_VERSION = '2026-11-11f';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -8738,7 +8738,7 @@ function startShrinkOutline(){
     }
     if(xy.length >= 3 && xy.length < from.length) from = xy.map(q => solarToLatLng(q.x, q.y, la));
   }
-  shrinkEdit = { base: from, lat0: from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180, d: from.map(() => 0), name: currentBoundaryName, preset: ed ? (ed.preset || ed.genPreset) : null, overlays: [], axTarget: (ed && typeof ed.azRad === 'number') ? ed.azRad * 180 / Math.PI : null, rotDeg: 0 };
+  shrinkEdit = { base: from, lat0: from.reduce((a, q) => a + q.getLat(), 0) / from.length * Math.PI / 180, d: from.map(() => 0), name: currentBoundaryName, preset: ed ? (ed.preset || ed.genPreset) : null, overlays: [], axTarget: (ed && typeof ed.azRad === 'number') ? ed.azRad * 180 / Math.PI : null, rotDeg: 0, srcEd: ed, srcPath: base };
   drawShrinkOverlays();
   if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = '⇲ 경계 줄이기: 옆면마다 노란 화살표 = 안쪽으로 한 칸(줄이기), 흰 화살표 = 바깥으로 한 칸(늘리기). 분홍 점은 ㄱ자 안쪽 변(누르면 그 변의 화살표가 펼쳐짐). 아래 막대에서 한 칸 크기(단위)·전체 −/+·↺ 처음으로. 바꿀 때마다 배치가 같은 유형으로 다시 만들어집니다. 끝나면 "완료".'; }
 }
@@ -8888,7 +8888,8 @@ function applyShrink(){
   const path = shrinkPath();
   if(!(shoelaceArea(path) > 4)){ E.d = E.d.map(v => v); return; }
   // 이전 배치(이 경계에서 만든 것) 지우고 새 경계로 다시 만들기
-  for(let k = layoutRegistry.length - 1; k >= 0; k--){ const e = layoutRegistry[k]; if(e.__shrinkOf === E || sameBoundary(e.boundary, E.base) || (e.origBoundary && sameBoundary(e.origBoundary, E.base))){ try{ removeMeasureGroup(e.groupId); }catch(x){} layoutRegistry.splice(k, 1); } }
+  // 줄이기 시작 때의 원래 배치(E.srcEd)도 지움 — 시작할 때 꼭짓점을 단순화하면 E.base가 원래 경계와 달라져 원래 배치가 남아 새 배치와 겹쳤음(2026-11-11 수정)
+  for(let k = layoutRegistry.length - 1; k >= 0; k--){ const e = layoutRegistry[k]; if(e.__shrinkOf === E || e === E.srcEd || sameBoundary(e.boundary, E.srcPath) || (e.origBoundary && sameBoundary(e.origBoundary, E.srcPath)) || sameBoundary(e.boundary, E.base) || (e.origBoundary && sameBoundary(e.origBoundary, E.base))){ try{ removeMeasureGroup(e.groupId); }catch(x){} layoutRegistry.splice(k, 1); } }
   if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
   drawConfirmedOutline(path, E.name, ' · 줄인 경계');
   currentBoundaryOfficial = false; // 사용자가 정한 경계 → 대장 면적 자동 보정 안 함
