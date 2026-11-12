@@ -151,6 +151,15 @@
   body.ui2[data-rail="railPaneLayout"] #kakaoMap{height:max(480px, calc(100vh - var(--header-h) - 84px));}
   @media (max-width:980px){ body.ui2[data-rail="railPaneLayout"] .app-grid{grid-template-columns:1fr;} body.ui2[data-rail="railPaneLayout"] #kakaoMap{height:60vh;} body.ui2 #railPaneLayout .lay-sum{position:static;} }
 
+  /* 컨설팅 탭 안 작은 탭(사용자 2026-11-12: 정보가 너무 많아 나눠 보기): 토지이용 · 한전 용량 · 건축물대장 · 부지 조건 · 지도·연락처 중 하나만 보임 */
+  .cs-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-top:12px;padding:4px;background:var(--surface-2);border:1px solid var(--card-line);border-radius:10px;}
+  .cs-tabs button{flex:1 1 auto;border:0;background:transparent;color:var(--ink-soft);font-family:inherit;font-size:12.5px;font-weight:700;padding:7px 8px;border-radius:7px;cursor:pointer;white-space:nowrap;}
+  .cs-tabs button:hover{background:#fff;}
+  .cs-tabs button.on{background:var(--ink);color:#F6F7F3;}
+  .cs-tabs button i{display:none;width:7px;height:7px;border-radius:50%;background:var(--leaf);margin-left:5px;vertical-align:middle;}
+  .cs-tabs button.has i{display:inline-block;}
+  .cs-tabs button.on.has i{background:#9BE28A;}
+  #railPaneConsult[data-cs-tab="land"] [data-cs]:not([data-cs="land"]), #railPaneConsult[data-cs-tab="kepco"] [data-cs]:not([data-cs="kepco"]), #railPaneConsult[data-cs-tab="bld"] [data-cs]:not([data-cs="bld"]), #railPaneConsult[data-cs-tab="site"] [data-cs]:not([data-cs="site"]), #railPaneConsult[data-cs-tab="links"] [data-cs]:not([data-cs="links"]){display:none !important;}
   /* 왼쪽 패널 탭: 컨설팅 · 배치도 · 제안서 */
   .rail-tabs{position:sticky;top:0;z-index:3;display:flex;gap:2px;background:#1C2430;border-radius:var(--r-md);padding:4px;box-shadow:var(--shadow);}
   .rail-tab-btn{flex:1;border:none;background:transparent;color:#B8C2CE;font-family:inherit;font-size:14px;font-weight:700;padding:9px 6px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;}
@@ -624,29 +633,38 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           </div>
           <button class="run sun" style="margin-top:0;" onclick="lookupAddress(true)">위치 확인</button>
         </div>
+        <div class="cs-tabs" id="csTabs" role="tablist" aria-label="컨설팅 항목">
+          <button type="button" role="tab" data-t="land" onclick="csTab('land')">토지이용<i></i></button>
+          <button type="button" role="tab" data-t="kepco" onclick="csTab('kepco')">한전 용량<i></i></button>
+          <button type="button" role="tab" data-t="bld" onclick="csTab('bld')">건축물대장<i></i></button>
+          <button type="button" role="tab" data-t="site" onclick="csTab('site')">부지 조건<i></i></button>
+          <button type="button" role="tab" data-t="links" onclick="csTab('links')">지도·연락처<i></i></button>
+        </div>
         <div class="lookups">
-          <div>
+          <div data-cs="land">
             <button class="run" id="eumBtn" style="background:var(--sky);" onclick="openEumResult()">📄 토지이용계획 바로 조회</button>
             <p id="eumStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
             <div id="landInfoPanel"></div>
           </div>
-          <div>
+          <div data-cs="kepco">
             <button class="run sun" id="kepcoBtn" onclick="checkKepcoCapacity()">⚡ 배전선로 여유용량 (한전ON)</button>
             <div id="kepcoResult" style="margin-top:8px;"></div>
           </div>
-          <div>
+          <div data-cs="bld">
             <button class="run" id="bldrgstBtn" style="background:var(--sky-deep);" onclick="checkBuildingRegister()">🏢 건축물대장 조회</button>
             <div id="bldrgstResult" style="margin-top:8px;"></div>
           </div>
         </div>
         <p id="parcelStatus" class="hint" style="margin-top:8px;min-height:18px;"></p>
+        <div data-cs="links">
         <div id="contactPanel"></div>
         <div id="mapLinks" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>
         <p class="footnote">실제 용도지역·지목 확인은 반드시 토지이음에서 직접 조회하세요. "토지이용계획 바로 조회"는 입력한 지번 주소로 토지이음 공식 결과 페이지를 새 탭에 엽니다.</p>
+        </div>
       </div>
 
       <!-- INPUT -->
-      <div class="card">
+      <div class="card" data-cs="site">
         <h2>부지 조건 입력</h2>
         <div class="site-summary" id="siteSummary">주소를 검색하면 지목·필지 면적·용도지역이 자동으로 채워지고, 모두 읽히면 분석까지 자동으로 실행됩니다. 개별공시지가만 토지이음 값으로 고쳐주세요.</div>
 
@@ -1348,7 +1366,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-11h';
+const APP_VERSION = '2026-11-12b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2179,6 +2197,10 @@ function ui2Tick(){
 window.addEventListener('DOMContentLoaded', () => { try{ ui2Apply(); }catch(e){ console.warn('ui2', e); } });
 // F5 = 새 작업(확인 창) — 머리띠의 '새 작업' 버튼을 없애고 단축키로만(사용자 2026-11-11). 그냥 새로 고침은 Ctrl+F5 / Ctrl+R
 window.addEventListener('keydown', ev => { if(ev.key !== 'F5' || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return; ev.preventDefault(); try{ const m = document.getElementById('newWorkModal'); if(m && m.style.display !== 'none' && m.style.display !== '') return; newWorkOpen(); }catch(e){ console.warn('F5 new work', e); } });
+// 컨설팅 탭 안 작은 탭: 하나만 보이게 + 결과가 있는 탭에 초록 점
+function csTab(t){ const pane = document.getElementById('railPaneConsult'); if(!pane) return; pane.setAttribute('data-cs-tab', t); document.querySelectorAll('#csTabs button').forEach(b => { const on = b.dataset.t === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); }); try{ localStorage.setItem('solarCsTab', t); }catch(e){} }
+function csTabMarks(){ const has = { land: 'landInfoPanel', kepco: 'kepcoResult', bld: 'bldrgstResult', links: 'mapLinks' }; document.querySelectorAll('#csTabs button').forEach(b => { const id = has[b.dataset.t]; const el = id && document.getElementById(id); b.classList.toggle('has', !!(el && el.textContent.trim().length > 0)); }); }
+window.addEventListener('DOMContentLoaded', () => { let t = 'land'; try{ const v = localStorage.getItem('solarCsTab'); if(['land', 'kepco', 'bld', 'site', 'links'].includes(v)) t = v; }catch(e){} csTab(t); setInterval(csTabMarks, 700); });
 function switchRailTab(paneId){
   document.querySelectorAll('#railTabs .rail-tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-pane') === paneId));
   document.querySelectorAll('.rail > .rail-pane').forEach(p => p.classList.toggle('active', p.id === paneId));
@@ -5548,6 +5570,126 @@ function ppCompute(inp){
 function ppSweep(inp, list){ return list.map(kW => { const r = ppCompute(Object.assign({}, inp, { kW })); return { kW, surRate: r.surRate, re100: r.re100, total: r.total, saving: r.saving, surplus: r.surplus, self: r.self, gen: r.gen }; }); }
 function ppRecommend(sweep, maxSurRate){ let best = null; sweep.forEach(s => { if(s.surRate <= maxSurRate + 1e-9 && (!best || s.kW > best.kW)) best = s; }); return best; }
 // ===== ⚡ 파워플래너 탭: 자료 읽기(채워진 손익계산서 xlsx 또는 파워플래너 .xls 파일들) → 자가소비 분석 → 용량 추천 → 제안서 자가소비 표에 연결 =====
+// ===== 📑 파워플래너 → 제안서(사용자 2026-11-12): 전기사용 패턴분석 장의 그림(월별·요일별·최저사용일 시간대별)과 분석 문구, 자가소비 수익 표를 자동으로 채움 =====
+// 그림은 한전 화면 캡처가 아니라 받은 자료로 분석기가 그린 그래프(일별 자료는 손익계산서에 없어 최저 사용월의 요일별로 대신). 넣은 뒤 제안서 편집기에서 글·그림 모두 직접 고칠 수 있음(직접 고친 글은 다시 넣을 때 덮어쓰지 않음)
+function ppPattern(){
+  if(!ppData || !ppData.blocks || ppData.blocks.length !== 12 || !ppResult || !ppResult.rows || ppResult.rows.length !== 12) return null;
+  const R = ppResult, rows = R.rows; const use = rows.map(r => r.usage); const valid = use.map((u, i) => (u > 0 ? i : -1)).filter(i => i >= 0); if(!valid.length) return null;
+  const lo = valid.reduce((a, i) => (use[i] < use[a] ? i : a), valid[0]), hi = valid.reduce((a, i) => (use[i] > use[a] ? i : a), valid[0]);
+  const mean = valid.reduce((a, i) => a + use[i], 0) / valid.length; const spread = mean > 0 ? (use[hi] - use[lo]) / mean : 0;
+  const blk = ppData.blocks[lo] || [], nD = rows[lo].nDays || [];
+  const wdTot = [0, 1, 2, 3, 4, 5, 6].map(wd => blk.reduce((a, r) => a + (+(r || [])[wd] || 0), 0)); // 요일별 그 달 합계(kWh) — 표 열 순서 일~토
+  const wdAvg = wdTot.map((t, wd) => (nD[wd] > 0 ? t / nD[wd] : 0)); // 요일별 하루 평균
+  const nWe = (nD[0] || 0) + (nD[6] || 0), nWk = [1, 2, 3, 4, 5].reduce((a, wd) => a + (nD[wd] || 0), 0);
+  const weDay = nWe > 0 ? (wdTot[0] + wdTot[6]) / nWe : 0, wkDay = nWk > 0 ? [1, 2, 3, 4, 5].reduce((a, wd) => a + wdTot[wd], 0) / nWk : 0;
+  const weHour = Array.from({ length: 24 }, (_, h) => (nWe > 0 ? ((+(blk[h] || [])[0] || 0) + (+(blk[h] || [])[6] || 0)) / nWe : 0)); // 최저 사용월 주말 시간당 평균
+  const hol = (ppData.hol || []).map(v => +v || 0); const hasHol = hol.length === 24 && hol.some(v => v > 0);
+  const hourSrc = hasHol ? hol : weHour; const hv = hourSrc.filter(v => v > 0);
+  const hAvg = hv.length ? hv.reduce((a, b) => a + b, 0) / hv.length : 0, hMin = hv.length ? Math.min(...hv) : 0, hMax = hv.length ? Math.max(...hv) : 0;
+  const sunH = hourSrc.slice(9, 16); const sunAvg = sunH.length ? sunH.reduce((a, b) => a + b, 0) / sunH.length : 0; // 10~16시(표의 10시~16시 칸)
+  const inp = ppInputs();
+  return { rows, use, lo, hi, mean, spread, wdTot, wdAvg, weDay, wkDay, weHour, hol, hasHol, hourSrc, hAvg, hMin, hMax, sunAvg, kW: inp.kW, surRate: R.surRate, minDate: ppData.minDate || '', loM: rows[lo].m, loY: rows[lo].y };
+}
+// 분석 문구(자료에서 계산한 값만 씀). 기준: 월별 편차 = (최대−최소)/평균 30% 이하면 '유사', 주말·평일 하루 평균 차이 20% 이상이면 '편차 존재', 시간당 (최대−최소)/평균 30% 이하면 '일정'
+function ppPatternTexts(S){
+  const n0 = v => Math.round(v).toLocaleString('ko-KR'), f1 = v => (Math.round(v * 10) / 10).toLocaleString('ko-KR');
+  const y0 = S.rows[0].y, y1 = S.rows[11].y; const yr = y0 === y1 ? `${y0}년` : `${y0}년~${y1}년`;
+  const hiR = S.rows[S.hi], loR = S.rows[S.lo];
+  const dayDiff = Math.max(S.weDay, S.wkDay) > 0 ? Math.abs(S.wkDay - S.weDay) / Math.max(S.weDay, S.wkDay) : 0;
+  const A = [
+    S.spread <= 0.3 ? `${yr} 12개월 월별 전력 사용량은 큰 편차 없이 유사한 수준 유지` : `${yr} 12개월 월별 전력 사용량은 최대 ${hiR.m}월 ${n0(hiR.usage)}kWh · 최소 ${loR.m}월 ${n0(loR.usage)}kWh로 편차 존재`,
+    `연중 ${S.loM}월이 가장 낮은 전력 사용량을 기록 (${n0(loR.usage)}kWh)`,
+    `${S.loM}월 하루 평균: 주말 ${n0(S.weDay)}kWh · 평일 ${n0(S.wkDay)}kWh${dayDiff >= 0.2 ? ' (편차 존재)' : ' (차이 작음)'}`,
+    (S.spread > 0.3 || dayDiff >= 0.2) ? '특정 월·요일에 따른 사용 패턴 차이가 확인됨' : '월·요일에 따른 사용 패턴 차이는 크지 않음'
+  ];
+  const flat = S.hAvg > 0 && (S.hMax - S.hMin) / S.hAvg <= 0.3;
+  const base = S.hasHol ? `연중 최저 사용일${S.minDate ? `(${S.minDate})` : ''} 기준 시간대별 전력 사용 패턴 분석` : `${S.loM}월(연중 최저 사용월) 기준 주말 전력 사용 패턴 분석`;
+  const who = S.hasHol ? '최저 사용일 사용량' : '주말 사용량';
+  const B = [
+    base,
+    flat ? `${who}은 시간대와 관계없이 시간당 약 ${f1(S.hAvg)}kWh로 일정` : `${who}은 시간당 ${f1(S.hMin)}~${f1(S.hMax)}kWh(평균 약 ${f1(S.hAvg)}kWh)`,
+    `태양광 발전 시간대(10~16시) 전력 사용량은 시간당 약 ${f1(S.sunAvg)}kWh`,
+    `${(Math.round(S.kW * 100) / 100).toLocaleString('ko-KR')}kW 설치 시 평일 포함 기준 잉여전력 약 ${(S.surRate * 100).toFixed(1)}% 발생 예상`
+  ];
+  return { A, B };
+}
+// 그래프(캔버스): kind = month(월별 사용량) / day(최저 사용월 요일별 하루 평균) / hour(최저 사용일 시간대별 + 표)
+function ppPatternChart(kind, S, W, H){
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+  const F = (px, b) => `${b ? '700 ' : ''}${px}px "Noto Sans KR","Malgun Gothic",sans-serif`; const n0 = v => Math.round(v).toLocaleString('ko-KR');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.strokeStyle = '#D5DAE0'; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
+  const u = kind === 'hour' ? W / 1000 : W / 620; // 글자·여백 배율(제안서에서 작게 들어가는 월별·요일별 그림은 글자를 크게)
+  const title = t => { g.fillStyle = '#1B2A4A'; g.font = F((kind === 'hour' ? 26 : 22) * u, true); g.textAlign = 'left'; g.textBaseline = 'top'; g.fillText(t, 28 * u, 20 * u); };
+  const note = t => { g.fillStyle = '#6B7785'; g.font = F(15 * u); g.textAlign = 'right'; g.textBaseline = 'top'; g.fillText(t, W - 24 * u, 26 * u); };
+  const bars = (vals, labels, hot, x0, y0, w, h, unitFmt) => {
+    const mx = Math.max(...vals, 1); const step = (() => { const raw = mx / 4; const p = Math.pow(10, Math.floor(Math.log10(raw))); const c = [1, 2, 2.5, 5, 10].find(k => k * p >= raw) || 10; return c * p; })(); const top = Math.ceil(mx / step) * step;
+    g.font = F(14 * u); g.textAlign = 'right'; g.textBaseline = 'middle';
+    for(let v = 0; v <= top + 1e-9; v += step){ const y = y0 + h - h * v / top; g.strokeStyle = '#E3E7EC'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + w, y); g.stroke(); g.fillStyle = '#6B7785'; g.fillText(n0(v), x0 - 8 * u, y); }
+    const bw = w / vals.length; vals.forEach((v, i) => { const bh = h * v / top; const x = x0 + bw * i + bw * 0.18, ww = bw * 0.64, y = y0 + h - bh;
+      g.fillStyle = hot.includes(i) ? '#F2994A' : '#4FD6D2'; g.fillRect(x, y, ww, bh);
+      if(hot.includes(i)){ g.strokeStyle = '#C00000'; g.lineWidth = 3 * u; g.strokeRect(x - 4 * u, y - 4 * u, ww + 8 * u, bh + 8 * u); }
+      g.fillStyle = '#1B2A4A'; g.font = F(Math.min(13 * u, bw * 0.2), hot.includes(i)); g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(unitFmt(v), x + ww / 2, y - 6 * u);
+      g.fillStyle = '#39424E'; g.font = F(15 * u, hot.includes(i)); g.textBaseline = 'top'; g.fillText(labels[i], x + ww / 2, y0 + h + 8 * u); });
+    g.strokeStyle = '#8894A3'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x0, y0 + h); g.lineTo(x0 + w, y0 + h); g.stroke();
+  };
+  if(kind === 'month'){
+    title('월별 전기사용량 (kWh)'); note(`주황 = 최저 ${S.loM}월`);
+    bars(S.use, S.rows.map(r => `${r.m}월`), [S.lo], 70 * u, 80 * u, W - 96 * u, H - 130 * u, n0);
+  } else if(kind === 'day'){
+    title(`${S.loM}월 요일별 하루 평균 (kWh)`); note('주황 = 주말');
+    bars(S.wdAvg, ['일', '월', '화', '수', '목', '금', '토'], [0, 6], 70 * u, 80 * u, W - 96 * u, H - 130 * u, n0);
+  } else {
+    const V = S.hourSrc; title(S.hasHol ? `최저 사용일${S.minDate ? ` (${S.minDate})` : ''} 시간대별 사용량 (kWh)` : `${S.loM}월 주말 시간대별 평균 사용량 (kWh)`); note('붉은 칸 = 태양광 발전 시간대(10~16시)');
+    const x0 = 80 * u, y0 = 90 * u, w = W - 120 * u, h = H * 0.40; const mx = Math.max(...V, 1); const top = mx * 1.25;
+    g.font = F(14 * u); g.textAlign = 'right'; g.textBaseline = 'middle';
+    for(let k = 0; k <= 4; k++){ const v = top * k / 4, y = y0 + h - h * k / 4; g.strokeStyle = '#E3E7EC'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + w, y); g.stroke(); g.fillStyle = '#6B7785'; g.fillText((Math.round(v * 10) / 10).toLocaleString('ko-KR'), x0 - 8 * u, y); }
+    const X = i => x0 + w * (i + 0.5) / 24, Y = v => y0 + h - h * v / top;
+    g.fillStyle = 'rgba(192,0,0,.07)'; g.fillRect(X(9) - w / 48, y0, w * 7 / 24, h); g.strokeStyle = '#C00000'; g.lineWidth = 3 * u; g.strokeRect(X(9) - w / 48, y0, w * 7 / 24, h);
+    V.forEach((v, i) => { g.fillStyle = '#4FD6D2'; g.fillRect(X(i) - w / 80, Y(v), w / 40, y0 + h - Y(v)); });
+    g.strokeStyle = '#F2994A'; g.lineWidth = 3 * u; g.beginPath(); V.forEach((v, i) => { if(i) g.lineTo(X(i), Y(v)); else g.moveTo(X(i), Y(v)); }); g.stroke();
+    g.fillStyle = '#39424E'; g.font = F(13 * u); g.textAlign = 'center'; g.textBaseline = 'top'; for(let i = 0; i < 24; i += 2) g.fillText(`${i + 1}시`, X(i), y0 + h + 6 * u);
+    // 표: 1~12시 / 13~24시 두 묶음
+    const ty = y0 + h + 50 * u, th = H - ty - 24 * u, rh = th / 13, tw = (W - 80 * u) / 2 - 10 * u;
+    [0, 1].forEach(c => { const tx = 40 * u + c * (tw + 20 * u);
+      g.fillStyle = '#1B2A4A'; g.fillRect(tx, ty, tw, rh); g.fillStyle = '#fff'; g.font = F(15 * u, true); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('시', tx + tw * 0.25, ty + rh / 2); g.fillText('사용량 (kWh)', tx + tw * 0.72, ty + rh / 2);
+      for(let r = 0; r < 12; r++){ const hIdx = c * 12 + r, y = ty + rh * (r + 1); const sun = hIdx >= 9 && hIdx <= 15;
+        g.fillStyle = r % 2 ? '#F4F6F8' : '#fff'; g.fillRect(tx, y, tw, rh); g.strokeStyle = '#D5DAE0'; g.lineWidth = 1; g.strokeRect(tx, y, tw, rh);
+        if(sun){ g.strokeStyle = '#C00000'; g.lineWidth = 2.5 * u; g.strokeRect(tx + tw * 0.5, y + 1, tw * 0.5 - 1, rh - 2); }
+        g.fillStyle = '#39424E'; g.font = F(15 * u, sun); g.fillText(String(hIdx + 1).padStart(2, '0'), tx + tw * 0.25, y + rh / 2); g.fillText((Math.round(V[hIdx] * 100) / 100).toFixed(2), tx + tw * 0.72, y + rh / 2); } });
+  }
+  return cv;
+}
+// 제안서에 넣기: 패턴 장 2개(제목으로 찾음)의 큰 그림·문구, 자가소비 표 장의 잉여율 문구. 반환 = 한 일 목록
+function pptApplyPP(silent){
+  const say = (t, c) => { if(typeof ppSay === 'function') ppSay(t, c); };
+  if(typeof pptInfo === 'undefined' || !pptInfo || !pptInfo.slides){ if(!silent) say('📑 제안서 양식이 아직 열려 있지 않습니다. 제안서 탭에서 양식(.pptx)을 먼저 여세요 — 열어 두면 자료를 읽을 때 자동으로 들어갑니다.', '#8a5a00'); return null; }
+  const S = ppPattern(); if(!S){ if(!silent) say('📑 12개월 사용량 자료가 없어 제안서에 넣을 분석을 만들 수 없습니다.', '#8a5a00'); return null; }
+  const T = ppPatternTexts(S); const done = [], kept = [];
+  const setText = (sl, sh, txt) => { const op = pptOpFor(sl.no); op.ppAuto = op.ppAuto || { texts: {}, pics: {} }; const cur = op.texts[sh.idx]; if(cur !== undefined && cur !== op.ppAuto.texts[sh.idx] && cur !== txt){ kept.push(`${sl.no}번 장 글`); return; } op.texts[sh.idx] = txt; op.ppAuto.texts[sh.idx] = txt; };
+  const setPic = (sl, i, kind) => { const op = pptOpFor(sl.no); op.ppAuto = op.ppAuto || { texts: {}, pics: {} }; const cur = op.replace[i]; if(cur && cur !== op.ppAuto.pics[i]){ kept.push(`${sl.no}번 장 그림`); return; } const pc = sl.picList[i]; const W = 1400, H = Math.max(300, Math.round(W * pc.cy / pc.cx)); const url = ppPatternChart(kind, S, W, H).toDataURL('image/png'); op.replace[i] = url; op.ppAuto.pics[i] = url; };
+  const bigPics = sl => sl.picList.map((pc, i) => ({ pc, i })).filter(o => o.pc.cx > 3240000 && o.pc.cy > 1944000).sort((a, b) => a.pc.x - b.pc.x); // 가로 9cm·세로 5.4cm보다 큰 그림(로고·아이콘 제외), 왼쪽부터
+  const bullet = sl => sl.shapes.filter(sh => sh.text.split('\n').length >= 3 && /사용/.test(sh.text)).sort((a, b) => b.text.length - a.text.length)[0];
+  pptInfo.slides.forEach(sl => {
+    if(pptOpFor(sl.no).del) return; const all = sl.shapes.map(x => x.text).join('\n');
+    if(/1년치\s*전기사용\s*패턴/.test(all)){ const bp = bigPics(sl); if(bp[0]) setPic(sl, bp[0].i, 'month'); if(bp[1]) setPic(sl, bp[1].i, 'day'); const b = bullet(sl); if(b) setText(sl, b, T.A.join('\n')); pptEdit.add(sl.no); done.push(`${sl.no}번 장(1년치 패턴: 그림 ${Math.min(bp.length, 2)}개·문구)`); }
+    else if(/시간별\s*전기사용\s*패턴/.test(all)){ const bp = bigPics(sl); if(bp[0]) setPic(sl, bp[0].i, 'hour'); const b = bullet(sl); if(b) setText(sl, b, T.B.join('\n')); pptEdit.add(sl.no); done.push(`${sl.no}번 장(시간별 패턴: 그림·문구)`); }
+    else { const sh = sl.shapes.find(x => /잉여량\s*%/.test(x.text) || (pptOpFor(sl.no).ppAuto && pptOpFor(sl.no).ppAuto.texts[x.idx] !== undefined)); if(sh && /잉여량 산정/.test(sh.text)){ setText(sl, sh, sh.text.replace(/잉여량\s*%/, `잉여량 ${(S.surRate * 100).toFixed(1)} %`)); done.push(`${sl.no}번 장(잉여율 ${(S.surRate * 100).toFixed(1)}% · 수익 표는 자동 채움)`); } }
+  });
+  if(done.length){ try{ window.__pptD = null; pptSaveState(); renderPptEditor(); }catch(e){ console.warn('ppt apply pp', e); } pptPPHideMarks().catch(e => console.warn('pp marks', e)); }
+  if(!silent || done.length) say(done.length ? `📑 제안서에 넣었습니다 — ${done.join(' · ')}.${kept.length ? ` 직접 고친 곳은 그대로 두었습니다(${[...new Set(kept)].join(', ')}).` : ''} 그림은 받은 자료로 그린 그래프입니다(한전 화면 캡처 아님). 제안서 탭에서 글·그림을 직접 고칠 수 있습니다.` : '📑 양식에서 "전기사용 패턴분석" 장을 찾지 못했습니다(제목에 "1년치 전기사용 패턴" · "시간별 전기사용 패턴"이 있어야 함).', done.length ? '#0B5A2A' : '#8a5a00');
+  return { done, kept };
+}
+// 양식의 패턴 장에는 한전 화면 캡처 위에 그려 둔 빨간 표시 상자(글 없는 테두리 도형)가 있음 → 분석기 그래프로 바꾼 그림 위에 놓인 것만 숨김(되살리기: 그 장의 "↩ 위치·크기 되돌리기")
+async function pptPPHideMarks(){
+  if(!pptFile || !pptInfo) return; await loadJSZip(); const zip = await JSZip.loadAsync(pptFile.buf); let changed = false;
+  for(const sl of pptInfo.slides){ const op = pptOps[sl.no]; if(!op || !op.ppAuto || !op.ppAuto.pics) continue; const idxs = Object.keys(op.ppAuto.pics).filter(i => op.replace[i] === op.ppAuto.pics[i]).map(Number); if(!idxs.length) continue;
+    const f = zip.file(sl.path); if(!f) continue; const xml = await f.async('string'); const boxes = idxs.map(i => pptPicBox(sl, i, op)); let si = -1;
+    xml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, sp => { si++; if(/<a:t>[^<]*\S[^<]*<\/a:t>/.test(sp) || !/<a:ln\b/.test(sp)) return sp; const m = sp.match(/<a:off x="(-?\d+)" y="(-?\d+)"\s*\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\s*\/>/); if(!m) return sp;
+      const x = +m[1], y = +m[2], cx = +m[3], cy = +m[4], mx = x + cx / 2, my = y + cy / 2;
+      if(boxes.some(b => mx > b.x && mx < b.x + b.cx && my > b.y && my < b.y + b.cy && cx <= b.cx * 1.05 && cy <= b.cy * 1.05)){ op.hideSp = op.hideSp || {}; if(!op.hideSp[si]){ op.hideSp[si] = true; changed = true; } } return sp; });
+  }
+  if(changed){ pptSaveState(); renderPptEditor(); }
+}
 let ppData = null;   // { blocks:[12][24][7], hol:[24], src:{}, tariff, mode, asOf, kW, months:['2025-10',…] }
 let ppResult = null; // ppCompute 결과(현재 조건)
 let __sheetJsP = null;
@@ -5578,6 +5720,7 @@ async function ppLoadFiles(files){
         for(let b = 0; b < 12; b++){ const r0 = 3 + 27 * b; const blk = []; for(let h = 0; h < 24; h++){ const row = A[r0 + h] || []; blk.push([1, 2, 3, 4, 5, 6, 7].map(c => PP_NUM(row[c]) || 0)); } blocks.push(blk); const lab = (A[r0 - 1] || [])[0]; months.push(lab instanceof Date ? `${lab.getFullYear()}-${String(lab.getMonth() + 1).padStart(2, '0')}` : (typeof lab === 'number' ? XLSX.SSF.format('yyyy-mm', lab) : String(lab || ''))); }
         const hol = []; for(let h = 0; h < 24; h++) hol.push(PP_NUM((A[3 + h] || [])[11]) || 0);
         ppData.blocks = blocks; ppData.hol = hol; ppData.months = months; ppData.src.template = f.name; fromTpl = true;
+        { let md = ''; sheetNames.forEach(sn => { if(md) return; const AA = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: false, defval: null }); AA.forEach(row => (row || []).forEach((c, ci) => { if(md || typeof c !== 'string' || !/최저사용량\s*참조일/.test(c)) return; const m = (c + ' ' + ((row[ci + 1] == null) ? '' : row[ci + 1])).match(/(\d{4})[-./년]\s*(\d{1,2})[-./월]\s*(\d{1,2})/); if(m) md = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`; })); }); ppData.minDate = md; }
         const ms = wb.Sheets['자가소비 연간분석표']; if(ms){ const g = a => { const c = ms[a]; return c ? c.v : null; }; const asOf = g('C24'); if(typeof asOf === 'number'){ const d = XLSX.SSF.parse_date_code(asOf); ppData.asOf = new Date(d.y, d.m - 1, d.d); } else if(asOf instanceof Date) ppData.asOf = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate()); const kW = PP_NUM(g('B3')); if(kW) ppData.kW = kW; const hrs = PP_NUM(g('C3')); if(hrs) ppData.hours = hrs; const mode = g('D3'); if(mode) ppData.mode = String(mode).trim(); const tf = g('E3'); if(tf) ppData.tariff = String(tf).replace(/\s/g, ''); const smp = PP_NUM(g('H27')); if(smp != null) ppData.smp = smp; const rec = PP_NUM(g('H28')); if(rec != null) ppData.rec = rec; const ct = g('F21'); if(ct) ppData.contract = String(ct); }
         continue;
       }
@@ -5604,6 +5747,7 @@ async function ppLoadFiles(files){
     ppSaveLast();
     ppSay(`${fromTpl ? `📗 ${ppData.src.template}에서 12개월·공휴일 자료를 읽었습니다.` : ''}${nWeek ? ` 요일별 파일 ${nWeek}개` : ''}${nMin ? ` · 최저사용량 파일 ${nMin}개` : ''}${notes.length ? ' · ' + notes.join(' · ') : ''}`, notes.length ? '#8a5a00' : '#0B5A2A');
     ppFillForm(); ppRun();
+    try{ if(typeof pptInfo !== 'undefined' && pptInfo){ const keep = (document.getElementById('ppStatus') || {}).textContent || ''; const r = pptApplyPP(true); if(r && r.done.length){ const el = document.getElementById('ppStatus'); if(el && keep) el.textContent = keep + ' ' + el.textContent; } } }catch(e){ console.warn('pp→ppt', e); }
   }catch(e){ console.warn('pp load', e); ppSay('❌ 읽기 실패: ' + (e && e.message ? e.message : e), '#b3402a'); }
 }
 function ppSaveLast(){ try{ pptDbPut('pp:last', { data: ppData, t: Date.now() }); }catch(e){} }
@@ -5645,7 +5789,7 @@ function ppRun(){
     <p class="hint" style="margin:0 0 6px;">잉여율 한도 <input id="ppMaxSur" type="number" value="${(maxSur * 100).toFixed(0)}" min="0" max="100" step="1" style="width:52px;" onchange="ppRun()">% 이하에서 가장 큰 용량을 추천으로 표시합니다(규칙은 바꿀 수 있음). 참고: 낮(10~15시) 평균 사용량 최저 ${Math.round(dayMin).toLocaleString('ko-KR')} kWh/h${minH != null ? ` · 공휴일(기저부하) 최저 ${Math.round(minH).toLocaleString('ko-KR')} kWh/h` : ''}${ppData.contract ? ` · ${escLand(ppData.contract)}` : ''}</p>
     ${rec ? `<div class="pp-rec">✅ 추천 설치용량 <b>${rec.kW} kW</b> — 잉여율 ${pct(rec.surRate)}, RE100 ${pct(rec.re100)}, ${inp.mode === '자가PPA' ? '연 수익' : '연 절감'} ${won(rec.total)}원 <button type="button" onclick="ppSetKw(${rec.kW})">이 용량으로 계산</button> <button type="button" onclick="ppApplyToQuote(${rec.kW})" title="제안서 탭 견적·수익성의 모듈 장수를 이 용량에 맞춰 넣음">견적·수익성에 적용</button></div>` : `<div class="pp-rec" style="background:#FDECEA;">잉여율 ${(maxSur * 100).toFixed(0)}% 이하인 용량이 없습니다 — 한도를 올리거나 자료를 확인하세요.</div>`}
     <table class="pp-tbl"><thead><tr><th>kW</th><th>발전량</th><th>재생E 사용</th><th>잉여</th><th>잉여율</th><th>RE100</th><th>연 ${inp.mode === '자가PPA' ? '수익' : '절감'}(원)</th><th></th></tr></thead><tbody>${sweepRows}</tbody></table>
-    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;"><button type="button" onclick="ppExportCsv()" style="font-size:11.5px;">📄 월별 표 CSV 저장</button><button type="button" onclick="ppApplyToQuote(${inp.kW})" style="font-size:11.5px;">견적·수익성에 ${inp.kW}kW 적용</button><span class="hint" style="font-size:11px;">제안서 43·44쪽 자가소비 표는 이 결과(전기사용량·재생E·잉여·절감액·RE100)로 채워집니다.</span></div>`;
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;"><button type="button" onclick="pptApplyPP(false)" style="font-size:11.5px;font-weight:700;" title="제안서 양식의 전기사용 패턴분석 2장(월별·요일별·시간대별 그래프와 분석 문구)과 자가소비 수익 표 장의 잉여율을 지금 조건으로 채움 — 직접 고친 글·그림은 그대로 둠">📑 제안서에 넣기</button><button type="button" onclick="ppExportCsv()" style="font-size:11.5px;">📄 월별 표 CSV 저장</button><button type="button" onclick="ppApplyToQuote(${inp.kW})" style="font-size:11.5px;">견적·수익성에 ${inp.kW}kW 적용</button><span class="hint" style="font-size:11px;">제안서 43·44쪽 자가소비 표는 이 결과(전기사용량·재생E·잉여·절감액·RE100)로 채워집니다.</span></div>`;
 }
 function ppSetKw(kW){ const el = document.getElementById('ppKw'); if(el) el.value = kW; ppRun(); }
 function ppApplyToQuote(kW){ try{ const Q = typeof computeQuote === 'function' ? computeQuote() : null; const wp = Q && Q.q && Q.q.mod ? Q.q.mod.wp : 645; const n = Math.round(kW * 1000 / wp); const el = document.getElementById('qCount'); if(el){ el.value = n; } if(typeof renderQuotePanel === 'function') renderQuotePanel(); window.__pptD = null; ppSay(`견적·수익성 모듈 장수를 ${n}장(${wp}W × ${n} = ${(n * wp / 1000).toFixed(2)}kW)으로 넣었습니다 — 제안서 탭에서 확인`, '#0B5A2A'); }catch(e){ console.warn(e); } }
