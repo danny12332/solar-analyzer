@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-13b';
+const APP_VERSION = '2026-11-18a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12321,9 +12321,10 @@ function kepcoOneLinerText(list, info){
   if(!Array.isArray(list) || !list.length) return '';
   const mw = v => { const n = Number(v) || 0; const m = n / 1000; return (Math.abs(m) >= 100 ? Math.round(m) : Math.round(m * 10) / 10).toLocaleString('ko-KR') + 'MW'; };
   const d = (info && info.date) || new Date();
-  const dateTxt = `${String(d.getFullYear()).slice(2)}년${d.getMonth() + 1}월${d.getDate()}일확인`;
+  const dateTxt = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 확인`; // 사용자 형식(2026-11-18): "청도변전소 33.8MW, #1 MTR-11.1MW, 흑석DL-5.5MW 출력제어조건부-6.5MW 여유 2026-11-18 확인 조회지번 88-1"
   const lines = list.map(r => { const ctrlOk = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0; const ctrl = ctrlOk ? Math.max(14000 - Number(r.DL_PWR), 0) : 0;
-    return `${r.SUBST_NM ?? '-'}변전소 ${mw(r.VOL_1)}, #${r.MTR_NO ?? '-'} MTR-${mw(r.VOL_2)}, ${r.DL_NM ?? '-'}DL-${mw(r.VOL_3)} 출력제어조건부-${mw(ctrl)}`; });
+    const ok = Number(r.VOL_1) > 0 && Number(r.VOL_2) > 0 && Number(r.VOL_3) > 0; // 변전소·주변압기·배전선로 중 하나라도 여유 0이면 '부족'
+    return `${r.SUBST_NM ?? '-'}변전소 ${mw(r.VOL_1)}, #${r.MTR_NO ?? '-'} MTR-${mw(r.VOL_2)}, ${r.DL_NM ?? '-'}DL-${mw(r.VOL_3)} 출력제어조건부-${mw(ctrl)} ${ok ? '여유' : '부족'}`; });
   let t = lines.join(' / ') + ' ' + dateTxt;
   // 다른 지번으로 조회했을 때만 조회 지번(사용자 2026-11-10: 지번만) — 같은 리·동이 아니면 그 리·동 이름을 앞에 붙임
   if(info && !info.exact && info.usedJibun) t += ` 조회지번 ${info.otherArea ? info.otherArea + ' ' : ''}${info.usedJibun}`;
