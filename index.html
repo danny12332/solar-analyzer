@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-19a';
+const APP_VERSION = '2026-11-19b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2041,7 +2041,7 @@ async function autoKepcoAfterAnalysis(seq){
   }catch(e){ console.warn('auto kepco', e); }
   if(seq !== autoAnalyzeSeq) return; // 그 사이 다른 주소를 검색했으면 갱신하지 않음
   if(document.querySelector('#resultsWrap .sum-card')){
-    runAnalysis(); // 요약 카드에 계통 결과 반영 (입력값은 그대로)
+    // 요약 카드 계통 반영은 checkKepcoCapacity()가 끝날 때 함 (2026-11-19)
     showAutoResultNote('자동 분석 결과입니다 — 토지 공부정보와 한전ON 배전선로 여유용량을 자동 조회해 반영했습니다. 토지이음·한전ON에서 최종 확인하세요.');
   }
 }
@@ -12626,13 +12626,20 @@ function kepcoDebugHtml(){
   const note = kepcoLooseNote ? `<p class="hint" style="margin:6px 0 0;color:#7A4E05;">${kepcoLooseNote}</p>` : '';
   if(!kepcoDebug) return note;
   const a = kepcoDebug.admin || {};
-  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}${st.nearest ? ' · 배전선로 조회 → ' + st.nearest : ''}`).join('<br>→ ');
-  return note + `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값) · 코드 v1001-1</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
+  const sec = ms => (ms / 1000).toFixed(1) + '초';
+  const total = kepcoDebug.t0 ? ` · 전체 ${sec((kepcoDebug.t1 || performance.now()) - kepcoDebug.t0)}` : '';
+  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listMs != null ? ' (' + sec(st.listMs) + ')' : ''}${st.calls && st.calls.length ? ' · 배전선로 조회 ' + st.calls.length + '회 [' + st.calls.map(sec).join(', ') + ']' : ''}${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}${st.nearest ? ' · 배전선로 조회 → ' + st.nearest : ''}`).join('<br>→ ');
+  return note + `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값·걸린 시간${total}) · 코드 v1001-1</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
 }
 async function checkKepcoCapacity(){
   if(kepcoRunning) return;
   kepcoRunning = true;
+  const pnu0 = lastParcelPnu, addr0 = lastJibunAddress;
   try { await checkKepcoCapacityInner(); } finally { kepcoRunning = false; }
+  // 조회 중 다른 필지로 바뀌지 않았으면, 결과(성공·실패)를 핵심 요약 '계통' 줄에 바로 반영 (2026-11-19: 버튼으로 조회하면 요약이 '미조회'로 남던 문제)
+  if(pnu0 === lastParcelPnu && addr0 === lastJibunAddress && lastKepcoSummary && document.querySelector('#resultsWrap .sum-card')){
+    try{ runAnalysis(); }catch(e){ console.warn('kepco summary', e); }
+  }
 }
 async function checkKepcoCapacityInner(){
   const resultEl = document.getElementById('kepcoResult');
@@ -12697,11 +12704,12 @@ async function checkKepcoCapacityInner(){
 
     // (lidong, li) 하나에 대해: 실제 등록된 지번 목록을 가져와 가장 가까운 순으로 정렬 후,
     // 상위 몇 개를 실제 배전선로 조회(/kepco-nearest)로 시도해 첫 성공을 반환
-    kepcoDebug = { addr, admin, jibun, steps: [] };
+    kepcoDebug = { addr, admin, jibun, steps: [], t0: performance.now() };
     const eqJibun = (a, b) => { const pa = parseJibunStr(a), pb = parseJibunStr(b); return !!(pa && pb && pa.isMountain === pb.isMountain && pa.bobn === pb.bobn && pa.bubn === pb.bubn); };
     async function tryArea(lidong, li, maxAttempts){
       let jibunList = [];
       let listErr = '';
+      const tA = performance.now();
       try{ jibunList = await fetchJibunList(admin, lidong, li); }
       catch(e){ listErr = e && e.message ? e.message : String(e); }
       // 법정동 "화북이동"을 한전ON은 "화북2동"처럼 숫자로 표기 (2026-11-03 한전ON 지번목록 직접 확인: 화북이동 0건 / 화북2동 773건)
@@ -12710,7 +12718,7 @@ async function checkKepcoCapacityInner(){
         let alt = []; try{ alt = await fetchJibunList(admin, numName, li); }catch(e){}
         if(alt.length){ if(lidong === admin.lidong) kepcoLooseNote = (kepcoLooseNote ? kepcoLooseNote + ' ' : '') + `ℹ 한전ON 주소 목록에는 "${lidong}"이 없어 <b>"${numName}"</b>(숫자 표기)으로 조회했습니다.`; lidong = numName; jibunList = alt; listErr = ''; }
       }
-      const step = { lidong, li, listCount: jibunList.length, listErr, attempts: '', nearest: '' };
+      const step = { lidong, li, listCount: jibunList.length, listErr, attempts: '', nearest: '', listMs: Math.round(performance.now() - tA), calls: [] };
       kepcoDebug.steps.push(step);
       let all;
       if(jibunList.length){
@@ -12736,6 +12744,7 @@ async function checkKepcoCapacityInner(){
         resultEl.innerHTML = `<p class="hint">한전ON 조회 중… ${lidong} ${li || ''} 등록 지번 ${Math.min(i + chunk, limit)}/${limit}개 확인 (가까운 지번 순)</p>`;
         const ctl = new AbortController();
         const tid = setTimeout(() => ctl.abort(), 60000);
+        const tC = performance.now();
         let res;
         try{
           res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
@@ -12744,7 +12753,7 @@ async function checkKepcoCapacityInner(){
             body: JSON.stringify({ do: admin.do, si: admin.si, gu: admin.gu, attempts }),
             signal: ctl.signal
           });
-        } finally { clearTimeout(tid); }
+        } finally { clearTimeout(tid); step.calls.push(Math.round(performance.now() - tC)); }
         if(!res.ok){ step.nearest = 'HTTP ' + res.status; throw new Error('HTTP ' + res.status); }
         const result = await res.json();
         if(result.error){ step.nearest = '오류: ' + result.error; return null; }
@@ -12793,6 +12802,7 @@ async function checkKepcoCapacityInner(){
     }
 
     clearTimeout(timeoutId);
+    kepcoDebug.t1 = performance.now();
 
     if(!result){
       resultEl.innerHTML = `
