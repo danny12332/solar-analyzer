@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-18a';
+const APP_VERSION = '2026-11-19a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -1495,7 +1495,7 @@ function applyParcelToForm(props, kakaoPath){
   lastParcelPath = kakaoPath || null;
   lastBldrgst = null; // 다른 필지 → 이전 건축물대장 결과는 버림
   try{ fetchParcelSlope(lastParcelPath); }catch(e){ console.warn('slope', e); }
-  try{ fetchGridInfra(); }catch(e){ console.warn('grid infra', e); }
+  // 주변 전력망(OSM Overpass) 조회는 사용자 요청으로 끔(2026-11-19) — 조회·표시 모두 안 함
   try{ fetchSolarResource(); }catch(e){ console.warn('solar res', e); }
   lastAreaPolygonPath = null; // 새 필지 검색 → 배치 경계는 새 필지 경계를 기본으로 씀 (이미 만든 배치는 유지)
   ['landCategory','farmZone','forestType','useZone'].forEach(id => collapseSeg(id, false));
@@ -13290,6 +13290,7 @@ function drawGridInfra(){
 }
 function toggleGridInfra(){ gridInfraShown = !gridInfraShown; if(gridInfraShown) drawGridInfra(); else clearGridInfra(); refreshSummaryDynamicRows(); }
 function gridInfraRowHtml(){
+  return '<div id="sumGridInfraRow" style="display:none"></div>'; // 2026-11-19 표시 안 함
   const G = lastGridInfra; const head = '<div class="sum-row" id="sumGridInfraRow"><span class="sum-k">주변 전력망</span><span class="sum-v">';
   if(!G) return '<div id="sumGridInfraRow" style="display:none"></div>';
   if(G.loading) return head + '<span class="sum-muted">OpenStreetMap에서 변전소·송전선 찾는 중… (보통 10~40초)</span></span></div>';
