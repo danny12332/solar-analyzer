@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-23a';
+const APP_VERSION = '2026-11-24a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12478,6 +12478,8 @@ function getJoryeEntry(admin){
   if(!table) return null;
   // 일반 도(道): si(시/군) 키로 조회
   if(admin.siText && table[admin.siText]) return table[admin.siText];
+  // 다른 시·도와 이름이 겹쳐 "경기 광주시"처럼 앞에 도 이름을 붙인 키 (2026-11-24: 경기 광주시 한전 문의 줄이 안 나오던 문제)
+  if(admin.siText){ const k = Object.keys(table).find(k => k.endsWith(' ' + admin.siText)); if(k) return table[k]; }
   // 광역시 내 개별 구/군에 별도 조례가 있는 경우 (예: 인천 강화군)
   if(admin.guText && table[admin.guText]) return table[admin.guText];
   // 광역시·세종·제주는 "본청" 단위로 통합 관리
