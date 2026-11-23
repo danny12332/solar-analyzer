@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-19c';
+const APP_VERSION = '2026-11-23a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2724,7 +2724,7 @@ function closeAddressOverlay(){
 let lastRoadAddress = null;
 function renderAddressLabel(pos, jibun, road){
   const map = ensureKakaoMap();
-  if(jibun){ lastJibunAddress = jibun; }
+  if(jibun){ lastJibunAddress = jibun; prefetchKepcoList(jibun); }
   lastRoadAddress = road || null;
   lastLatLng = pos;
   try{ localStorage.setItem('solarLastSite', JSON.stringify({ lat: pos.getLat(), lng: pos.getLng(), addr: jibun || road || '', t: Date.now() })); }catch(e){}
@@ -12531,12 +12531,36 @@ async function kepcoHedgedFetch(url, opts, waits, totalMs){
     timers.push(setTimeout(() => { const e = new Error('timeout'); e.name = 'AbortError'; finish(reject, lastErr && lastErr.name !== 'AbortError' ? lastErr : e); }, totalMs));
   });
 }
-async function fetchJibunList(admin, lidong, li){
+// 2026-11-23 실측: Worker에 캐시가 없는 리·동의 지번목록은 매번 약 20초(20.4/19.8/20.5/20.6초), 캐시된 같은 주소는 0.4~0.9초.
+// 같은 요청을 겹쳐 보내도 모두 20초라 재요청은 쓰지 않음 → 한 번만 보내고, 주소를 찾자마자 미리 받아 둠(prefetchKepcoList)
+const kepcoListCache = new Map();
+function fetchJibunList(admin, lidong, li){
   const params = new URLSearchParams({ do: admin.do, si: admin.si, gu: admin.gu, lidong, li });
-  const res = await kepcoHedgedFetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-jibun-list?' + params.toString(), {}, [3000, 5000]);
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  return data.jibunList || [];
+  const key = params.toString();
+  if(kepcoListCache.has(key)) return kepcoListCache.get(key);
+  const p = (async () => {
+    const ctl = new AbortController(); const tid = setTimeout(() => ctl.abort(), 60000);
+    try{
+      const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-jibun-list?' + key, { signal: ctl.signal });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      return data.jibunList || [];
+    } finally { clearTimeout(tid); }
+  })();
+  kepcoListCache.set(key, p);
+  p.catch(() => kepcoListCache.delete(key)); // 실패는 기억하지 않음(다시 조회 가능)
+  return p;
+}
+// 주소가 확인되는 순간 그 리·동 지번목록을 미리 받기 시작(토지 분석이 도는 동안 20초 대기를 겹침)
+async function prefetchKepcoList(addr){
+  try{
+    if(!addr) return;
+    await loadBjdong();
+    const parsed = parseAddressParts(addr); if(!parsed) return;
+    const { hit } = findBjdongCode(parsed.dongText); if(!hit) return;
+    const a = splitAdminName(hit.name);
+    fetchJibunList(a, a.lidong, a.li).catch(() => {});
+  }catch(e){ console.warn('kepco prefetch', e); }
 }
 
 // ===================== 한전ON 계통보강 안내문구 (한전ON 원본 로직 이식) =====================
@@ -12651,7 +12675,7 @@ function kepcoDebugHtml(){
   const sec = ms => (ms / 1000).toFixed(1) + '초';
   const total = kepcoDebug.t0 ? ` · 전체 ${sec((kepcoDebug.t1 || performance.now()) - kepcoDebug.t0)}` : '';
   const hedged = kepcoHedgeLog.filter(h => h.shot > 1).length; const hedgeTxt = hedged ? ` · 응답 지연으로 다시 보낸 요청이 먼저 온 경우 ${hedged}회` : '';
-  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: 지번목록 ${st.listCount}건${st.listMs != null ? ' (' + sec(st.listMs) + ')' : ''}${st.calls && st.calls.length ? ' · 배전선로 조회 ' + st.calls.length + '회 [' + st.calls.map(sec).join(', ') + ']' : ''}${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}${st.nearest ? ' · 배전선로 조회 → ' + st.nearest : ''}`).join('<br>→ ');
+  const steps = (kepcoDebug.steps || []).map(st => `${st.lidong} ${st.li || ''}: ${st.skipList ? '지번목록 기다리지 않음' : '지번목록 ' + st.listCount + '건'}${st.listMs != null ? ' (' + sec(st.listMs) + ')' : ''}${st.calls && st.calls.length ? ' · 배전선로 조회 ' + st.calls.length + '회 [' + st.calls.map(sec).join(', ') + ']' : ''}${st.listErr ? ' (오류: ' + st.listErr + ')' : ''}${st.attempts ? ' · 시도 지번 [' + st.attempts + ']' : ''}${st.nearest ? ' · 배전선로 조회 → ' + st.nearest : ''}`).join('<br>→ ');
   return note + `<details style="margin-top:6px;"><summary style="font-size:11px;">조회 과정 보기 (한전ON 전송값·걸린 시간${total}${hedgeTxt}) · 코드 v1001-1</summary><p class="hint" style="margin:4px 0 0;font-size:11px;">시/도 ${a.do} · 시 ${a.si} · 구/군 ${a.gu} · 동/면 ${a.lidong} · 리 ${a.li} · 지번 ${kepcoDebug.jibun}<br>${steps}</p></details>`;
 }
 async function checkKepcoCapacity(){
@@ -12734,7 +12758,25 @@ async function checkKepcoCapacityInner(){
       let jibunList = [];
       let listErr = '';
       const tA = performance.now();
-      try{ jibunList = await fetchJibunList(admin, lidong, li); }
+      const listP = fetchJibunList(admin, lidong, li);
+      listP.catch(() => {});
+      // 처음 지역(입력한 리·동)이면 지번목록(최대 약 20초)을 기다리는 동안 입력 지번 그대로 배전선로를 먼저 조회 → 맞으면 바로 끝
+      if(lidong === admin.lidong && li === admin.li){
+        try{
+          const tE = performance.now();
+          const r0 = await kepcoHedgedFetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
+            method: 'POST', headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+            body: JSON.stringify({ do: admin.do, si: admin.si, gu: admin.gu, attempts: [{ lidong, li, jibun }] })
+          }, [4000, 6000]);
+          const j0 = r0.ok ? await r0.json() : null;
+          if(j0 && j0.matched && j0.dlt_resultList && j0.dlt_resultList.length){
+            kepcoDebug.steps.push({ lidong, li, listCount: 0, skipList: true, listErr: '', attempts: jibun, nearest: '일치: ' + j0.matched.jibun + ' (입력 지번 바로 조회)', calls: [Math.round(performance.now() - tE)] });
+            return j0;
+          }
+        }catch(e){ console.warn('kepco exact first', e); }
+        resultEl.innerHTML = `<p class="hint">한전ON 조회 중… 입력 지번 ${jibun}은 한전ON에 없어 ${lidong} ${li || ''} 등록 지번 목록을 받는 중 (처음 조회하는 리·동은 약 20초)</p>`;
+      }
+      try{ jibunList = await listP; }
       catch(e){ listErr = e && e.message ? e.message : String(e); }
       // 법정동 "화북이동"을 한전ON은 "화북2동"처럼 숫자로 표기 (2026-11-03 한전ON 지번목록 직접 확인: 화북이동 0건 / 화북2동 773건)
       const numName = kepcoNumDong(lidong);
