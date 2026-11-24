@@ -866,7 +866,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
           <button type="button" class="preset-btn" id="buildingBtn" onclick="toggleBuildingPickMode()" title="건물을 클릭하면 공식 건물 외곽선(도로명주소 건물도형)을 경계로 사용">🏢 건물 자동 선택</button>
           <button type="button" class="preset-btn" onclick="startBuildingEdit()" title="잡힌 경계의 꼭짓점을 끌어 위성사진에 맞춥니다">↔ 꼭짓점 조정</button>
           <button type="button" class="preset-btn wb-more" id="bldMergeBtn" onclick="toggleBldMergeMode()" title="한 지붕인데 공공 건물도형이 여러 동으로 나뉘어 있을 때: 도형들을 차례로 클릭한 뒤 이 버튼을 다시 누르면 하나로 합쳐(사이 빈 곳 포함) 최대 배치">🔗 건물 합치기</button>
-          <button type="button" class="preset-btn wb-more" id="parcelMergeBtn" onclick="mergeClickedParcels()" title="합필: 지도에서 필지를 차례로 클릭해 고른 뒤(주황 테두리) 이 버튼을 누르면 맞닿은 필지를 하나의 사업지 경계로 합쳐 토지 배치를 바로 만듭니다. 같은 필지를 다시 클릭하면 선택이 풀립니다.">🧩 필지 합치기</button>
+          <button type="button" class="preset-btn" id="parcelMergeBtn" onclick="mergeClickedParcels()" title="합필: 지도에서 필지를 차례로 클릭해 고른 뒤(주황 테두리) 누르면 하나의 사업지로 합쳐 전체 면적에 토지 배치. 고른 필지가 없으면 지도에 있는 토지 배치들을 합칩니다. 떨어진 필지는 '따로 배치+사업지로 묶기' 또는 '틈 메워 하나로'를 고릅니다. 같은 필지를 다시 클릭하면 선택이 풀립니다.">🧩 필지 합쳐 배치</button>
           <button type="button" class="preset-btn wb-more" onclick="mergeAdjacentLandLayouts()" title="이미 만든 토지 배치 중 서로 맞닿은 필지를 모두 찾아 경계 하나로 합쳐 다시 배치(필지 사이 이격이 없어짐). 도로 등으로 떨어진 필지는 그대로">🧩 인접 토지 모두 합치기</button>
           <button type="button" class="preset-btn wb-more" onclick="optimizeLandAzimuth()" title="지도에 있는 토지 배치를 모두 같은 방위로 −45°~+45° 돌려 보며 합계 장수가 가장 많은 방위로 다시 배치(필지마다 방향이 달라지지 않음)">🧭 여러 필지 같은 방향 최적화</button>
           <button type="button" class="preset-btn wb-more" id="splitBtn" onclick="toggleSplitMode()" title="한 동을 선 하나로 두 구역으로 나눠, 구역마다 다른 배치 유형(예: 원단 + 인삼밭 2단 플랫)으로 배치">✂ 구역 나누기</button>
@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-24e';
+const APP_VERSION = '2026-11-24f';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2506,33 +2506,96 @@ function removeClickedParcel(pnu){
 }
 // 클릭해 둔 필지들의 합산: "선택 필지 N개 합계 ㎡(평) — 지번(평) + …"
 // 🧩 필지 합치기(합필): 클릭해 고른 필지(clickedParcels)를 하나의 사업지 경계로 합쳐 토지 배치. 맞닿은(1.5m 이내) 필지만 합쳐짐
-function mergeClickedParcels(){
+async function mergeClickedParcels(){
   const st = document.getElementById('roadviewStatus');
   const list = Object.entries(clickedParcels).map(([pnu, c]) => Object.assign({ pnu }, c));
-  if(list.length < 2){ if(st){ st.style.color = '#b3402a'; st.textContent = '🧩 필지 합치기: 지도에서 합칠 필지를 2개 이상 클릭해 고른 뒤(주황 테두리) 다시 누르세요.' + (list.length ? ` 지금 ${list.length}개 선택.` : ''); } return; }
-  let r = null; for(const cell of [0.2, 0.4, 0.8]){ r = mergeBuildingPaths(list.map(c => c.path), 'touch', cell); if(r) break; }
-  if(!r || r.path.length < 3 || r.pieces > 1){ if(st){ st.style.color = '#b3402a'; st.textContent = `🧩 합칠 수 없습니다 — 고른 필지 ${list.length}개가 서로 맞닿아 있지 않습니다(사이가 1.5m 이상). 맞닿은 필지만 고르세요.`; } return; }
-  histCheckpoint('필지 합치기');
-  const path = r.path; const area = shoelaceArea(path);
-  const big = list.slice().sort((a, b) => (b.area || 0) - (a.area || 0))[0];
-  const name = `${big.jibun || '필지'} 외 ${list.length - 1}필지`;
-  list.forEach(c => { try{ removeLayoutsOnOutline(c.path); }catch(e){} removeClickedParcel(c.pnu); });
-  // 합친 경계를 지도에 그리고 배치 경계로
-  const map = ensureKakaoMap();
-  const poly = new kakao.maps.Polygon({ map, path, strokeWeight: 3, strokeColor: '#1E2FD0', strokeOpacity: 0.95, strokeStyle: 'solid', fillColor: '#1E2FD0', fillOpacity: 0.08, zIndex: 2 });
-  measureShapes.push(poly); const groupId = registerMeasureGroup([poly]);
-  clickedParcels['merged-' + Date.now()] = { groupId, path: path.slice(), area, jibun: name, members: list.map(c => c.jibun), merged: true };
-  boundaryNameRef = { path: path.slice(), name };
-  lastAreaPolygonPath = path.slice(); currentBoundaryOfficial = false;
-  try{ refreshAlignEdgeOptions(); }catch(e){}
-  // 토지 배치: 고른 유형이 토지면 그대로, 아니면 토지 맞춤
+  // 고른 필지가 부족하면, 이미 만든 토지 배치들을 대상으로
+  if(list.length < 2){
+    const land = layoutRegistry.filter(ed => ed.type === 'ground' && ed.boundary && ed.boundary.length >= 3);
+    if(land.length >= 2) return mergeLandLayoutsAll();
+    if(st){ st.style.color = '#b3402a'; st.textContent = '🧩 필지 합쳐 배치: 지도에서 합칠 필지를 2개 이상 클릭해 고른 뒤(주황 테두리) 다시 누르세요. (토지 배치가 2개 이상 있으면 그 배치들을 합칩니다)' + (list.length ? ` 지금 ${list.length}개 선택.` : ''); }
+    return;
+  }
   const pre = (activePreset && LAYOUT_PRESETS[activePreset] && LAYOUT_PRESETS[activePreset].mount === 'ground') ? activePreset : 'groundauto';
-  const before = layoutRegistry.length;
-  try{ applyLayoutPreset(pre); onGenerateLayoutClick(); }catch(e){ console.warn('parcel merge layout', e); }
-  const ed = layoutRegistry.length > before ? layoutRegistry[layoutRegistry.length - 1] : null;
-  if(ed){ ed.bldName = name; ed.mergedParcels = list.map(c => c.jibun); try{ applyBadge(ed); }catch(e){} }
+  return mergeLandItems(list.map(c => ({ pnu: c.pnu, path: c.path, name: c.jibun, members: c.members })), pre, '필지 합치기');
+}
+// 지도에 있는 토지 배치 전부를 하나의 사업지로 (맞닿으면 한 경계, 떨어지면 고름)
+function mergeLandLayoutsAll(){
+  const land = layoutRegistry.filter(ed => ed.type === 'ground' && ed.boundary && ed.boundary.length >= 3);
+  const st = document.getElementById('roadviewStatus');
+  if(land.length < 2){ if(st){ st.style.color = '#b3402a'; st.textContent = '🧩 토지 배치가 2개 이상 있어야 합칠 수 있습니다.'; } return; }
+  const pre = (land.find(e => e.preset && LAYOUT_PRESETS[e.preset]) || {}).preset || 'groundauto';
+  return mergeLandItems(land.map(ed => ({ ed, path: ed.boundary.slice(), name: ed.bldName || '', members: ed.mergedParcels })), pre, '토지 배치 합치기');
+}
+
+// ===== 🧩 여러 필지 합쳐 배치(사용자 2026-11-24): 고른 필지(또는 이미 만든 토지 배치)를 하나의 사업지로 =====
+// 맞닿음(1.5m 이내) → 경계 하나로 합쳐 배치. 떨어져 있으면(도로·구거·지적 틈) 사용자가 고름:
+//  ① 틈(최대 6m)까지 메워 하나로 — 사이 땅이 사업지에 포함될 때만  ② 필지별로 같은 방향(정남)으로 배치하고 사업지로 묶어 합계 표시
+function polyGapM(a, b){ // 두 경계 사이 최단 거리(m)
+  const la = a[0].getLat() * Math.PI / 180; const A = a.map(q => solarToXY(q, la)), B = b.map(q => solarToXY(q, la));
+  if(A.some(p => pointInPolygonXY(p, B)) || B.some(p => pointInPolygonXY(p, A))) return 0;
+  let d = Infinity; A.forEach(p => { d = Math.min(d, distToPolygonBoundary(p, B)); }); B.forEach(p => { d = Math.min(d, distToPolygonBoundary(p, A)); }); return d;
+}
+function gsChoice(title, html, options){ // options: [{label, value, primary}] → Promise(value | null)
+  return new Promise(res => {
+    const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', title);
+    d.style.cssText = 'position:fixed;inset:0;z-index:100002;background:rgba(10,20,30,.45);display:flex;align-items:center;justify-content:center;padding:14px;';
+    d.innerHTML = `<div style="background:#fff;color:var(--ink);border-radius:12px;max-width:560px;width:100%;padding:16px 18px;box-shadow:0 12px 40px rgba(0,0,0,.25);font-size:13px;"><h3 style="margin:0 0 8px;font-size:15px;">${title}</h3><div>${html}</div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px;">${options.map((o, i) => `<button type="button" data-i="${i}" style="font-size:13px;padding:6px 12px;border-radius:6px;cursor:pointer;border:1px solid ${o.primary ? 'var(--ink)' : 'var(--card-line)'};background:${o.primary ? 'var(--ink)' : '#fff'};color:${o.primary ? '#fff' : 'var(--ink)'};">${o.label}</button>`).join('')}</div></div>`;
+    const done = v => { document.removeEventListener('keydown', onKey, true); d.remove(); res(v); };
+    const onKey = e => { if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(null); } };
+    d.addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if(b) done(options[+b.dataset.i].value); else if(e.target === d) done(null); });
+    document.addEventListener('keydown', onKey, true); document.body.appendChild(d); const pb = d.querySelector('button[data-i]'); if(pb) pb.focus();
+  });
+}
+// items: [{path, name, members?, ed?}] — 공통 처리
+async function mergeLandItems(items, preset, histLabel){
+  const st = document.getElementById('roadviewStatus'); const say = (t, warn) => { if(st){ st.style.color = warn ? '#b3402a' : 'var(--ink-soft)'; st.textContent = t; } };
+  const names = []; items.forEach(it => (it.members && it.members.length ? it.members : [it.name]).forEach(n => { if(n && !names.includes(n)) names.push(n); }));
+  const bigName = (items.slice().sort((a, b) => shoelaceArea(b.path) - shoelaceArea(a.path))[0] || {}).name || names[0] || '필지';
+  const nm = names.length > 1 ? `${String(bigName).split(' 외 ')[0]} 외 ${names.length - 1}필지` : (names[0] || '');
+  const tryMerge = gap => { for(const cell of [0.2, 0.4, 0.8]){ const r = mergeBuildingPaths(items.map(i => i.path), 'touch', cell, gap); if(r) return r; } return null; };
+  let r = tryMerge(1.5); let mode = 'one', gapUsed = 1.5;
+  if(!r || r.pieces > 1 || r.path.length < 3){
+    let maxGap = 0; // 각 필지에서 가장 가까운 다른 필지까지 거리 중 최댓값(전체가 이어지는 데 필요한 틈 근사)
+    items.forEach((a, i) => { let m = Infinity; items.forEach((b, j) => { if(i !== j) m = Math.min(m, polyGapM(a.path, b.path)); }); maxGap = Math.max(maxGap, m); });
+    const opts = [{ label: '🔗 따로 배치 + 사업지로 묶기', value: 'group', primary: true }];
+    let rr = null;
+    if(maxGap <= 6){ for(const g of [3, 4.5, 6].filter(g => g >= maxGap + 0.3 || g === 6)){ rr = tryMerge(g); if(rr && rr.pieces === 1 && rr.path.length >= 3){ gapUsed = g; break; } rr = null; } }
+    if(rr) opts.push({ label: `🧩 틈(약 ${maxGap.toFixed(1)}m)까지 메워 하나로`, value: 'fill' });
+    opts.push({ label: '취소', value: null });
+    const pick = await gsChoice('🧩 필지가 서로 떨어져 있습니다',
+      `<p style="margin:0 0 6px;">고른 ${items.length}개 경계(${escLand(names.join(', '))}) 중 맞닿지 않은 곳이 있습니다 — 가장 먼 틈 약 <b>${maxGap.toFixed(1)}m</b> (연속지적도 경계 기준).</p>
+       <ul style="margin:0;padding-left:18px;line-height:1.6;"><li><b>따로 배치 + 사업지로 묶기</b>: 필지마다 같은 유형·같은 방향(정남)으로 배치하고 "${escLand(nm)}" 사업지로 묶어 합계 kW·장수를 하나로 표시합니다. 필지 사이 땅(도로·구거 등)에는 배치하지 않습니다.</li>
+       ${rr ? `<li><b>틈까지 메워 하나로</b>: 사이 틈(최대 ${gapUsed}m 닫힘)을 경계에 넣어 한 덩어리로 배치합니다. <span style="color:#b3402a;">틈이 도로·구거·남의 땅이면 실제로 설치할 수 없는 자리에 모듈이 들어갈 수 있습니다.</span></li>` : `<li style="color:var(--ink-soft);">틈이 6m를 넘어 하나로 합치는 방식은 쓸 수 없습니다.</li>`}</ul>`, opts);
+    if(!pick){ say('🧩 필지 합치기를 취소했습니다.'); return null; }
+    mode = pick; if(mode === 'fill') r = rr;
+  }
+  histCheckpoint(histLabel || '필지 합치기'); const was = histMuted; histMuted = true;
+  const pre = preset || 'groundauto'; const made = [];
+  try{
+    items.forEach(it => { if(it.ed){ try{ removeSolarLayout(it.ed.groupId); }catch(e){} } else { try{ removeLayoutsOnOutline(it.path); }catch(e){} } if(it.pnu && clickedParcels[it.pnu]) removeClickedParcel(it.pnu); });
+    if(bldPickGroupId){ removeMeasureGroup(bldPickGroupId); bldPickGroupId = null; }
+    const runOne = (path, name, label) => {
+      lastAreaPolygonPath = path.slice(); currentBoundaryOfficial = false; boundaryNameRef = { path: path.slice(), name };
+      drawConfirmedOutline(path.slice(), name, label || ''); applyLayoutPreset(pre); onGenerateLayoutClickInner();
+      const ne = layoutRegistry[layoutRegistry.length - 1]; if(ne && sameBoundary(ne.boundary, path)){ ne.bldName = name; ne.preset = ne.preset || pre; made.push(ne); return ne; } return null;
+    };
+    if(mode === 'one' || mode === 'fill'){
+      const ne = runOne(r.path, nm, mode === 'fill' ? ' · 합친 필지(틈 메움)' : ' · 합친 필지'); if(ne){ ne.mergedParcels = names; if(mode === 'fill') ne.mergedGapM = gapUsed; try{ applyBadge(ne); }catch(e){} }
+    } else {
+      items.forEach(it => { const ne = runOne(it.path, it.name || ''); if(ne){ ne.siteGroup = nm; if(it.members) ne.mergedParcels = it.members; } });
+      made.forEach(ne => { try{ applyBadge(ne); }catch(e){} });
+    }
+  } finally { histMuted = was; }
+  if(mode === 'group' && made.length > 1 && made.some(e => landAzDeg(e) !== 0)){ // 필지마다 방향이 다르면 모두 정남으로 맞춤(되돌리기 한 번에 함께)
+    histMuted = true; try{ setLandAzAll(made.map(e => e.groupId), 0); }catch(e){ console.warn('merge az', e); } finally { histMuted = was; }
+    made.length = 0; layoutRegistry.filter(e => e.type === 'ground' && e.siteGroup === nm).forEach(e => made.push(e));
+  }
   scheduleLayoutCards();
-  if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🧩 필지 ${list.length}개(${list.map(c => c.jibun || '?').join(', ')})를 하나의 사업지로 합쳤습니다 — 약 ${Math.round(area).toLocaleString('ko-KR')}㎡ (${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평)${ed ? ` → ${layoutTypeLabel(ed)} ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장` : ''}. 이름은 라벨의 ✏로 바꿀 수 있고, ↶ 이전으로 되돌릴 수 있습니다.`; }
+  const tot = made.reduce((a, e) => a + e.modules.filter(m => !m.removed).length, 0);
+  const area = items.reduce((a, it) => a + shoelaceArea(it.path), 0);
+  say(made.length ? `🧩 ${names.length}필지(${names.join(', ')}) 합계 경계 ${Math.round(area).toLocaleString('ko-KR')}㎡(${Math.round(area / PYEONG_M2).toLocaleString('ko-KR')}평) — ${mode === 'group' ? `필지별 정남 배치 후 사업지 "${nm}"로 묶음` : mode === 'fill' ? `틈 ${gapUsed}m까지 메워 한 경계로 배치` : '한 경계로 합쳐 배치'} → 합계 ${tot.toLocaleString('ko-KR')}장. ↶ 이전으로 되돌릴 수 있습니다.` : '🧩 배치를 만들지 못했습니다.', !made.length);
+  return made;
 }
 function clickedParcelsSummary(){
   const list = Object.values(clickedParcels); if(!list.length) return '';
@@ -6822,7 +6885,9 @@ function renderLayoutCards(){
       </div>${layCardEditRow(ed)}</div>`;
   });
   const allBar = rows.length ? `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:0 0 6px;flex-wrap:wrap;"><span style="color:var(--ink-soft);">전체 동을</span><select id="layAllType" style="font-size:11px;padding:1px 3px;border:1px solid var(--card-line);border-radius:5px;background:var(--surface-2);font-family:inherit;">${layCardTypeOptions(null)}</select><button type="button" class="preset-btn" style="padding:2px 8px;font-size:11px;" onclick="layRelayoutAll(document.getElementById('layAllType').value)" title="모든 동을 고른 유형으로 다시 배치">🔁 모두 다시 배치</button></div>` : '';
-  wrap.innerHTML = rows.length ? allBar + rows.join('') : '<div class="lay-empty">아직 배치가 없습니다. 지도에서 건물을 클릭하고 ② 유형 → ③ 배치 생성.</div>';
+  const landN = layoutRegistry.filter(e => e.type === 'ground').length;
+  const mergeBar = landN >= 2 ? `<div style="margin:0 0 6px;"><button type="button" onclick="mergeLandLayoutsAll()" style="font-size:12px;padding:3px 10px;border:1px solid var(--card-line);border-radius:5px;background:#fff;cursor:pointer;" title="지도에 있는 토지 배치 ${landN}개를 하나의 사업지로: 맞닿으면 경계 하나로 합쳐 다시 배치, 떨어져 있으면 '따로 배치+사업지로 묶기' 또는 '틈 메워 하나로' 선택">🧩 토지 배치 ${landN}개 합쳐 배치</button></div>` : '';
+  wrap.innerHTML = rows.length ? allBar + mergeBar + rows.join('') : '<div class="lay-empty">아직 배치가 없습니다. 지도에서 건물을 클릭하고 ② 유형 → ③ 배치 생성.</div>';
   sum.innerHTML = rows.length
     ? `<b>${fmt(tKw)} kW</b><span>${tEa.toLocaleString('ko-KR')} EA · ${rows.length}개 배치 · 경계 면적 합계 ${Math.round(tArea).toLocaleString('ko-KR')}㎡ (${Math.round(tArea / PYEONG_M2).toLocaleString('ko-KR')}평)${parcelBuildings.length ? ' · 필지 안 건물 ' + parcelBuildings.length + '동' : ''}</span>`
     : `<b>0 kW</b><span>배치 없음 — 지도에서 건물을 클릭하거나 아래 ①→②→③ 순서로</span>`;
@@ -10977,7 +11042,7 @@ function makeParcelBldPoly(entry){
 // ===== 건물 도형 합치기 =====
 // 여러 건물 외곽선을 하나로: 가장 큰 도형의 축으로 돌린 0.2m 격자에 칠한 뒤 바깥 테두리를 따라 직각 외곽선을 만듦
 //   mode 'touch': 1.5m 이내 틈만 메움(맞닿은 조각 합치기) · mode 'fill': 사이 빈 곳도 가로·세로로 메움(사용자가 고른 도형 = 한 지붕)
-function mergeBuildingPaths(paths, mode, cell){
+function mergeBuildingPaths(paths, mode, cell, gapM){
   const all = paths.flat(); const lat0 = all.reduce((a, q) => a + q.getLat(), 0) / all.length * Math.PI / 180;
   const XY = paths.map(pp => pp.map(q => solarToXY(q, lat0)));
   const big = XY.reduce((a, b) => areaXY(b) > areaXY(a) ? b : a, XY[0]);
@@ -10996,7 +11061,7 @@ function mergeBuildingPaths(paths, mode, cell){
     for(let j = 0; j < H; j++){ let last = -1e9; for(let i = 0; i < W; i++){ if(src[j * W + i] === val) last = i; t[j * W + i] = (i - last <= r) ? val : 1 - val; } last = 1e9; for(let i = W - 1; i >= 0; i--){ if(src[j * W + i] === val) last = i; if(last - i <= r) t[j * W + i] = val; } }
     for(let i = 0; i < W; i++){ let last = -1e9; for(let j = 0; j < H; j++){ if(t[j * W + i] === val) last = j; o[j * W + i] = (j - last <= r) ? val : 1 - val; } last = 1e9; for(let j = H - 1; j >= 0; j--){ if(t[j * W + i] === val) last = j; if(last - j <= r) o[j * W + i] = val; } }
     return o; };
-  const rc = Math.round(1.6 / cs / 2); // 1.5m 틈 메우기(닫힘 연산)
+  const rc = Math.round(((gapM || 1.5) + 0.1) / cs / 2); // 틈 메우기(닫힘 연산, 기본 1.5m)
   g = boxMax(boxMax(g, rc, 1), rc, 0);
   if(mode === 'fill'){ // 가로 → 세로 → 가로로 사이를 메움
     const rowFill = () => { for(let j = 0; j < H; j++){ let a = -1, b = -1; for(let i = 0; i < W; i++) if(g[j * W + i]){ if(a < 0) a = i; b = i; } if(a >= 0) for(let i = a; i <= b; i++) g[j * W + i] = 1; } };
