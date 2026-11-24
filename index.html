@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-24c';
+const APP_VERSION = '2026-11-24d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12550,7 +12550,7 @@ function fetchJibunList(admin, lidong, li){
     } finally { clearTimeout(tid); }
   })();
   kepcoListCache.set(key, p);
-  p.catch(() => kepcoListCache.delete(key)); // 실패는 기억하지 않음(다시 조회 가능)
+  p.then(l => { if(!l.length) kepcoListCache.delete(key); }, () => kepcoListCache.delete(key)); // 실패·0건은 기억하지 않음(다시 조회하면 새로 받음)
   return p;
 }
 // 주소가 확인되는 순간 그 리·동 지번목록을 미리 받기 시작(토지 분석이 도는 동안 20초 대기를 겹침)
@@ -12781,9 +12781,12 @@ async function checkKepcoCapacityInner(){
       }
       try{ jibunList = await listP; }
       catch(e){ listErr = e && e.message ? e.message : String(e); }
+      // 2026-11-24 실측: 한전ON 사이트가 응답하지 않을 때(사용자 PC에서도 online.kepco.co.kr 접속 실패) 지번목록이 약 39초 뒤 0건으로 옴
+      // → 오래 걸려 0건(또는 오류)이면 '한전 서버 응답 없음'으로 보고 다른 리·동 찾기(지역마다 다시 39초)를 하지 않음
+      if(!jibunList.length && (performance.now() - tA > 15000 || listErr)) kepcoDebug.serverSlow = Math.round((performance.now() - tA) / 1000);
       // 법정동 "화북이동"을 한전ON은 "화북2동"처럼 숫자로 표기 (2026-11-03 한전ON 지번목록 직접 확인: 화북이동 0건 / 화북2동 773건)
       const numName = kepcoNumDong(lidong);
-      if(!jibunList.length && numName !== lidong){
+      if(!jibunList.length && !kepcoDebug.serverSlow && numName !== lidong){
         let alt = []; try{ alt = await fetchJibunList(admin, numName, li); }catch(e){}
         if(alt.length){ if(lidong === admin.lidong) kepcoLooseNote = (kepcoLooseNote ? kepcoLooseNote + ' ' : '') + `ℹ 한전ON 주소 목록에는 "${lidong}"이 없어 <b>"${numName}"</b>(숫자 표기)으로 조회했습니다.`; lidong = numName; jibunList = alt; listErr = ''; }
       }
@@ -12840,7 +12843,7 @@ async function checkKepcoCapacityInner(){
     result = await tryArea(admin.lidong, admin.li, 320);
     if(result) matchLevel = eqJibun(result.matched.jibun, jibun) ? 'exact' : 'sameArea';
     // 1-1) 읍 승격·면 환원 등으로 한전ON 주소 목록이 옛 이름(예: 여주시 "가남읍" → 한전ON "가남면")인 경우: 읍↔면 이름을 바꿔 같은 리에서 다시 시도
-    if(!result && /[읍면]$/.test(admin.lidong || '')){
+    if(!result && !kepcoDebug.serverSlow && /[읍면]$/.test(admin.lidong || '')){
       const alt = admin.lidong.replace(/읍$/, '\u0000').replace(/면$/, '읍').replace('\u0000', '면');
       result = await tryArea(alt, admin.li, 320);
       if(result){
@@ -12848,6 +12851,16 @@ async function checkKepcoCapacityInner(){
         kepcoLooseNote = (kepcoLooseNote ? kepcoLooseNote + ' ' : '') + `ℹ 한전ON 주소 목록에는 "${admin.lidong}"이 없어 옛 이름 <b>"${alt}"</b>으로 조회했습니다(읍·면 명칭 변경 지역).`;
       }
     }
+
+    if(!result && kepcoDebug.serverSlow){
+      clearTimeout(timeoutId); kepcoDebug.t1 = performance.now();
+      const why = `한전ON 서버가 응답하지 않습니다 — ${admin.lidong} ${admin.li || ''} 지번 목록을 ${kepcoDebug.serverSlow}초 기다렸지만 0건이 왔습니다. 한전ON 사이트 자체가 느리거나 접속이 안 되는 상태일 수 있어 다른 리·동은 찾지 않았습니다. 잠시 뒤 "다시 조회"를 누르거나 한전ON에서 직접 확인하세요.`;
+      resultEl.innerHTML = `${kepcoPhoneLine(admin)}${kepcoDebugHtml()}${deptContactsHtml(admin)}${contactHtml(admin)}`;
+      markKepcoFailed(why);
+      return;
+    }
+    // 다른 리·동 지번 목록은 한꺼번에 미리 요청(예전엔 하나씩 차례로 기다림)
+    if(!result){ getSiblingLis(admin).slice(0, 3).forEach(sib => fetchJibunList(admin, admin.lidong, sib).catch(() => {})); getSiblingDongs(admin).slice(0, 3).forEach(sib => fetchJibunList(admin, sib, '').catch(() => {})); }
 
     // 2) 같은 면 안의 다른 리에서 시도
     if(!result){
