@@ -1368,7 +1368,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-24d';
+const APP_VERSION = '2026-11-24e';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -6844,6 +6844,7 @@ function layCardEditRow(ed){
     const cmp = ed.tiltCmp ? ` <span style="color:${ed.tiltCmp.diff < 0 ? '#B3261E' : '#0E5A3A'};font-weight:700;">${ed.tiltCmp.from}° ${ed.tiltCmp.fromN.toLocaleString('ko-KR')}장 → ${tilt}° ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장 (${ed.tiltCmp.diff >= 0 ? '+' : ''}${ed.tiltCmp.diff}장)</span>` : '';
     html += `<span title="모듈 경사를 바꾸면 수평투영 길이(모듈 길이×cos경사)와 앞뒤 줄 간격이 달라져 들어가는 장수가 바뀝니다">경사 <b>${tilt}°</b> <span style="color:var(--ink-soft);">(투영 ${Math.round(L * Math.cos(tilt * Math.PI / 180) * 1000).toLocaleString('ko-KR')}mm)</span></span> <button type="button" ${sb} onclick="layCardTilt(${ed.groupId}, -5)" title="5° 눕혀서 다시 배치">−5°</button><button type="button" ${sb} onclick="layCardTilt(${ed.groupId}, 5)" title="5° 세워서 다시 배치">+5°</button>${(ed.type === 'ground' || (ed.type === 'std' && /^(insam|insam_flat|zero)$/.test(ed.kind))) ? `<button type="button" ${sb} onclick="shadeDlgOpen(${ed.groupId})" title="동지 등 날짜의 시간대별 태양 위치로 줄 사이 그늘·필요한 줄 간격·경사별 비교를 계산">☀ 음영</button>` : ''}${cmp}`;
   }
+  if(ed.modules && ed.modules.length){ html += `${html ? '<span style="opacity:.4;margin:0 4px;">|</span>' : ''}<button type="button" ${sb} onclick="tShadeOpen(${ed.groupId})" title="하지·동지 등 날짜의 시각별로 그늘지는 모듈을 지도에 색칠(앞줄·파라펫 높이 반영), 시간대 그늘 모듈 빼기">🕒 시간대 음영</button>${ed.type !== 'ground' ? ` <span style="color:var(--ink-soft);" title="지붕 테두리 파라펫(난간벽) 높이 — 🕒 시간대 음영에서 바꿀 수 있음">파라펫 ${(typeof ed.parapetH === 'number' ? ed.parapetH : 1).toFixed(1)}m</span>` : ''}`; }
   if(tiers.length > 1){
     const btn = t => { const ms = ed.modules.filter(m => m.tier === t && !m.vent); const off = ms.length && ms.every(m => m.removed); return `<button type="button" ${sb.replace('background:#fff;', off ? 'background:#eee;text-decoration:line-through;color:#999;' : 'background:#fff;')} onclick="layCardTier(${ed.groupId}, ${t})" title="${off ? '이 단 모듈을 다시 살림' : '모든 틀에서 이 단(' + (t + 1) + '단째 줄) 모듈을 한꺼번에 뺌'}">${t + 1}단</button>`; };
     html += `${html ? '<span style="opacity:.4;margin:0 4px;">|</span>' : ''}<span title="틀마다 같은 단(줄) 모듈을 통째로 빼거나 살림">단 빼기</span> ${tiers.map(btn).join('')}`;
@@ -6931,6 +6932,148 @@ function shadeDlgRender(){
       <p class="hint" style="font-size:11.5px;margin:8px 0 0;">계산 기준: 태양 위치 근사식(적위·균시차), 시각은 한국 표준시. 줄들이 같은 높이의 평평한 면에 놓였다고 보고 앞줄 윗변이 뒷줄에 드리우는 그늘만 계산했습니다. 줄 옆 끝으로 새는 그늘, 주변 건물·나무·난간, 지붕면 경사에 따른 줄 높이 차이는 포함하지 않았습니다. "높이 1m당 그림자"에 장애물 높이를 곱하면 그 장애물에서 띄울 거리가 됩니다(그림자 방향 = 태양 방위의 반대쪽). 경사를 바꾸려면 배치 카드의 경사 −5°/+5°를 누르고 다시 ☀ 음영을 여세요.</p>`;
   }
   d.innerHTML = `<div style="background:#fff;color:var(--ink);border-radius:12px;max-width:820px;width:100%;max-height:92vh;overflow:auto;padding:16px 18px;box-shadow:0 12px 40px rgba(0,0,0,.25);">${head}${body}</div>`;
+}
+// ===== 🕒 시간대별 음영(사용자 2026-11-24): 하지·동지 시각마다 모듈별로 그늘 여부를 계산해 지도에 색칠 + 파라펫(지붕 테두리 난간벽) 높이 반영 =====
+// 계산: 모듈마다 5점(가운데 + 네 모서리 안쪽 15%)에서 태양 쪽으로 직선을 그어, 그 길에 있는 파라펫(경계선, 높이 Hp)이나 다른 모듈 모서리가
+// 그 지점 높이 + 거리×tan(태양 고도)보다 높으면 그늘. 모듈 높이 = 하단 높이 + (줄 앞에서 거리)×tan(모듈 경사). 지붕 경사·주변 건물·나무는 계산하지 않음.
+const T_SHADE = { gid: null, date: '12-21', hour: 12, h0: 9, h1: 15, cache: null, overlays: [], playT: null };
+function tsParapetDefault(ed){ return ed.type === 'ground' ? 0 : 1.0; } // 사용자 결정(2026-11-24): 지붕 파라펫 기본 1.0m, 토지는 없음
+function tsModel(ed){
+  const la = ed.lat0Rad, R = Math.PI / 180;
+  const tilt = typeof ed.tilt === 'number' ? ed.tilt : 0, tanT = Math.tan(tilt * R);
+  const base = typeof ed.tsBaseH === 'number' ? ed.tsBaseH : 0.5;
+  const Hp = typeof ed.parapetH === 'number' ? ed.parapetH : tsParapetDefault(ed);
+  // 모듈이 들리는 방향(위로 올라가는 쪽) b: 남향 배치면 북쪽
+  let b = null; const az = ed.azRad || 0;
+  if(tilt > 0){
+    if(ed.type === 'std' && (ed.kind === 'insam' || ed.kind === 'insam_flat' || ed.kind === 'zero')){ const v = ed.tiltAlongX ? rotateXY(1, 0, az) : rotateXY(0, 1, az); b = v.y >= 0 ? v : { x: -v.x, y: -v.y }; }
+    else { const v = rotateXY(0, 1, az); b = v.y >= 0 ? v : { x: -v.x, y: -v.y }; }
+  }
+  const mods = ed.modules.filter(m => !m.vent && m.poly).map(m => ({ m, P: m.poly.getPath().map(q => solarToXY(q, la)) }));
+  // 줄(띠): b 방향 구간이 겹치는 모듈끼리 묶어 띠 앞(t0)에서 높이 시작
+  if(b){
+    mods.forEach(o => { const ts = o.P.map(p => p.x * b.x + p.y * b.y); o.t0 = Math.min(...ts); o.t1 = Math.max(...ts); });
+    const srt = mods.filter(o => !o.m.removed).slice().sort((p, q) => p.t0 - q.t0); const bands = [];
+    srt.forEach(o => { const L = bands[bands.length - 1]; if(L && o.t0 <= L.t1 + 0.05){ L.t1 = Math.max(L.t1, o.t1); } else bands.push({ t0: o.t0, t1: o.t1 }); });
+    mods.forEach(o => { const bd = bands.find(B => o.t0 >= B.t0 - 0.06 && o.t0 <= B.t1 + 0.06); o.bt0 = bd ? bd.t0 : o.t0; });
+  }
+  const zAt = (o, p) => b ? base + Math.max(0, (p.x * b.x + p.y * b.y) - o.bt0) * tanT : base;
+  // 그늘을 만드는 선분: 파라펫(경계) + 남아 있는 모듈 모서리
+  const segs = [];
+  const bnd = (ed.boundary || []).map(q => solarToXY(q, la));
+  if(Hp > 0 && bnd.length >= 3) for(let i = 0; i < bnd.length; i++){ const A = bnd[i], B = bnd[(i + 1) % bnd.length]; segs.push({ A, B, za: Hp, zb: Hp, own: -1 }); }
+  mods.forEach((o, k) => { if(o.m.removed) return; const zs = o.P.map(p => zAt(o, p)); o.zs = zs; for(let i = 0; i < o.P.length; i++){ const j = (i + 1) % o.P.length; segs.push({ A: o.P[i], B: o.P[j], za: zs[i], zb: zs[j], own: k }); } });
+  // 2m 칸 격자에 선분 등록
+  const C = 2, grid = new Map(); const key = (i, j) => i + ',' + j;
+  segs.forEach((s, si) => { const x0 = Math.floor(Math.min(s.A.x, s.B.x) / C), x1 = Math.floor(Math.max(s.A.x, s.B.x) / C), y0 = Math.floor(Math.min(s.A.y, s.B.y) / C), y1 = Math.floor(Math.max(s.A.y, s.B.y) / C);
+    if((x1 - x0 + 1) * (y1 - y0 + 1) > 4000){ // 긴 파라펫 변: 선을 따라 칸 등록
+      const L = Math.hypot(s.B.x - s.A.x, s.B.y - s.A.y), n = Math.ceil(L / 1); for(let t = 0; t <= n; t++){ const x = s.A.x + (s.B.x - s.A.x) * t / n, y = s.A.y + (s.B.y - s.A.y) * t / n; const k2 = key(Math.floor(x / C), Math.floor(y / C)); (grid.get(k2) || grid.set(k2, []).get(k2)).push(si); } return; }
+    for(let i = x0; i <= x1; i++) for(let j = y0; j <= y1; j++){ const k2 = key(i, j); (grid.get(k2) || grid.set(k2, []).get(k2)).push(si); } });
+  const zMax = Math.max(Hp, ...mods.filter(o => o.zs).map(o => Math.max(...o.zs)), base);
+  // 모듈마다 5개 시험점
+  mods.forEach(o => { const cx = o.P.reduce((a, p) => a + p.x, 0) / o.P.length, cy = o.P.reduce((a, p) => a + p.y, 0) / o.P.length; const pts = [{ x: cx, y: cy }].concat(o.P.slice(0, 4).map(p => ({ x: cx + (p.x - cx) * 0.85, y: cy + (p.y - cy) * 0.85 }))); o.S = pts.map(p => ({ x: p.x, y: p.y, z: zAt(o, p) })); });
+  return { ed, mods, segs, grid, C, key, zMax, Hp, base, tilt, b, lat: la / R, lon: ed.boundary && ed.boundary[0] ? ed.boundary[0].getLng() : 127.5 };
+}
+// 한 시각의 모듈별 그늘 비율(0~1, 시험점 5개 중 그늘인 비율)
+function tsShadeAt(M, month, day, hour){
+  const sp = sunPos(M.lat, M.lon, month, day, hour); const R = Math.PI / 180;
+  if(sp.alt <= 1) return { sp, night: true, fr: null };
+  const s = { x: Math.sin(sp.az * R), y: Math.cos(sp.az * R) }, tanA = Math.tan(sp.alt * R);
+  const fr = M.mods.map((o, k) => {
+    if(o.m.removed) return null; let sh = 0;
+    o.S.forEach(P => {
+      const tmax = Math.min(80, Math.max(0, (M.zMax - P.z) / tanA) + 0.5); if(tmax <= 0.02) return;
+      const seen = new Set(); let hit = false;
+      for(let t = 0; t <= tmax + M.C && !hit; t += M.C * 0.5){
+        const cx = Math.floor((P.x + s.x * t) / M.C), cy = Math.floor((P.y + s.y * t) / M.C);
+        for(let di = -1; di <= 1 && !hit; di++) for(let dj = -1; dj <= 1 && !hit; dj++){
+          const L = M.grid.get(M.key(cx + di, cy + dj)); if(!L) continue;
+          for(const si of L){ if(seen.has(si)) continue; seen.add(si); const g = M.segs[si]; if(g.own === k) continue;
+            const ex = g.B.x - g.A.x, ey = g.B.y - g.A.y, den = s.x * ey - s.y * ex; if(Math.abs(den) < 1e-9) continue;
+            const wx = g.A.x - P.x, wy = g.A.y - P.y; const tt = (wx * ey - wy * ex) / den, u = (wx * s.y - wy * s.x) / den;
+            if(tt <= 0.02 || u < 0 || u > 1 || tt > tmax) continue;
+            if(P.z + tt * tanA < g.za + (g.zb - g.za) * u - 1e-3){ hit = true; break; } }
+        }
+      }
+      if(hit) sh++;
+    });
+    return sh / o.S.length;
+  });
+  return { sp, night: false, fr };
+}
+function tsHours(){ const a = []; for(let h = 5; h <= 19.01; h += 0.5) a.push(Math.round(h * 2) / 2); return a; }
+function tsCompute(){
+  const ed = layoutByGroup(T_SHADE.gid); if(!ed) return null;
+  const [mo, da] = T_SHADE.date.split('-').map(Number);
+  const sig = [ed.groupId, T_SHADE.date, ed.parapetH, ed.tsBaseH, ed.modules.length, ed.modules.filter(m => m.removed).length].join('|');
+  if(T_SHADE.cache && T_SHADE.cache.sig === sig) return T_SHADE.cache;
+  const M = tsModel(ed); const rows = tsHours().map(h => Object.assign({ h }, tsShadeAt(M, mo, da, h)));
+  T_SHADE.cache = { sig, M, rows, mo, da }; return T_SHADE.cache;
+}
+function tsPaint(){
+  const Cc = tsCompute(); if(!Cc) return; const row = Cc.rows.find(r => r.h === T_SHADE.hour);
+  Cc.M.mods.forEach((o, k) => { if(o.m.removed){ setModuleRemoved(o.m, true); return; } const f = row && row.fr ? row.fr[k] : 0;
+    if(row && row.night) o.m.poly.setOptions({ fillColor: '#4A4A6A', fillOpacity: 0.55 });
+    else if(f >= 0.99) o.m.poly.setOptions({ fillColor: '#D7261E', fillOpacity: 0.8 });
+    else if(f > 0) o.m.poly.setOptions({ fillColor: '#F29A1F', fillOpacity: 0.8 });
+    else setModuleRemoved(o.m, false); });
+}
+function tsUnpaint(){ const ed = layoutByGroup(T_SHADE.gid); if(ed) ed.modules.forEach(m => { if(m.poly) setModuleRemoved(m, !!m.removed); }); }
+function tsDrawParapet(){
+  T_SHADE.overlays.forEach(o => { try{ o.setMap(null); }catch(e){} }); T_SHADE.overlays = [];
+  const ed = layoutByGroup(T_SHADE.gid); if(!ed || !ed.boundary || ed.boundary.length < 3) return;
+  const Hp = typeof ed.parapetH === 'number' ? ed.parapetH : tsParapetDefault(ed); if(!(Hp > 0)) return; const map = ensureKakaoMap();
+  T_SHADE.overlays.push(new kakao.maps.Polyline({ map, path: ed.boundary.concat([ed.boundary[0]]), strokeWeight: 7, strokeColor: '#5E5E5E', strokeOpacity: 0.85, zIndex: 6 }));
+  T_SHADE.overlays.push(new kakao.maps.CustomOverlay({ map, position: ed.boundary[0], yAnchor: 1.4, zIndex: 30, content: `<div style="background:#5E5E5E;color:#fff;font-size:11px;padding:1px 6px;border-radius:4px;white-space:nowrap;">파라펫 ${Hp.toFixed(1)}m</div>` }));
+}
+function tShadeOpen(gid){
+  const ed = layoutByGroup(gid); if(!ed) return;
+  if(T_SHADE.gid != null && T_SHADE.gid !== gid) tShadeClose();
+  T_SHADE.gid = gid; T_SHADE.cache = null; if(typeof ed.parapetH !== 'number') ed.parapetH = tsParapetDefault(ed);
+  let d = document.getElementById('tShadePanel');
+  if(!d){ d = document.createElement('div'); d.id = 'tShadePanel'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', '시간대별 음영'); d.style.cssText = 'position:fixed;right:16px;top:70px;z-index:100000;width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 90px);overflow:auto;background:#fff;color:var(--ink);border:1px solid var(--card-line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.22);padding:12px 14px;font-size:12.5px;'; document.body.appendChild(d); }
+  d.style.display = 'block'; tShadeRender(); tsDrawParapet();
+}
+function tShadeClose(){ tsPlay(false); const d = document.getElementById('tShadePanel'); if(d) d.style.display = 'none'; tsUnpaint(); T_SHADE.overlays.forEach(o => { try{ o.setMap(null); }catch(e){} }); T_SHADE.overlays = []; T_SHADE.gid = null; T_SHADE.cache = null; }
+function tsSet(k, v){ T_SHADE[k] = v; if(k === 'date'){ T_SHADE.cache = null; } tShadeRender(); }
+function tsEdSet(k, v){ const ed = layoutByGroup(T_SHADE.gid); if(!ed) return; ed[k] = Math.max(0, Math.min(5, Math.round(v * 10) / 10)); T_SHADE.cache = null; tShadeRender(); tsDrawParapet(); }
+function tsPlay(on){ clearInterval(T_SHADE.playT); T_SHADE.playT = null; if(!on) return; const H = tsHours(); T_SHADE.playT = setInterval(() => { const Cc = tsCompute(); const day = Cc ? Cc.rows.filter(r => !r.night).map(r => r.h) : H; let i = day.indexOf(T_SHADE.hour); i = (i + 1) % day.length; T_SHADE.hour = day[i]; tShadeRender(); }, 700); }
+function tShadeRender(){
+  const d = document.getElementById('tShadePanel'); const ed = layoutByGroup(T_SHADE.gid); if(!d) return; if(!ed){ tShadeClose(); return; }
+  const Cc = tsCompute(); const M = Cc.M; const live = M.mods.filter(o => !o.m.removed).length;
+  const day = Cc.rows.filter(r => !r.night); if(day.length && !day.some(r => r.h === T_SHADE.hour)) T_SHADE.hour = day.reduce((a, r) => Math.abs(r.h - 12) < Math.abs(a - 12) ? r.h : a, day[0].h);
+  const cnt = r => r.fr ? r.fr.filter(f => f != null && f > 0).length : 0, full = r => r.fr ? r.fr.filter(f => f != null && f >= 0.99).length : 0;
+  const hh = h => `${Math.floor(h)}:${h % 1 ? '30' : '00'}`; const R = Math.PI / 180; const dir = az => ['북', '북동', '동', '남동', '남', '남서', '서', '북서'][Math.round(az / 45) % 8];
+  const cur = Cc.rows.find(r => r.h === T_SHADE.hour);
+  const dates = [['6-21', '하지'], ['12-21', '동지'], ['3-21', '춘분'], ['9-23', '추분']];
+  const btn = (on, js, t) => `<button type="button" onclick="${js}" style="font-size:12px;padding:2px 9px;border:1px solid var(--card-line);border-radius:5px;cursor:pointer;${on ? 'background:var(--ink);color:#fff;' : 'background:#fff;'}">${t}</button>`;
+  const win = Cc.rows.filter(r => !r.night && r.h >= T_SHADE.h0 && r.h <= T_SHADE.h1);
+  const winSet = new Set(); win.forEach(r => r.fr.forEach((f, k) => { if(f != null && f > 0) winSet.add(k); }));
+  const parShadow = r => (M.Hp > M.base && !r.night) ? (M.Hp - M.base) / Math.tan(r.sp.alt * R) : 0;
+  const tbl = Cc.rows.filter(r => !r.night && r.h % 1 === 0).map(r => `<tr${r.h === Math.floor(T_SHADE.hour) ? ' style="background:#FFF6DA;"' : ''} onclick="tsSet('hour', ${r.h})" style="cursor:pointer;"><td>${r.h}시</td><td>${r.sp.alt.toFixed(1)}°</td><td>${Math.round(r.sp.az)}° ${dir(r.sp.az)}</td><td>${M.Hp > 0 ? parShadow(r).toFixed(2) + 'm' : '-'}</td><td style="${cnt(r) ? 'color:#B3261E;font-weight:700;' : 'color:#0E5A3A;'}">${cnt(r).toLocaleString('ko-KR')}장${cnt(r) ? ` (${Math.round(cnt(r) / Math.max(1, live) * 100)}%)` : ''}</td><td>${full(r).toLocaleString('ko-KR')}</td></tr>`).join('');
+  d.innerHTML = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><b style="font-size:14px;">🕒 시간대별 음영 — ${escLand(ed.bldName || layoutTypeLabel(ed))}</b><button type="button" onclick="tShadeClose()" style="margin-left:auto;font-size:12px;padding:2px 9px;" title="닫기 (Esc)">닫기</button></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">${dates.map(([v, n]) => btn(v === T_SHADE.date, `tsSet('date','${v}')`, n)).join('')}<span style="margin-left:auto;"></span>${btn(!!T_SHADE.playT, T_SHADE.playT ? 'tsPlay(false);tShadeRender()' : 'tsPlay(true);tShadeRender()', T_SHADE.playT ? '■ 멈춤' : '▶ 재생')}</div>
+    ${day.length ? `<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="${day[0].h}" max="${day[day.length - 1].h}" step="0.5" value="${T_SHADE.hour}" oninput="tsSet('hour', +this.value)" style="flex:1;" aria-label="시각"><b style="min-width:44px;">${hh(T_SHADE.hour)}</b></div>
+    <p style="margin:4px 0 6px;">태양 고도 <b>${cur.sp.alt.toFixed(1)}°</b> · 방위 ${Math.round(cur.sp.az)}°(${dir(cur.sp.az)}) · 그늘 <b style="color:${cnt(cur) ? '#B3261E' : '#0E5A3A'};">${cnt(cur).toLocaleString('ko-KR')}장</b> / ${live.toLocaleString('ko-KR')}장 <span style="color:var(--ink-soft);">(<span style="color:#D7261E;">■</span> 전체 그늘 ${full(cur)} · <span style="color:#F29A1F;">■</span> 일부 그늘 ${cnt(cur) - full(cur)})</span></p>` : '<p>이 날짜는 해가 뜨지 않는 시간만 있습니다.</p>'}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:4px 0 6px;padding:6px 8px;background:var(--surface-2);border-radius:6px;">
+      <span title="지붕 테두리(경계선)에 세운 난간벽 높이 — 지붕면에서 파라펫 위 끝까지">파라펫 높이 <button type="button" onclick="tsEdSet('parapetH', ${M.Hp} - 0.1)" style="font-size:11px;padding:0 6px;">−</button> <b>${M.Hp.toFixed(1)}m</b> <button type="button" onclick="tsEdSet('parapetH', ${M.Hp} + 0.1)" style="font-size:11px;padding:0 6px;">+</button></span>
+      <span title="지붕면(땅)에서 모듈 아래 끝까지 높이 — 앞줄·파라펫 그림자 계산에 씀">모듈 하단 높이 <button type="button" onclick="tsEdSet('tsBaseH', ${M.base} - 0.1)" style="font-size:11px;padding:0 6px;">−</button> <b>${M.base.toFixed(1)}m</b> <button type="button" onclick="tsEdSet('tsBaseH', ${M.base} + 0.1)" style="font-size:11px;padding:0 6px;">+</button></span>
+      <span style="color:var(--ink-soft);">모듈 경사 ${M.tilt}°</span></div>
+    <table class="pp-tbl" style="font-size:11.5px;width:100%;"><thead><tr><th>시각</th><th>고도</th><th>방위</th><th title="파라펫 위 끝이 모듈 하단 높이에 드리우는 그림자 길이(태양 방향). 파라펫에서 이만큼 띄우면 그 시각엔 그늘 없음">파라펫 그림자</th><th>그늘 모듈</th><th>전체 그늘</th></tr></thead><tbody>${tbl}</tbody></table>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+      <span>그늘 없어야 하는 시간 <select onchange="tsSet('h0', +this.value)" style="font-size:12px;">${[7, 8, 9, 10, 11].map(v => `<option${v === T_SHADE.h0 ? ' selected' : ''}>${v}</option>`).join('')}</select>시~<select onchange="tsSet('h1', +this.value)" style="font-size:12px;">${[13, 14, 15, 16, 17].map(v => `<option${v === T_SHADE.h1 ? ' selected' : ''}>${v}</option>`).join('')}</select>시</span>
+      <button type="button" onclick="tsRemoveShaded()" ${winSet.size ? '' : 'disabled'} style="font-size:12px;padding:3px 10px;border:1px solid #B3261E;color:#B3261E;background:#fff;border-radius:5px;cursor:pointer;">이 시간대 그늘 모듈 ${winSet.size.toLocaleString('ko-KR')}장 빼기</button></div>
+    <p class="hint" style="font-size:11px;margin:8px 0 0;">계산: 태양 위치 근사식(한국 표준시), 모듈마다 5점에서 태양 쪽으로 선을 그어 파라펫(경계선 위, 높이 ${M.Hp.toFixed(1)}m)·다른 모듈 모서리에 가리면 그늘. 모듈 높이 = 하단 ${M.base.toFixed(1)}m + 줄 앞에서 거리×tan(${M.tilt}°). 지붕면은 평평하다고 보며 지붕 경사·옆 건물·나무·실외기 등은 계산하지 않습니다. 빼기는 ↶ 이전으로(Ctrl+Z)로 되돌릴 수 있습니다.</p>`;
+  tsPaint();
+}
+function tsRemoveShaded(){
+  const ed = layoutByGroup(T_SHADE.gid); const Cc = tsCompute(); if(!ed || !Cc) return;
+  const win = Cc.rows.filter(r => !r.night && r.h >= T_SHADE.h0 && r.h <= T_SHADE.h1); const kill = new Set(); win.forEach(r => r.fr.forEach((f, k) => { if(f != null && f > 0) kill.add(k); }));
+  if(!kill.size) return; const before = ed.modules.filter(m => !m.removed).length;
+  histCheckpoint(`시간대 음영 ${kill.size}장 빼기`);
+  kill.forEach(k => { const m = Cc.M.mods[k].m; setModuleRemoved(m, true); m.shaded = true; m.shadeWhy = 'tshade'; });
+  T_SHADE.cache = null; scheduleLayoutCards(); tShadeRender();
+  const st = document.getElementById('roadviewStatus'); if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = `🕒 ${T_SHADE.date === '12-21' ? '동지' : T_SHADE.date === '6-21' ? '하지' : T_SHADE.date} ${T_SHADE.h0}~${T_SHADE.h1}시에 그늘지는 모듈 ${kill.size.toLocaleString('ko-KR')}장을 뺐습니다 — ${before.toLocaleString('ko-KR')}장 → ${ed.modules.filter(m => !m.removed).length.toLocaleString('ko-KR')}장 (파라펫 ${Cc.M.Hp.toFixed(1)}m). ↶ 이전으로 되돌릴 수 있습니다.`; }
 }
 // 인삼밭 플랫 높이 한도 ±0.5m → 같은 유형·경사로 다시 배치
 function layCardMaxH(gid, delta){
@@ -10694,6 +10837,30 @@ function updateBoundaryInfo(){
   el.textContent = (p && p.length >= 3) ? `현재 경계: ${p.length}각형 · ${Math.round(shoelaceArea(p)).toLocaleString('ko-KR')}㎡` : '현재 경계 없음 (주소 검색 시 필지 경계는 토지 노지 배치에만 사용)';
 }
 setInterval(updateBoundaryInfo, 800);
+// ===== Esc = 지금 쓰는 편집 기능 취소 (사용자 2026-11-24) — 입력칸에서는 동작 안 함, 다른 Esc 처리(따라 그리기·맞춤·건물 합치기 등)는 그대로
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Escape' || e.defaultPrevented) return;
+  if(/input|textarea|select/i.test((e.target || {}).tagName || '') || (e.target && e.target.isContentEditable)) return;
+  const st = document.getElementById('roadviewStatus'); const say = t => { if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = t; } };
+  const tp = document.getElementById('tShadePanel'); if(tp && tp.style.display !== 'none' && T_SHADE.gid != null){ tShadeClose(); say('🕒 시간대 음영을 닫았습니다.'); return; }
+  const sd = document.getElementById('shadeDlg'); if(sd && sd.style.display === 'flex'){ sd.style.display = 'none'; return; }
+  if(typeof bldEdit !== 'undefined' && bldEdit){
+    if(bldEdit.cut && bldEdit.cut.pts && bldEdit.cut.pts.length){ editCutClear(); bldEdit.cut = { pts: [], line: null, dot: null }; say('✂ 그리던 자르기 선을 지웠습니다. 한 번 더 Esc를 누르면 조정 전체를 취소합니다.'); return; }
+    cancelBuildingEdit(); return;
+  }
+  if(typeof shrinkEdit !== 'undefined' && shrinkEdit){ endShrinkOutline(false); say('⇲ 경계 줄이기를 취소하고 원래대로 되돌렸습니다.'); return; }
+  if(['trace', 'fitoutline', 'bldmerge'].includes(mapMode) || (typeof geomTool !== 'undefined' && geomTool)) return; // 각자 Esc 처리
+  if(mapMode && mapMode !== 'normal'){
+    const m0 = mapMode; setMode('normal');
+    try{
+      if(m0 === 'delrow' && typeof delRowReset === 'function') delRowReset();
+      if(m0 === 'fillrect'){ fillFirst = null; if(fillPreview){ fillPreview.setMap(null); fillPreview = null; } }
+      if(m0 === 'annot'){ annotPending = null; annotBtnState(); }
+      if(m0 === 'editadd' || m0 === 'editcut'){ if(typeof editCutClear === 'function') editCutClear(); }
+    }catch(err){ console.warn('esc cleanup', err); }
+    say('도구를 취소했습니다 (Esc).');
+  }
+});
 document.addEventListener('keydown', e => { if(mapMode !== 'trace') return; if(e.key === 'Escape') finishTrace(true); else if(e.key === 'Backspace' && !/input|textarea|select/i.test((e.target || {}).tagName || '')){ e.preventDefault(); traceUndoPoint(); } });
 function toggleBuildingPickMode(){
   if(mapMode === 'building'){ setMode('normal'); document.getElementById('roadviewStatus').textContent = ''; return; }
