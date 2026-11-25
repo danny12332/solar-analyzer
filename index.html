@@ -963,7 +963,8 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
             <div id="s4Heights" style="font-size:12px;"></div>
             <div id="ppEditBox"></div>
             <div class="s4-row" style="font-size:12px;">대장 높이 없는 건물 <input type="number" id="s4DefH" value="8" step="0.5" min="0" style="width:52px;" onchange="s4Rebuild()">m(가정)</div>
-            <div class="s4-row" style="font-size:12px;"><label><input type="checkbox" id="s4Nb" checked onchange="s4Rebuild()"> 주변 건물</label> 층당 <input type="number" id="s4FloorH" value="3.3" step="0.1" min="1" style="width:46px;" onchange="s4Rebuild()">m · 층수 없으면 <input type="number" id="s4NbDef" value="4" step="0.5" min="0" style="width:44px;" onchange="s4Rebuild()">m <span id="s4NbLbl" class="sum-muted"></span></div>
+            <div id="xbBox" style="border-top:1px solid var(--card-line);margin-top:6px;padding-top:6px;"></div>
+            <div class="s4-row" style="font-size:12px;border-top:1px solid var(--card-line);margin-top:6px;padding-top:6px;"><label><input type="checkbox" id="s4Nb" checked onchange="s4Rebuild()"> 주변 건물</label> 층당 <input type="number" id="s4FloorH" value="3.3" step="0.1" min="1" style="width:46px;" onchange="s4Rebuild()">m · 층수 없으면 <input type="number" id="s4NbDef" value="4" step="0.5" min="0" style="width:44px;" onchange="s4Rebuild()">m <span id="s4NbLbl" class="sum-muted"></span></div>
           </div>
           <div class="s4-box" id="s4Stats"></div>
           <p class="hint" style="font-size:11px;margin:4px 0 0;">계산: 태양 위치 근사식(한국 표준시). 건물 = 경계를 높이만큼 세운 상자(지붕 평평), 파라펫·구조물 = 지붕 위 벽·상자, 모듈 = 하단 높이 + 줄 앞에서 거리×tan(경사). 모듈마다 여러 점에서 해 쪽으로 선을 그어 가리면 그늘. 지붕 경사·나무·지형은 계산하지 않음. 주변 건물 높이 = 도로명주소 건물 층수 × 층당 높이(가정).</p>
@@ -1419,7 +1420,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-25e';
+const APP_VERSION = '2026-11-26a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -7234,11 +7235,14 @@ function s4Data(){
   const nb = []; const fh = parseFloat((document.getElementById('s4FloorH') || {}).value) || 3.3, nd = parseFloat((document.getElementById('s4NbDef') || {}).value) || 0;
   const inside = P => { const c = { x: P.reduce((a, p) => a + p.x, 0) / P.length, y: P.reduce((a, p) => a + p.y, 0) / P.length }; return B.some(b => pointInPolygonXY(c, b.P)); };
   if((document.getElementById('s4Nb') || {}).checked !== false){
-    (parcelBuildings || []).forEach(pb => { if(!pb.path || pb.path.length < 3) return; const P = pb.path.map(XY); if(inside(P)) return; nb.push({ P, H: defH, src: '필지 안 건물(가정)' }); });
+    (parcelBuildings || []).forEach(pb => { if(!pb.path || pb.path.length < 3) return; const P = pb.path.map(XY); if(inside(P)) return; const key = xbKey(pb.path); const man = XB.nbH[key]; nb.push({ P, key, manual: man != null, H: man != null ? man : defH, src: man != null ? '직접 입력' : '필지 안 건물(가정)', short: man != null ? '직접' : '가정' }); });
     const feats = (typeof autoSite !== 'undefined' && autoSite.houses && autoSite.houses.feats) || [];
     feats.forEach(f => { const r = parseVworldGeom(f.geometry || (f.properties && f.properties.ag_geom)); if(!r || r.length < 3) return; const P = r.map(v => XY(new kakao.maps.LatLng(v.lat, v.lng))); if(inside(P)) return;
-      const fl = parseInt((f.properties || {}).gro_flo_co, 10); nb.push({ P, H: fl > 0 ? fl * fh : nd, src: fl > 0 ? `${fl}층 × ${fh}m` : '층수 없음(가정)' }); });
+      const fl = parseInt((f.properties || {}).gro_flo_co, 10); const key = xbKey(r.map(v => new kakao.maps.LatLng(v.lat, v.lng))); const man = XB.nbH[key];
+      nb.push({ P, key, manual: man != null, H: man != null ? man : (fl > 0 ? fl * fh : nd), src: man != null ? '직접 입력' : (fl > 0 ? `${fl}층 × ${fh}m` : '층수 없음(가정)'), short: man != null ? '직접' : (fl > 0 ? `${fl}층` : '가정') }); });
   }
+  // 직접 넣은 건물(미건축·자료에 없는 건물)은 '주변 건물' 체크와 상관없이 항상 계산
+  XB.list.forEach(x => { if(x.path.length >= 3 && x.h > 0) nb.push({ P: x.path.map(XY), H: x.h, src: '직접 넣은 건물', extra: true, name: x.name }); });
   const mods = [];
   B.forEach((b, bi) => { const ed = b.ed; const R = Math.PI / 180; const tilt = typeof ed.tilt === 'number' ? ed.tilt : 0, tanT = Math.tan(tilt * R); const base = typeof ed.tsBaseH === 'number' ? ed.tsBaseH : 0.5;
     let dir = null; const az = ed.azRad || 0;
@@ -7332,14 +7336,14 @@ function s4Invalidate(){ S4.day = null; s4StatsRender(); s4Repaint(); }
 function s4Enter(){
   s4DatesRender(); const D = s4Data();
   if(!D){ S4.D = null; s4HeightsRender(); const sl = document.getElementById('s4SunLbl'); if(sl) sl.innerHTML = '<span style="color:#b3402a;">배치도 탭에서 배치를 먼저 만드세요.</span>'; return; }
-  const sig = layoutRegistry.map(ed => ed.groupId + ':' + ed.modules.filter(m => !m.removed).length + ':' + ed.tilt + ':' + ed.s4H + ':' + ed.tsBaseH + ':' + JSON.stringify(ed.ppEdges || {}) + ':' + (ed.obst || []).map(o => o.h + o.path.length).join(',')).join('|') + '|' + D.nb.length + '|' + ((document.getElementById('s4Res') || {}).value);
+  const sig = layoutRegistry.map(ed => ed.groupId + ':' + ed.modules.filter(m => !m.removed).length + ':' + ed.tilt + ':' + ed.s4H + ':' + ed.tsBaseH + ':' + JSON.stringify(ed.ppEdges || {}) + ':' + (ed.obst || []).map(o => o.h + o.path.length).join(',')).join('|') + '|' + D.nb.length + '|' + D.nb.map(n => n.H).join(',') + '|' + XB.list.map(x => x.id + ':' + x.h + ':' + x.path.length).join(',') + '|' + ((document.getElementById('s4Res') || {}).value);
   if(sig !== S4.sig){ S4.sig = sig; S4.D = D; S4.model = s4Model(D, +((document.getElementById('s4Res') || {}).value || 9)); S4.day = null; S4.built3d = false; }
-  s4HeightsRender(); smOn(true); s4SetTime(S4.min); s4StatsRender();
+  s4HeightsRender(); smOn(true); s4SetTime(S4.min); s4StatsRender(); xbRender();
   const nl = document.getElementById('s4NbLbl'); if(nl) nl.textContent = S4.D.nb.length ? `${S4.D.nb.length}동` : '없음(컨설팅 주소 검색 때 200m 건물을 읽음)';
 }
 function s4OpenSection(){ switchRailTab('railPaneLayout'); const ws = document.getElementById('wbShade'); if(ws){ if(ws.open) s4Enter(); else ws.open = true; try{ ws.scrollIntoView({ block: 'nearest' }); }catch(e){} } }
 window.addEventListener('DOMContentLoaded', () => { const ws = document.getElementById('wbShade'); if(ws) ws.addEventListener('toggle', () => { try{ if(ws.open && document.body.getAttribute('data-rail') === 'railPaneLayout') s4Enter(); else s4Leave(); }catch(e){ console.warn('s4 toggle', e); } }); });
-function s4Leave(){ if(S4.play) s4Play(); smOn(false); ppEditEnd(); if(S4.D) S4.D.mods.forEach(o => { try{ setModuleRemoved(o.m, !!o.m.removed); }catch(e){} }); }
+function s4Leave(){ if(S4.play) s4Play(); smOn(false); ppEditEnd(); XB.mode = null; XB.pts = []; xbRender(); if(S4.D) S4.D.mods.forEach(o => { try{ setModuleRemoved(o.m, !!o.m.removed); }catch(e){} }); }
 function s4SetTime(min){
   S4.min = min; ['s4Time', 's4Time3'].forEach(id => { const el = document.getElementById(id); if(el && +el.value !== min) el.value = min; }); const lb = document.getElementById('s4TimeLbl'); if(lb) lb.textContent = s4Hm(min);
   if(!S4.D) return; const sp = s4Sun(min); const up = sp.alt > 0.5;
@@ -7404,11 +7408,60 @@ function s4Play(){
   const b = document.getElementById('s4PlayBtn'); if(S4.play){ clearInterval(S4.play); S4.play = null; if(b) b.textContent = '▶ 하루 재생'; return; } if(!S4.D) return;
   if(b) b.textContent = '■ 멈춤'; S4.play = setInterval(() => { const sp = +((document.getElementById('s4Speed') || {}).value || 20) / 4; let t = S4.min + sp; if(t > s4Set()) t = s4Rise(); s4SetTime(Math.round(t)); }, 120);
 }
+// ===== ➕ 직접 넣는 건물(사용자 2026-11-26): 아직 안 지어졌거나 건물 자료에 없는 건물을 면적·높이로 넣어 음영 계산 + 지도에 건물 높이 표시 =====
+const XB = { list: [], nbH: {}, mode: null, pts: [], h: 10, area: 200, ovs: [], lbls: [], drawOv: [], down: null, hooked: false, seq: 0 };
+function xbKey(path){ const la = path.reduce((a, q) => a + q.getLat(), 0) / path.length, ln = path.reduce((a, q) => a + q.getLng(), 0) / path.length; return la.toFixed(6) + ',' + ln.toFixed(6); }
+function xbHook(){
+  if(XB.hooked) return; XB.hooked = true; const el = document.getElementById('kakaoMap'); if(!el) return;
+  el.addEventListener('mousedown', e => { if(XB.mode) XB.down = { x: e.clientX, y: e.clientY }; }, true);
+  el.addEventListener('click', e => { if(!XB.mode || !XB.down) return; if(Math.hypot(e.clientX - XB.down.x, e.clientY - XB.down.y) > 5) return; const r = el.getBoundingClientRect(); xbClick(e.clientX - r.left, e.clientY - r.top); e.stopPropagation(); e.preventDefault(); }, true);
+  el.addEventListener('dblclick', e => { if(XB.mode === 'draw'){ xbFinish(); e.stopPropagation(); e.preventDefault(); } }, true);
+  el.addEventListener('contextmenu', e => { if(XB.mode === 'draw' && XB.pts.length){ XB.pts.pop(); xbRender(); e.preventDefault(); e.stopPropagation(); } }, true);
+}
+function xbStart(mode){ if(typeof PP !== 'undefined' && PP.ed) ppEditEnd(); xbHook(); XB.mode = XB.mode === mode ? null : mode; XB.pts = []; xbRender(); }
+function xbCancel(){ XB.mode = null; XB.pts = []; xbRender(); }
+function xbClick(px, py){
+  const map = ensureKakaoMap(), pr = map.getProjection(); const ll = pr.coordsFromContainerPoint(new kakao.maps.Point(px, py));
+  if(XB.mode === 'place'){ // 면적으로 놓기: 클릭한 곳을 가운데로 정사각형(변 = √면적, 남북 방향)
+    const a = Math.max(1, XB.area), s = Math.sqrt(a) / 2, la = ll.getLat() * Math.PI / 180; const c = solarToXY(ll, la);
+    const path = [[-s, -s], [s, -s], [s, s], [-s, s]].map(([dx, dy]) => solarToLatLng(c.x + dx, c.y + dy, la));
+    XB.list.push({ id: ++XB.seq, path, h: XB.h, name: '추가 건물 ' + XB.seq }); XB.mode = null; xbRender(); s4Rebuild(); return; }
+  if(XB.mode === 'draw'){ if(XB.pts.length >= 3){ const f = pr.containerPointFromCoords(XB.pts[0]); if(Math.hypot(f.x - px, f.y - py) < 12){ xbFinish(); return; } } XB.pts.push(ll); xbRender(); }
+}
+function xbFinish(){ if(XB.pts.length >= 3) XB.list.push({ id: ++XB.seq, path: XB.pts.slice(), h: XB.h, name: '추가 건물 ' + XB.seq }); XB.pts = []; XB.mode = null; xbRender(); s4Rebuild(); }
+function xbSet(id, k, v){ const b = XB.list.find(x => x.id === id); if(!b) return; if(k === 'del') XB.list = XB.list.filter(x => x.id !== id); else if(k === 'name') b.name = String(v).slice(0, 30); else { const n = parseFloat(v); if(n >= 0) b.h = Math.round(n * 100) / 100; } xbRender(); s4Rebuild(); }
+function xbNbEdit(key){ const cur = XB.nbH[key]; const v = prompt('이 주변 건물의 높이(m)를 입력하세요. 비우면 자동 값(층수 × 층당 높이)으로 돌아갑니다.', cur != null ? cur : ''); if(v === null) return; const n = parseFloat(v); if(String(v).trim() === '' || !(n >= 0)) delete XB.nbH[key]; else XB.nbH[key] = Math.round(n * 100) / 100; s4Rebuild(); }
+function xbClear(){ XB.ovs.concat(XB.drawOv, XB.lbls).forEach(o => { try{ o.setMap(null); }catch(e){} }); XB.ovs = []; XB.drawOv = []; XB.lbls = []; }
+// 지도 그림(추가 건물 도형 + 건물 높이 라벨)과 왼쪽 목록
+function xbRender(){
+  xbClear(); const on = typeof SM !== 'undefined' && SM.on; const bx = document.getElementById('xbBox'); const map = on ? ensureKakaoMap() : null;
+  if(on){
+    XB.list.forEach(b => { XB.ovs.push(new kakao.maps.Polygon({ map, path: b.path, strokeWeight: 2.5, strokeColor: '#0B6E99', strokeStyle: 'shortdash', fillColor: '#0B6E99', fillOpacity: 0.28, zIndex: 5 })); });
+    if(XB.pts.length) XB.drawOv.push(new kakao.maps.Polyline({ map, path: XB.pts.length >= 3 ? XB.pts.concat([XB.pts[0]]) : XB.pts, strokeWeight: 4, strokeColor: '#E8702A', strokeStyle: 'shortdash', zIndex: 42 }));
+    const show = (document.getElementById('xbLabels') || {}).checked !== false; const D = S4.D;
+    if(show && D){ const lbl = (pos, html, bg, js) => XB.lbls.push(new kakao.maps.CustomOverlay({ map, position: pos, yAnchor: 0.5, zIndex: 35, content: `<div ${js ? `onclick="${js}" onmousedown="kakao.maps.event.preventMap();" title="클릭하면 높이를 고칩니다" style="cursor:pointer;` : 'style="pointer-events:none;'}font-size:11px;line-height:1.25;padding:1px 5px;border-radius:4px;white-space:nowrap;text-align:center;background:${bg};color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);">${html}</div>` }));
+      const ctr = P => { const x = P.reduce((a, p) => a + p.x, 0) / P.length, y = P.reduce((a, p) => a + p.y, 0) / P.length; return { x, y, ll: D.toLL(x, y) }; };
+      D.B.forEach(b => { if(b.ed.type === 'ground') return; const c = ctr(b.P); const tops = D.mods.filter(o => o.ed === b.ed && !o.m.removed).map(o => Math.max(...o.zs)); const mt = tops.length ? Math.max(...tops) : null;
+        const p0 = b.ed.boundary[0]; lbl(p0, `🏢 설치 건물 <b>${b.H.toFixed(1)}m</b> <span style="opacity:.8;">(${b.src})</span>${mt != null ? `<br>모듈 상단 <b>${mt.toFixed(1)}m</b> (지붕 +${(mt - b.H).toFixed(1)}m)` : ''}`, '#1B3A5C'); });
+      const site = D.B.flatMap(b => b.P); const sc = { x: site.reduce((a, p) => a + p.x, 0) / site.length, y: site.reduce((a, p) => a + p.y, 0) / site.length };
+      D.nb.map(n => ({ n, c: ctr(n.P) })).filter(o => o.n.H > 0).sort((a, c) => Math.hypot(a.c.x - sc.x, a.c.y - sc.y) - Math.hypot(c.c.x - sc.x, c.c.y - sc.y)).slice(0, 60).forEach(o => { const n = o.n;
+        lbl(o.c.ll, `${n.extra ? escLand(n.name) + ' ' : ''}<b>${n.H.toFixed(1)}m</b>${n.extra ? '' : ` <span style="opacity:.8;">${escLand(n.short || '')}</span>`}`, n.extra ? '#0B6E99' : (n.manual ? '#7A4E05' : '#5A6470'), n.extra ? '' : `xbNbEdit('${n.key}')`); });
+    }
+  }
+  if(!bx) return; const b = (onb, js, t, tip) => `<button type="button" class="pp-btn${onb ? ' on' : ''}" onclick="${js}" title="${tip || ''}">${t}</button>`;
+  const hint = XB.mode === 'draw' ? '지도에서 건물 모서리를 차례로 클릭 → 첫 점을 다시 클릭(또는 더블클릭)하면 끝 · 오른쪽 클릭 = 마지막 점 취소 · Esc = 취소' : XB.mode === 'place' ? `지도에서 건물이 들어설 자리를 클릭하면 ${Math.round(XB.area).toLocaleString('ko-KR')}㎡(한 변 ${Math.sqrt(Math.max(1, XB.area)).toFixed(1)}m) 정사각형으로 놓습니다 · Esc = 취소` : '';
+  bx.innerHTML = `<div class="s4-row"><b>➕ 직접 넣는 건물</b> <span class="sum-muted" style="font-size:11.5px;">미건축·자료에 없는 건물</span></div>
+    <div class="s4-row" style="font-size:12px;">높이 <input type="number" step="0.5" min="0" value="${XB.h}" style="width:52px;" onchange="XB.h = Math.max(0, parseFloat(this.value) || 0)" aria-label="추가 건물 높이(m)">m · 면적 <input type="number" step="10" min="1" value="${XB.area}" style="width:62px;" onchange="XB.area = Math.max(1, parseFloat(this.value) || 1); xbRender()" aria-label="추가 건물 면적(㎡)">㎡</div>
+    <div class="s4-row">${b(XB.mode === 'place', "xbStart('place')", '📍 면적으로 놓기', '입력한 면적의 정사각형 건물을 지도에서 클릭한 자리에 놓음')}${b(XB.mode === 'draw', "xbStart('draw')", '✏ 모양 그리기', '지도에서 건물 모양을 직접 그림(면적 자동 계산)')}${XB.mode ? b(false, 'xbCancel()', '취소') : ''}</div>
+    ${hint ? `<div style="font-size:11.5px;color:#444;margin:2px 0;">${hint}</div>` : ''}
+    ${XB.list.map(x => `<div style="font-size:12px;border-top:1px dashed var(--card-line);padding:3px 0;"><input value="${escLand(x.name)}" style="width:92px;font-size:12px;" onchange="xbSet(${x.id}, 'name', this.value)" aria-label="건물 이름"> ${Math.round(shoelaceArea(x.path)).toLocaleString('ko-KR')}㎡ · 높이 <input type="number" step="0.5" min="0" value="${x.h}" style="width:50px;" onchange="xbSet(${x.id}, 'h', this.value)">m <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'del')" title="삭제">🗑</button></div>`).join('')}
+    <div class="s4-row" style="font-size:12px;"><label><input type="checkbox" id="xbLabels" ${(document.getElementById('xbLabels') || { checked: true }).checked ? 'checked' : ''} onchange="xbRender()"> 지도에 건물 높이 표시</label> <span class="sum-muted">주변 건물 높이 라벨을 클릭하면 고칠 수 있음</span></div>`;
+}
 // ===== 🧱 파라펫·구조물 편집(지도) =====
 // 지도에서 건물 테두리 변을 클릭하면 그 변에 파라펫을 켜고/끔. 선 그리기 = 테두리와 다른 위치의 벽(일부 구간 파라펫 등), 면 그리기 = 계단실·기계실 같은 지붕 위 상자. 높이는 지붕면 기준.
 const PP = { ed: null, h: 1.0, mode: 'edge', pts: [], ovs: [], drawOv: [], down: null, hooked: false };
 function ppEditStart(gid){
-  const ed = layoutByGroup(gid); if(!ed) return; if(PP.ed) ppEditEnd(); ppEnsure(ed); PP.ed = ed; PP.mode = 'edge'; PP.pts = [];
+  const ed = layoutByGroup(gid); if(!ed) return; if(XB.mode) xbCancel(); if(PP.ed) ppEditEnd(); ppEnsure(ed); PP.ed = ed; PP.mode = 'edge'; PP.pts = [];
   histCheckpoint('파라펫 편집'); ppHook(); ppRender(); s4HeightsRender();
   const map = ensureKakaoMap(); try{ const b = new kakao.maps.LatLngBounds(); ed.boundary.forEach(q => b.extend(q)); map.setBounds(b, 40, 40, 40, 40); }catch(e){}
 }
@@ -7489,7 +7542,7 @@ function s4Build3D(force){
   const prism = (P, z0, h, color, op) => { if(!(h > 0)) return; const g = new T.ExtrudeGeometry(shapeOf(P), { depth: h, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, z0, 0); const m = new T.Mesh(g, new T.MeshStandardMaterial({ color, roughness: 0.85, transparent: op < 1, opacity: op })); m.castShadow = true; m.receiveShadow = true; sc.add(m); sc.add(new T.LineSegments(new T.EdgesGeometry(g, 30), new T.LineBasicMaterial({ color: sk ? 0x1a1a1a : 0x333333, transparent: true, opacity: sk ? 0.9 : 0.5 }))); };
   const wall = (A, Bq, z0, h, color) => { const L = Math.hypot(Bq.x - A.x, Bq.y - A.y); if(L < 0.05 || !(h > 0)) return; const w = new T.Mesh(new T.BoxGeometry(L, h, 0.2), new T.MeshStandardMaterial({ color, roughness: 0.9 })); w.position.set((A.x + Bq.x) / 2, z0 + h / 2, -(A.y + Bq.y) / 2); w.rotation.y = Math.atan2(Bq.y - A.y, Bq.x - A.x); w.castShadow = true; w.receiveShadow = true; sc.add(w); };
   D.B.forEach(b => { prism(b.P, 0, b.H, sk ? 0xf7f5ef : 0xd9d4c7, 1); b.segs.forEach(s => wall(s.A, s.B, b.H, s.h, 0x8f8a82)); b.areas.forEach(a => prism(a.P, b.H, a.h, 0xa58fb8, 1)); });
-  D.nb.forEach(n => prism(n.P, 0, n.H, sk ? 0xe9edf1 : 0xb9c2cc, sk ? 1 : 0.95));
+  D.nb.forEach(n => prism(n.P, 0, n.H, n.extra ? 0x8fc3d9 : (sk ? 0xe9edf1 : 0xb9c2cc), sk ? 1 : 0.95));
   const pos = [], col = [], line = []; S4.mods = [];
   D.mods.forEach((o, k) => { if(o.P.length < 4) return; const v = o.P.slice(0, 4).map((p, i) => [p.x, o.zs[i] + 0.02, -p.y]); const at = pos.length / 3; [0, 1, 2, 0, 2, 3].forEach(i => pos.push(...v[i])); for(let i = 0; i < 6; i++) col.push(0.12, 0.23, 0.45); for(let i = 0; i < 4; i++) line.push(...v[i], ...v[(i + 1) % 4]); S4.mods.push({ k, at }); });
   const mg = new T.BufferGeometry(); mg.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); mg.setAttribute('color', new T.Float32BufferAttribute(col, 3)); mg.computeVertexNormals();
@@ -11307,6 +11360,7 @@ document.addEventListener('keydown', e => {
   if(e.key !== 'Escape' || e.defaultPrevented) return;
   if(/input|textarea|select/i.test((e.target || {}).tagName || '') || (e.target && e.target.isContentEditable)) return;
   const st = document.getElementById('roadviewStatus'); const say = t => { if(st){ st.style.color = 'var(--ink-soft)'; st.textContent = t; } };
+  if(typeof XB !== 'undefined' && XB.mode){ xbCancel(); say('건물 넣기를 취소했습니다.'); return; }
   if(typeof PP !== 'undefined' && PP.ed){ if(PP.mode !== 'edge'){ PP.pts = []; PP.mode = 'edge'; ppRender(); say('그리던 선·면을 취소했습니다.'); return; } ppEditEnd(); say('🧱 파라펫 편집을 마쳤습니다.'); return; }
   const s4m = document.getElementById('s4Modal'); if(s4m && s4m.style.display === 'block'){ s4Close3D(); return; }
   const tp = document.getElementById('tShadePanel'); if(tp && tp.style.display !== 'none' && T_SHADE.gid != null){ tShadeClose(); say('🕒 시간대 음영을 닫았습니다.'); return; }
