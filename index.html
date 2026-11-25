@@ -1419,7 +1419,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-25d';
+const APP_VERSION = '2026-11-25e';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -12975,7 +12975,7 @@ function fallbackCopy(t, done){ const ta = document.createElement('textarea'); t
 function kepcoPhoneLine(admin){
   const localData = getJoryeEntry(admin);
   if(!localData || !localData.kepco) return '';
-  return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--sun-tint);border-left:3px solid var(--sun);border-radius:0 4px 4px 0;font-size:12.5px;">☎ <b>한전 문의</b> — ${copyableText(localData.kepco)}</p>`;
+  return `<p style="margin:0 0 8px;padding:6px 10px;background:var(--sun-tint);border-left:3px solid var(--sun);border-radius:0 4px 4px 0;font-size:12.5px;">☎ <b>한전 문의</b> — ${copyableText(withAreaCode(localData.kepco, admin))}</p>`;
 }
 // ===== 주소 검색 시 해당 지자체 담당부서 연락처 자동 표시 =====
 let lastAdmin = null; // 마지막으로 확인된 행정구역(한전ON 형식) — 요약 카드·연락처 패널에서 사용
@@ -12997,8 +12997,8 @@ async function showRegionContacts(){
   try{ await loadBjdong(); await loadJorye(); await loadContacts(); }catch(e){}
   const admin = resolveAdminFromAddress(addr);
   lastAdmin = admin;
-  // 지자체 담당부서는 한전ON 결과(배전선로 여유용량) 안에만 표시 — 주소 카드에는 표시하지 않음(중복 방지)
-  panel.innerHTML = '';
+  // (2026-11-25 사용자 요청) 주소를 넣으면 '지도·연락처' 칸에 한전 문의 번호와 지자체 담당부서 연락처를 바로 표시(한전ON 결과 안에도 그대로 나옴)
+  panel.innerHTML = admin ? (kepcoPhoneLine(admin) || `<p class="hint" style="margin:0 0 8px;">☎ 한전 문의 — 이 지역 한전 번호가 자료에 없습니다. 한전 고객센터 123</p>`) + deptContactsHtml(admin) : '<p class="hint">주소에서 시·군·구를 찾지 못해 연락처를 표시하지 못했습니다.</p>';
   if(document.querySelector('#resultsWrap .sum-card')) { try{ runAnalysis(); }catch(e){} }
 }
 // ===== 지자체 담당부서 연락처 (contacts.json: 대표번호·발전사업허가·개발행위허가·건축허가) =====
@@ -13030,8 +13030,13 @@ function getSidoContacts(admin){
   return e && ['대표번호','발전사업허가','개발행위허가'].some(f => e[f]) ? e : null;
 }
 // 긴 항목(여러 담당자)을 " / " 기준으로 줄바꿈해 보여줌
-function contactLinesHtml(v){
-  return String(v).split(' / ').map(x => `<div style="padding:1px 0;">${escLand(x)}</div>`).join('');
+// 지역번호: 시·도 기본값 + 다른 지역번호를 쓰는 시(경기 광명·과천 02, 부천 032 / 충남 계룡 042). 대구 군위군은 054
+const AREA_CODE = { '서울특별시': '02', '경기도': '031', '인천광역시': '032', '강원특별자치도': '033', '충청남도': '041', '대전광역시': '042', '충청북도': '043', '세종특별자치시': '044', '부산광역시': '051', '울산광역시': '052', '대구광역시': '053', '경상북도': '054', '경상남도': '055', '전라남도': '061', '광주광역시': '062', '전북특별자치도': '063', '제주특별자치도': '064' };
+function areaCodeFor(admin){ if(!admin) return ''; const si = admin.siText || '', gu = admin.guText || ''; if(admin.do === '경기도' && /^(광명시|과천시)$/.test(si)) return '02'; if(admin.do === '경기도' && si === '부천시') return '032'; if(admin.do === '충청남도' && si === '계룡시') return '042'; if(admin.do === '대구광역시' && gu === '군위군') return '054'; return AREA_CODE[admin.do] || ''; }
+// 지역번호 없이 적힌 번호(예: 606-6572)에 그 지역 지역번호를 붙임. 이미 지역번호가 있거나(0xx-, 0xx)) 대표번호(15xx·16xx·18xx)·연도(2021-2026)는 그대로
+function withAreaCode(txt, admin){ const ac = areaCodeFor(admin); if(!ac) return String(txt); return String(txt).replace(/(^|[^\d\-)])(\d{3,4})-(\d{4})(?![\d-])/g, (m, pre, a, b) => (/^(15|16|18)\d\d$/.test(a) || /^(19|20)\d\d$/.test(a)) ? m : `${pre}${ac}-${a}-${b}`); }
+function contactLinesHtml(v, admin){
+  return withAreaCode(v, admin).split(' / ').map(x => `<div style="padding:1px 0;">${escLand(x)}</div>`).join('');
 }
 function deptContactsHtml(admin){
   const regionName = [admin.do, admin.siText, admin.guText].filter(Boolean).join(' ');
@@ -13052,7 +13057,7 @@ function deptContactsHtml(admin){
   if(d['대표번호']) rows.push(['대표번호', d['대표번호']]);
   else if(sido && sido['대표번호']) rows.push([`대표번호<br><span class="hint">(${escLand(admin.do)})</span>`, sido['대표번호']]);
   if(!rows.length) rows.push(['정부민원안내콜센터', '110 (관할 지자체 담당부서로 연결 요청 가능)']);
-  const list = rows.map(([k,v]) => `<li style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px;"><span style="flex:none;width:104px;color:var(--ink-soft);line-height:1.35;">${k}</span><span style="min-width:0;">${contactLinesHtml(v)}</span></li>`).join('');
+  const list = rows.map(([k,v]) => `<li style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--surface-2);font-size:12.5px;"><span style="flex:none;width:104px;color:var(--ink-soft);line-height:1.35;">${k}</span><span style="min-width:0;">${contactLinesHtml(v, admin)}</span></li>`).join('');
   const meta = e ? `${e.data['확인일'] ? escLand(e.data['확인일']) + ' 확인' : ''}${e.data['출처'] ? ` · <a href="${escLand(e.data['출처'])}" target="_blank" rel="noopener">출처</a>` : ''}` : '';
   return `
     <div class="keyline" style="margin-top:10px;background:var(--sky-tint);border-left-color:var(--sky);">
@@ -13379,7 +13384,7 @@ async function checkKepcoCapacityInner(){
     admin = splitAdminName(hit.name);
     lastAdmin = admin;
     // 지자체 담당부서는 한전ON 결과 안에 함께 표시하므로 주소 카드 쪽 표시는 비움(중복 방지)
-    { const cp = document.getElementById('contactPanel'); if(cp) cp.innerHTML = ''; }
+    // 지도·연락처 칸의 연락처는 그대로 둠(2026-11-25)
     const jibun = (parsed.bubn && parsed.bubn !== '0') ? `${parsed.bobn}-${parsed.bubn}` : parsed.bobn;
     const target = { isMountain: !!parsed.isMountain, bobn: parseInt(parsed.bobn, 10), bubn: parsed.bubn ? parseInt(parsed.bubn, 10) : 0 };
 
