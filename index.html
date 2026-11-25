@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>태양광사업 분석기 v2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/static/pretendard.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   /* ===== 태양광 에너지 테마: 새벽 하늘 → 낮 하늘, 포인트는 해 ===== */
@@ -568,39 +567,6 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
   body.taste small.pp-tool-stat, body.taste .ppt-side small, body.taste .card small{font-size:11px;}
   body.taste .field select, body.taste .field input{border-color:#C9D4DE;}
   body.taste table td, body.taste table th{font-variant-numeric:tabular-nums;}
-  /* ===== 2026-11-26 밝고 깔끔한 화이트 테마(사용자 선택) — 기능·배치는 그대로, 색·글꼴·카드 모양만 =====
-     흰 바탕 · 얇은 선 · 포인트 색 하나(태양 주황) · 그림자 거의 없음 · 글 대비 4.5:1 이상 유지 */
-  body.taste{--paper:#F6F7F9; --surface:#FFFFFF; --surface-2:#F4F6F8; --line:#E3E7EC; --card-line:#E3E7EC; --ink:#17202B; --ink-soft:#4A5766; --ink-faint:#5F6B7A;
-    --sun:#F59E0B; --sun-deep:#B45309; --sun-tint:#FEF3C7; --dusk:#17202B; --r-lg:14px; --r-md:10px; --r-sm:7px; --shadow:0 1px 2px rgba(16,24,40,.05);
-    background:var(--paper) !important; font-family:'Pretendard','Noto Sans KR','IBM Plex Sans KR',system-ui,sans-serif;}
-  body.taste header.top{background:#FFFFFF;color:var(--ink);border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(16,24,40,.03);}
-  body.taste header.top h1{font-family:inherit;font-weight:800;color:var(--ink);letter-spacing:-.03em;}
-  body.taste header.top .eyebrow{color:var(--ink-soft);}
-  body.taste header.top .meta{color:var(--ink-soft);} body.taste header.top .meta b{color:var(--sun-deep);font-weight:700;}
-  body.taste header.top .hdr-market{background:#FFFFFF;border:1px solid var(--line);color:var(--ink);}
-  body.taste header.top .hdr-market:hover{border-color:var(--sun);}
-  body.taste .hm-caption{background:#FFFFFF;color:var(--sun-deep);font-weight:700;}
-  body.taste .hm-dot{background:var(--sun);}
-  body.taste .hm-item{border-left-color:var(--line);}
-  body.taste .hm-label, body.taste .hm-sub{color:var(--ink-soft);} body.taste .hm-sub b{color:var(--ink);}
-  body.taste .hm-value{color:var(--ink);font-weight:600;} body.taste .hm-value em, body.taste .hm-value small{color:var(--ink-soft);}
-  body.taste .hdr-market.failed .hm-value span{color:var(--ink-soft);}
-  body.taste .hdr-btn{background:#FFFFFF;color:var(--ink);border:1px solid var(--line);border-radius:9px;font-weight:600;}
-  body.taste .hdr-btn:hover{border-color:var(--ink);filter:none;}
-  body.taste .rail-tabs{background:#FFFFFF;border:1px solid var(--line);border-radius:12px;padding:4px;}
-  body.taste .rail-tab-btn{color:var(--ink-soft);border-radius:9px;font-weight:600;}
-  body.taste .rail-tab-btn:hover{color:var(--ink);background:var(--surface-2);}
-  body.taste .rail-tab-btn.active{background:var(--ink);color:#FFFFFF;}
-  body.taste .card, body.taste .toolbar-card{border:1px solid var(--line);border-radius:var(--r-lg);background:#FFFFFF;}
-  body.taste .card h2, body.taste .toolbar-card h2{font-family:inherit;font-weight:700;}
-  body.taste button.run{border-radius:10px;font-weight:700;}
-  body.taste button.run.sun{background:var(--ink);color:#FFFFFF;}
-  body.taste .preset-btn{border-radius:9px;border-color:var(--line);background:#FFFFFF;}
-  body.taste .preset-btn:hover{border-color:var(--ink);}
-  body.taste input[type="text"], body.taste input[type="number"], body.taste input[type="date"], body.taste select, body.taste textarea{border-radius:8px;}
-  body.taste input:focus-visible, body.taste select:focus-visible, body.taste textarea:focus-visible, body.taste button:focus-visible{outline:2px solid var(--sun);outline-offset:1px;}
-  body.taste .wb-sec{border-radius:12px;border-color:var(--line);}
-  body.taste .s4-box{background:#FAFBFC;}
 </style>
   <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=de36da69d21e4e4b2fa5a454db03c557&libraries=services"></script>
 </head>
@@ -1454,7 +1420,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-26b';
+const APP_VERSION = '2026-11-26c';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2294,6 +2260,7 @@ function switchRailTab(paneId){
   document.querySelectorAll('#railTabs .rail-tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-pane') === paneId));
   document.querySelectorAll('.rail > .rail-pane').forEach(p => p.classList.toggle('active', p.id === paneId));
   document.body.setAttribute('data-rail', paneId);
+  if(paneId !== 'railPaneLayout' && typeof mapZoomK !== 'undefined' && mapZoomK > 1){ try{ setMapZoom(1); mapZoomNote(); }catch(e){} } // 휠 추가 확대는 배치도 탭에서만
   if(document.body.classList.contains('ui2')) ui2Relayout();
   if(paneId === 'railPaneLayout' && typeof autoLayoutPending !== 'undefined' && autoLayoutPending){ autoLayoutPending = false; setTimeout(() => { try{ autoLayoutAfterSearch(); }catch(e){} }, 50); }
   const rail = document.querySelector('.rail'); if(rail) rail.scrollTop = 0;
@@ -2747,6 +2714,18 @@ let mapZoomK = 1, mapPtrActive = false;
   const end = () => { setTimeout(() => { mapPtrActive = false; }, 0); };
   window.addEventListener('pointerup', end, true); window.addEventListener('mouseup', end, true); window.addEventListener('pointercancel', end, true);
 })();
+// (2026-11-26) 배치도 탭: 지도가 가장 가까운 단계(레벨 1)일 때 휠을 더 올리면 화면을 ×1.5 → ×2 → ×3 → ×4로 더 키움. 휠을 내리면 먼저 이 확대부터 풀림
+(function(){ const STEPS = [1, 1.5, 2, 3, 4]; let last = 0;
+  window.addEventListener('wheel', e => {
+    const el = document.getElementById('kakaoMap'); if(!el || !e.target || !el.contains(e.target)) return;
+    if(document.body.getAttribute('data-rail') !== 'railPaneLayout' || typeof kakaoMapObj === 'undefined' || !kakaoMapObj) return;
+    const inn = e.deltaY < 0, i = Math.max(0, STEPS.indexOf(mapZoomK));
+    if(inn && kakaoMapObj.getLevel() <= 1 && i < STEPS.length - 1){ e.preventDefault(); e.stopPropagation(); if(Date.now() - last > 160){ last = Date.now(); setMapZoom(STEPS[i + 1]); mapZoomNote(); } }
+    else if(inn && kakaoMapObj.getLevel() <= 1){ e.preventDefault(); e.stopPropagation(); }
+    else if(!inn && mapZoomK > 1){ e.preventDefault(); e.stopPropagation(); if(Date.now() - last > 160){ last = Date.now(); setMapZoom(STEPS[Math.max(0, i - 1)]); mapZoomNote(); } }
+  }, { capture: true, passive: false });
+})();
+function mapZoomNote(){ let n = document.getElementById('mapZoomNote'); const wrap = document.getElementById('kakaoMap'); if(!wrap || !wrap.parentNode) return; if(!n){ n = document.createElement('div'); n.id = 'mapZoomNote'; n.style.cssText = 'position:absolute;left:12px;top:12px;z-index:30;background:rgba(18,49,75,.85);color:#fff;font-size:12px;padding:3px 9px;border-radius:999px;pointer-events:none;'; const par = wrap.parentNode; if(getComputedStyle(par).position === 'static') par.style.position = 'relative'; par.appendChild(n); } n.textContent = mapZoomK > 1 ? `화면 확대 ×${mapZoomK} (휠을 내리면 줄어듭니다)` : ''; n.style.display = mapZoomK > 1 ? 'block' : 'none'; try{ if(typeof SM !== 'undefined' && SM.on) setTimeout(smDraw, 60); }catch(e){} }
 function setMapZoom(k){
   const el = document.getElementById('kakaoMap'); if(!el) return;
   const map = ensureKakaoMap(); const c = map.getCenter();
@@ -7256,6 +7235,8 @@ function s4MD(){ const [m, d] = S4.date.split('-').map(Number); return { m, d };
 function s4Hm(min){ return `${Math.floor(min / 60)}:${String(Math.round(min % 60)).padStart(2, '0')}`; }
 // 건축물대장 높이(m) — bldHeightFor는 {height,…}를 돌려줌(2026-11-25: 이것을 숫자로 써서 3D가 빈 화면이 됐던 문제)
 function s4RegH(ed){ try{ const r = bldHeightFor(ed); const h = r && parseFloat(r.height); return h > 0 ? h : null; }catch(e){ return null; } }
+// 토지 배치인지(건물 상자를 세우지 않음): 직접 고른 값(ed.s4Base) → 토지 유형 배치 → 이 주소에 건물(필지 안 건물 도형·건축물대장)이 없으면 토지
+function s4IsLand(ed){ if(ed.s4Base === 'land') return true; if(ed.s4Base === 'bld') return false; if(ed.type === 'ground') return true; try{ if(typeof isBuildingSite === 'function' && !isBuildingSite()) return true; }catch(e){} return false; }
 // ---- 장면 자료: 같은 원점·같은 위도 기준 미터 좌표(x 동, y 북) ----
 function s4Data(){
   const eds = layoutRegistry.filter(ed => ed.boundary && ed.boundary.length >= 3 && ed.modules && ed.modules.length);
@@ -7265,14 +7246,14 @@ function s4Data(){
   const XY = q => { const p = solarToXY(q, la); return { x: p.x - o.x, y: p.y - o.y }; };
   const defH = Math.max(0, parseFloat((document.getElementById('s4DefH') || {}).value) || 0);
   const B = eds.map(ed => { ppEnsure(ed);
-    const reg = ed.type === 'ground' ? 0 : s4RegH(ed);
-    const H = ed.type === 'ground' ? 0 : (typeof ed.s4H === 'number' ? ed.s4H : (reg != null ? reg : defH));
-    const src = ed.type === 'ground' ? '토지' : (typeof ed.s4H === 'number' ? '직접 입력' : (reg != null ? '건축물대장' : '가정'));
+    const land = s4IsLand(ed); const reg = land ? 0 : s4RegH(ed);
+    const H = land ? 0 : (typeof ed.s4H === 'number' ? ed.s4H : (reg != null ? reg : defH));
+    const src = land ? '토지' : (typeof ed.s4H === 'number' ? '직접 입력' : (reg != null ? '건축물대장' : '가정'));
     const P = ed.boundary.map(XY); const segs = [];
-    Object.entries(ed.ppEdges).forEach(([i, h]) => { i = +i; if(!(h > 0) || i >= P.length) return; segs.push({ A: P[i], B: P[(i + 1) % P.length], h }); });
+    if(!land) Object.entries(ed.ppEdges).forEach(([i, h]) => { i = +i; if(!(h > 0) || i >= P.length) return; segs.push({ A: P[i], B: P[(i + 1) % P.length], h }); });
     const areas = [];
-    ed.obst.forEach(ob => { const Q = ob.path.map(XY); if(!(ob.h > 0)) return; if(ob.kind === 'line'){ for(let i = 0; i + 1 < Q.length; i++) segs.push({ A: Q[i], B: Q[i + 1], h: ob.h }); } else if(Q.length >= 3) areas.push({ P: Q, h: ob.h }); });
-    return { ed, P, H, src, segs, areas };
+    if(!land) ed.obst.forEach(ob => { const Q = ob.path.map(XY); if(!(ob.h > 0)) return; if(ob.kind === 'line'){ for(let i = 0; i + 1 < Q.length; i++) segs.push({ A: Q[i], B: Q[i + 1], h: ob.h }); } else if(Q.length >= 3) areas.push({ P: Q, h: ob.h }); });
+    return { ed, P, H, src, segs, areas, land };
   });
   const nb = []; const fh = parseFloat((document.getElementById('s4FloorH') || {}).value) || 3.3, nd = parseFloat((document.getElementById('s4NbDef') || {}).value) || 0;
   const inside = P => { const c = { x: P.reduce((a, p) => a + p.x, 0) / P.length, y: P.reduce((a, p) => a + p.y, 0) / P.length }; return B.some(b => pointInPolygonXY(c, b.P)); };
@@ -7284,7 +7265,7 @@ function s4Data(){
       nb.push({ P, key, manual: man != null, H: man != null ? man : (fl > 0 ? fl * fh : nd), src: man != null ? '직접 입력' : (fl > 0 ? `${fl}층 × ${fh}m` : '층수 없음(가정)'), short: man != null ? '직접' : (fl > 0 ? `${fl}층` : '가정') }); });
   }
   // 직접 넣은 건물(미건축·자료에 없는 건물)은 '주변 건물' 체크와 상관없이 항상 계산
-  XB.list.forEach(x => { if(x.path.length >= 3 && x.h > 0) nb.push({ P: x.path.map(XY), H: x.h, src: '직접 넣은 건물', extra: true, name: x.name }); });
+  XB.list.forEach(x => { if(x.h > 0 && x.w > 0 && x.d > 0) nb.push({ P: xbPath(x).map(XY), H: x.h, src: '직접 놓은 건물', extra: true, name: x.name }); });
   const mods = [];
   B.forEach((b, bi) => { const ed = b.ed; const R = Math.PI / 180; const tilt = typeof ed.tilt === 'number' ? ed.tilt : 0, tanT = Math.tan(tilt * R); const base = typeof ed.tsBaseH === 'number' ? ed.tsBaseH : 0.5;
     let dir = null; const az = ed.azRad || 0;
@@ -7380,14 +7361,14 @@ function s4Invalidate(){ S4.day = null; s4StatsRender(); s4Repaint(); }
 function s4Enter(){
   s4DatesRender(); const D = s4Data();
   if(!D){ S4.D = null; s4HeightsRender(); const sl = document.getElementById('s4SunLbl'); if(sl) sl.innerHTML = '<span style="color:#b3402a;">배치도 탭에서 배치를 먼저 만드세요.</span>'; return; }
-  const sig = layoutRegistry.map(ed => ed.groupId + ':' + ed.modules.filter(m => !m.removed).length + ':' + ed.tilt + ':' + ed.s4H + ':' + ed.tsBaseH + ':' + JSON.stringify(ed.ppEdges || {}) + ':' + (ed.obst || []).map(o => o.h + o.path.length).join(',')).join('|') + '|' + D.nb.length + '|' + D.nb.map(n => n.H).join(',') + '|' + XB.list.map(x => x.id + ':' + x.h + ':' + x.path.length).join(',') + '|' + ((document.getElementById('s4Res') || {}).value);
+  const sig = layoutRegistry.map(ed => ed.groupId + ':' + ed.modules.filter(m => !m.removed).length + ':' + ed.tilt + ':' + ed.s4H + ':' + s4IsLand(ed) + ':' + ed.tsBaseH + ':' + JSON.stringify(ed.ppEdges || {}) + ':' + (ed.obst || []).map(o => o.h + o.path.length).join(',')).join('|') + '|' + D.nb.length + '|' + D.nb.map(n => n.H).join(',') + '|' + XB.list.map(x => [x.id, x.h, x.w, x.d, x.rot, x.c.getLat().toFixed(6), x.c.getLng().toFixed(6)].join(':')).join(',') + '|' + ((document.getElementById('s4Res') || {}).value);
   if(sig !== S4.sig){ S4.sig = sig; S4.D = D; S4.model = s4Model(D, +((document.getElementById('s4Res') || {}).value || 9)); S4.day = null; S4.built3d = false; }
   s4HeightsRender(); smOn(true); s4SetTime(S4.min); s4StatsRender(); xbRender();
   const nl = document.getElementById('s4NbLbl'); if(nl) nl.textContent = S4.D.nb.length ? `${S4.D.nb.length}동` : '없음(컨설팅 주소 검색 때 200m 건물을 읽음)';
 }
 function s4OpenSection(){ switchRailTab('railPaneLayout'); const ws = document.getElementById('wbShade'); if(ws){ if(ws.open) s4Enter(); else ws.open = true; try{ ws.scrollIntoView({ block: 'nearest' }); }catch(e){} } }
 window.addEventListener('DOMContentLoaded', () => { const ws = document.getElementById('wbShade'); if(ws) ws.addEventListener('toggle', () => { try{ if(ws.open && document.body.getAttribute('data-rail') === 'railPaneLayout') s4Enter(); else s4Leave(); }catch(e){ console.warn('s4 toggle', e); } }); });
-function s4Leave(){ if(S4.play) s4Play(); smOn(false); ppEditEnd(); XB.mode = null; XB.pts = []; xbRender(); if(S4.D) S4.D.mods.forEach(o => { try{ setModuleRemoved(o.m, !!o.m.removed); }catch(e){} }); }
+function s4Leave(){ if(S4.play) s4Play(); smOn(false); ppEditEnd(); XB.mode = null; XB.moveId = null; xbRender(); if(S4.D) S4.D.mods.forEach(o => { try{ setModuleRemoved(o.m, !!o.m.removed); }catch(e){} }); }
 function s4SetTime(min){
   S4.min = min; ['s4Time', 's4Time3'].forEach(id => { const el = document.getElementById(id); if(el && +el.value !== min) el.value = min; }); const lb = document.getElementById('s4TimeLbl'); if(lb) lb.textContent = s4Hm(min);
   if(!S4.D) return; const sp = s4Sun(min); const up = sp.alt > 0.5;
@@ -7416,9 +7397,11 @@ function s4HeightsRender(){
   const el = document.getElementById('s4Heights'); if(!el) return; const eds = layoutRegistry.filter(ed => ed.boundary && ed.modules && ed.modules.length);
   if(!eds.length){ el.innerHTML = '<span class="sum-muted">배치 없음</span>'; return; }
   const defH = parseFloat((document.getElementById('s4DefH') || {}).value) || 0;
-  el.innerHTML = eds.map(ed => { ppEnsure(ed); const reg = ed.type === 'ground' ? null : s4RegH(ed); const H = ed.type === 'ground' ? 0 : (typeof ed.s4H === 'number' ? ed.s4H : (reg != null ? reg : defH)); const tilt = typeof ed.tilt === 'number' ? ed.tilt : 0; const editing = PP.ed === ed;
-    return `<div class="pp-ed"><b>${escLand(ed.bldName || layoutTypeLabel(ed))}</b> <span class="sum-muted">경사 ${tilt}°</span><br>${ed.type === 'ground' ? '토지(건물 없음)' : `높이 <input type="number" step="0.5" min="0" value="${H}" style="width:54px;" onchange="s4EdSet(${ed.groupId}, 's4H', this.value)">m <span class="sum-muted">(${typeof ed.s4H === 'number' ? '직접' : reg != null ? '대장' : '가정'})</span> · 모듈 하단 <input type="number" step="0.1" min="0" value="${typeof ed.tsBaseH === 'number' ? ed.tsBaseH : 0.5}" style="width:46px;" onchange="s4EdSet(${ed.groupId}, 'tsBaseH', this.value)">m<br><button type="button" class="pp-btn${editing ? ' on' : ''}" onclick="${editing ? 'ppEditEnd()' : `ppEditStart(${ed.groupId})`}">🧱 ${editing ? '파라펫 편집 끝' : '파라펫·구조물'}</button> <span class="sum-muted">${ppSummary(ed)}</span>`}</div>`; }).join('');
+  el.innerHTML = eds.map(ed => { ppEnsure(ed); const land = s4IsLand(ed); const reg = land ? null : s4RegH(ed); const H = land ? 0 : (typeof ed.s4H === 'number' ? ed.s4H : (reg != null ? reg : defH)); const tilt = typeof ed.tilt === 'number' ? ed.tilt : 0; const editing = PP.ed === ed;
+    const kind = `<select onchange="s4Base(${ed.groupId}, this.value)" style="font-size:12px;" aria-label="토지 또는 건물"><option value="land"${land ? ' selected' : ''}>토지(바닥)</option><option value="bld"${land ? '' : ' selected'}>건물 지붕</option></select>`;
+    return `<div class="pp-ed"><b>${escLand(ed.bldName || layoutTypeLabel(ed))}</b> ${kind} <span class="sum-muted">경사 ${tilt}°</span><br>${land ? `모듈 하단 <input type="number" step="0.1" min="0" value="${typeof ed.tsBaseH === 'number' ? ed.tsBaseH : 0.5}" style="width:46px;" onchange="s4EdSet(${ed.groupId}, 'tsBaseH', this.value)">m <span class="sum-muted">(땅에서)</span>` : `높이 <input type="number" step="0.5" min="0" value="${H}" style="width:54px;" onchange="s4EdSet(${ed.groupId}, 's4H', this.value)">m <span class="sum-muted">(${typeof ed.s4H === 'number' ? '직접' : reg != null ? '대장' : '가정'})</span> · 모듈 하단 <input type="number" step="0.1" min="0" value="${typeof ed.tsBaseH === 'number' ? ed.tsBaseH : 0.5}" style="width:46px;" onchange="s4EdSet(${ed.groupId}, 'tsBaseH', this.value)">m<br><button type="button" class="pp-btn${editing ? ' on' : ''}" onclick="${editing ? 'ppEditEnd()' : `ppEditStart(${ed.groupId})`}">🧱 ${editing ? '파라펫 편집 끝' : '파라펫·구조물'}</button> <span class="sum-muted">${ppSummary(ed)}</span>`}</div>`; }).join('');
 }
+function s4Base(gid, v){ const ed = layoutByGroup(gid); if(!ed) return; ed.s4Base = v === 'land' ? 'land' : 'bld'; if(PP.ed === ed && v === 'land') ppEditEnd(); s4Rebuild(); }
 function s4EdSet(gid, k, v){ const ed = layoutByGroup(gid); if(!ed) return; const n = parseFloat(v); if(!(n >= 0)) return; ed[k] = Math.round(n * 100) / 100; scheduleLayoutCards(); s4Rebuild(); }
 // ---- 하루 분석 ----
 async function s4RunDay(){
@@ -7452,54 +7435,51 @@ function s4Play(){
   const b = document.getElementById('s4PlayBtn'); if(S4.play){ clearInterval(S4.play); S4.play = null; if(b) b.textContent = '▶ 하루 재생'; return; } if(!S4.D) return;
   if(b) b.textContent = '■ 멈춤'; S4.play = setInterval(() => { const sp = +((document.getElementById('s4Speed') || {}).value || 20) / 4; let t = S4.min + sp; if(t > s4Set()) t = s4Rise(); s4SetTime(Math.round(t)); }, 120);
 }
-// ===== ➕ 직접 넣는 건물(사용자 2026-11-26): 아직 안 지어졌거나 건물 자료에 없는 건물을 면적·높이로 넣어 음영 계산 + 지도에 건물 높이 표시 =====
-const XB = { list: [], nbH: {}, mode: null, pts: [], h: 10, area: 200, ovs: [], lbls: [], drawOv: [], down: null, hooked: false, seq: 0 };
+// ===== ➕ 건물 놓기(2026-11-26 단순화): 가로·세로·높이를 정하고 지도를 한 번 클릭하면 그 자리에 놓임. 놓은 뒤 목록에서 크기·높이·방향을 고치거나 다시 옮김 =====
+const XB = { list: [], nbH: {}, mode: null, moveId: null, w: 20, d: 10, h: 10, ovs: [], lbls: [], down: null, hooked: false, seq: 0 };
 function xbKey(path){ const la = path.reduce((a, q) => a + q.getLat(), 0) / path.length, ln = path.reduce((a, q) => a + q.getLng(), 0) / path.length; return la.toFixed(6) + ',' + ln.toFixed(6); }
+function xbPath(b){ const la = b.c.getLat() * Math.PI / 180, c = solarToXY(b.c, la), r = -(b.rot || 0) * Math.PI / 180; return [[-b.w / 2, -b.d / 2], [b.w / 2, -b.d / 2], [b.w / 2, b.d / 2], [-b.w / 2, b.d / 2]].map(([x, y]) => { const q = rotateXY(x, y, r); return solarToLatLng(c.x + q.x, c.y + q.y, la); }); }
 function xbHook(){
   if(XB.hooked) return; XB.hooked = true; const el = document.getElementById('kakaoMap'); if(!el) return;
-  el.addEventListener('mousedown', e => { if(XB.mode) XB.down = { x: e.clientX, y: e.clientY }; }, true);
-  el.addEventListener('click', e => { if(!XB.mode || !XB.down) return; if(Math.hypot(e.clientX - XB.down.x, e.clientY - XB.down.y) > 5) return; const r = el.getBoundingClientRect(); xbClick(e.clientX - r.left, e.clientY - r.top); e.stopPropagation(); e.preventDefault(); }, true);
-  el.addEventListener('dblclick', e => { if(XB.mode === 'draw'){ xbFinish(); e.stopPropagation(); e.preventDefault(); } }, true);
-  el.addEventListener('contextmenu', e => { if(XB.mode === 'draw' && XB.pts.length){ XB.pts.pop(); xbRender(); e.preventDefault(); e.stopPropagation(); } }, true);
+  // 누른 자리와 뗀 자리가 5px 안이면 '클릭'으로 봄(지도를 끌어 옮기는 것과 구분). pointer 이벤트라 마우스·터치 모두 됨
+  el.addEventListener('pointerdown', e => { if(XB.mode) XB.down = { x: e.clientX, y: e.clientY }; }, true);
+  el.addEventListener('pointerup', e => { if(!XB.mode || !XB.down) return; const d = Math.hypot(e.clientX - XB.down.x, e.clientY - XB.down.y); XB.down = null; if(d > 5) return; const r = el.getBoundingClientRect(); XB.eat = Date.now(); xbClick(e.clientX - r.left, e.clientY - r.top); }, true);
+  el.addEventListener('click', e => { if(XB.eat && Date.now() - XB.eat < 400){ e.stopPropagation(); e.preventDefault(); } }, true); // 건물을 놓은 클릭이 필지 선택 등 다른 기능으로 넘어가지 않게
 }
-function xbStart(mode){ if(typeof PP !== 'undefined' && PP.ed) ppEditEnd(); xbHook(); XB.mode = XB.mode === mode ? null : mode; XB.pts = []; xbRender(); }
-function xbCancel(){ XB.mode = null; XB.pts = []; xbRender(); }
+function xbStart(){ if(typeof PP !== 'undefined' && PP.ed) ppEditEnd(); xbHook(); XB.mode = XB.mode === 'place' ? null : 'place'; XB.moveId = null; xbRender(); }
+function xbMove(id){ xbHook(); XB.mode = 'move'; XB.moveId = id; xbRender(); }
+function xbCancel(){ XB.mode = null; XB.moveId = null; xbRender(); }
 function xbClick(px, py){
   const map = ensureKakaoMap(), pr = map.getProjection(); const ll = pr.coordsFromContainerPoint(new kakao.maps.Point(px, py));
-  if(XB.mode === 'place'){ // 면적으로 놓기: 클릭한 곳을 가운데로 정사각형(변 = √면적, 남북 방향)
-    const a = Math.max(1, XB.area), s = Math.sqrt(a) / 2, la = ll.getLat() * Math.PI / 180; const c = solarToXY(ll, la);
-    const path = [[-s, -s], [s, -s], [s, s], [-s, s]].map(([dx, dy]) => solarToLatLng(c.x + dx, c.y + dy, la));
-    XB.list.push({ id: ++XB.seq, path, h: XB.h, name: '추가 건물 ' + XB.seq }); XB.mode = null; xbRender(); s4Rebuild(); return; }
-  if(XB.mode === 'draw'){ if(XB.pts.length >= 3){ const f = pr.containerPointFromCoords(XB.pts[0]); if(Math.hypot(f.x - px, f.y - py) < 12){ xbFinish(); return; } } XB.pts.push(ll); xbRender(); }
+  if(XB.mode === 'move'){ const b = XB.list.find(x => x.id === XB.moveId); if(b) b.c = ll; }
+  else { XB.list.push({ id: ++XB.seq, c: ll, w: XB.w, d: XB.d, h: XB.h, rot: 0, name: '건물 ' + XB.seq }); }
+  XB.mode = null; XB.moveId = null; xbRender(); s4Rebuild();
 }
-function xbFinish(){ if(XB.pts.length >= 3) XB.list.push({ id: ++XB.seq, path: XB.pts.slice(), h: XB.h, name: '추가 건물 ' + XB.seq }); XB.pts = []; XB.mode = null; xbRender(); s4Rebuild(); }
-function xbSet(id, k, v){ const b = XB.list.find(x => x.id === id); if(!b) return; if(k === 'del') XB.list = XB.list.filter(x => x.id !== id); else if(k === 'name') b.name = String(v).slice(0, 30); else { const n = parseFloat(v); if(n >= 0) b.h = Math.round(n * 100) / 100; } xbRender(); s4Rebuild(); }
+function xbSet(id, k, v){ const b = XB.list.find(x => x.id === id); if(!b) return; if(k === 'del') XB.list = XB.list.filter(x => x.id !== id); else if(k === 'name') b.name = String(v).slice(0, 30); else { const n = parseFloat(v); if(!isFinite(n)) return; if(k === 'rot') b.rot = Math.round(n); else if(n >= 0) b[k] = Math.round(n * 100) / 100; } xbRender(); s4Rebuild(); }
 function xbNbEdit(key){ const cur = XB.nbH[key]; const v = prompt('이 주변 건물의 높이(m)를 입력하세요. 비우면 자동 값(층수 × 층당 높이)으로 돌아갑니다.', cur != null ? cur : ''); if(v === null) return; const n = parseFloat(v); if(String(v).trim() === '' || !(n >= 0)) delete XB.nbH[key]; else XB.nbH[key] = Math.round(n * 100) / 100; s4Rebuild(); }
-function xbClear(){ XB.ovs.concat(XB.drawOv, XB.lbls).forEach(o => { try{ o.setMap(null); }catch(e){} }); XB.ovs = []; XB.drawOv = []; XB.lbls = []; }
-// 지도 그림(추가 건물 도형 + 건물 높이 라벨)과 왼쪽 목록
+function xbClear(){ XB.ovs.concat(XB.lbls).forEach(o => { try{ o.setMap(null); }catch(e){} }); XB.ovs = []; XB.lbls = []; }
 function xbRender(){
   xbClear(); const on = typeof SM !== 'undefined' && SM.on; const bx = document.getElementById('xbBox'); const map = on ? ensureKakaoMap() : null;
+  const mapEl = document.getElementById('kakaoMap'); if(mapEl) mapEl.style.cursor = XB.mode ? 'crosshair' : '';
   if(on){
-    XB.list.forEach(b => { XB.ovs.push(new kakao.maps.Polygon({ map, path: b.path, strokeWeight: 2.5, strokeColor: '#0B6E99', strokeStyle: 'shortdash', fillColor: '#0B6E99', fillOpacity: 0.28, zIndex: 5 })); });
-    if(XB.pts.length) XB.drawOv.push(new kakao.maps.Polyline({ map, path: XB.pts.length >= 3 ? XB.pts.concat([XB.pts[0]]) : XB.pts, strokeWeight: 4, strokeColor: '#E8702A', strokeStyle: 'shortdash', zIndex: 42 }));
+    XB.list.forEach(b => { XB.ovs.push(new kakao.maps.Polygon({ map, path: xbPath(b), strokeWeight: 2.5, strokeColor: '#0B6E99', strokeStyle: 'shortdash', fillColor: '#0B6E99', fillOpacity: XB.moveId === b.id ? 0.5 : 0.28, zIndex: 5 })); });
     const show = (document.getElementById('xbLabels') || {}).checked !== false; const D = S4.D;
     if(show && D){ const lbl = (pos, html, bg, js) => XB.lbls.push(new kakao.maps.CustomOverlay({ map, position: pos, yAnchor: 0.5, zIndex: 35, content: `<div ${js ? `onclick="${js}" onmousedown="kakao.maps.event.preventMap();" title="클릭하면 높이를 고칩니다" style="cursor:pointer;` : 'style="pointer-events:none;'}font-size:11px;line-height:1.25;padding:1px 5px;border-radius:4px;white-space:nowrap;text-align:center;background:${bg};color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);">${html}</div>` }));
       const ctr = P => { const x = P.reduce((a, p) => a + p.x, 0) / P.length, y = P.reduce((a, p) => a + p.y, 0) / P.length; return { x, y, ll: D.toLL(x, y) }; };
-      D.B.forEach(b => { if(b.ed.type === 'ground') return; const c = ctr(b.P); const tops = D.mods.filter(o => o.ed === b.ed && !o.m.removed).map(o => Math.max(...o.zs)); const mt = tops.length ? Math.max(...tops) : null;
-        const p0 = b.ed.boundary[0]; lbl(p0, `🏢 설치 건물 <b>${b.H.toFixed(1)}m</b> <span style="opacity:.8;">(${b.src})</span>${mt != null ? `<br>모듈 상단 <b>${mt.toFixed(1)}m</b> (지붕 +${(mt - b.H).toFixed(1)}m)` : ''}`, '#1B3A5C'); });
+      D.B.forEach(b => { const tops = D.mods.filter(o => o.ed === b.ed && !o.m.removed).map(o => Math.max(...o.zs)); const mt = tops.length ? Math.max(...tops) : null; const p0 = b.ed.boundary[0];
+        if(b.land){ if(mt != null) lbl(p0, `🌱 토지 · 모듈 상단 <b>${mt.toFixed(1)}m</b>`, '#3E6B2F'); return; }
+        lbl(p0, `🏢 설치 건물 <b>${b.H.toFixed(1)}m</b> <span style="opacity:.8;">(${b.src})</span>${mt != null ? `<br>모듈 상단 <b>${mt.toFixed(1)}m</b> (지붕 +${(mt - b.H).toFixed(1)}m)` : ''}`, '#1B3A5C'); });
       const site = D.B.flatMap(b => b.P); const sc = { x: site.reduce((a, p) => a + p.x, 0) / site.length, y: site.reduce((a, p) => a + p.y, 0) / site.length };
       D.nb.map(n => ({ n, c: ctr(n.P) })).filter(o => o.n.H > 0).sort((a, c) => Math.hypot(a.c.x - sc.x, a.c.y - sc.y) - Math.hypot(c.c.x - sc.x, c.c.y - sc.y)).slice(0, 60).forEach(o => { const n = o.n;
         lbl(o.c.ll, `${n.extra ? escLand(n.name) + ' ' : ''}<b>${n.H.toFixed(1)}m</b>${n.extra ? '' : ` <span style="opacity:.8;">${escLand(n.short || '')}</span>`}`, n.extra ? '#0B6E99' : (n.manual ? '#7A4E05' : '#5A6470'), n.extra ? '' : `xbNbEdit('${n.key}')`); });
     }
   }
-  if(!bx) return; const b = (onb, js, t, tip) => `<button type="button" class="pp-btn${onb ? ' on' : ''}" onclick="${js}" title="${tip || ''}">${t}</button>`;
-  const hint = XB.mode === 'draw' ? '지도에서 건물 모서리를 차례로 클릭 → 첫 점을 다시 클릭(또는 더블클릭)하면 끝 · 오른쪽 클릭 = 마지막 점 취소 · Esc = 취소' : XB.mode === 'place' ? `지도에서 건물이 들어설 자리를 클릭하면 ${Math.round(XB.area).toLocaleString('ko-KR')}㎡(한 변 ${Math.sqrt(Math.max(1, XB.area)).toFixed(1)}m) 정사각형으로 놓습니다 · Esc = 취소` : '';
-  bx.innerHTML = `<div class="s4-row"><b>➕ 직접 넣는 건물</b> <span class="sum-muted" style="font-size:11.5px;">미건축·자료에 없는 건물</span></div>
-    <div class="s4-row" style="font-size:12px;">높이 <input type="number" step="0.5" min="0" value="${XB.h}" style="width:52px;" onchange="XB.h = Math.max(0, parseFloat(this.value) || 0)" aria-label="추가 건물 높이(m)">m · 면적 <input type="number" step="10" min="1" value="${XB.area}" style="width:62px;" onchange="XB.area = Math.max(1, parseFloat(this.value) || 1); xbRender()" aria-label="추가 건물 면적(㎡)">㎡</div>
-    <div class="s4-row">${b(XB.mode === 'place', "xbStart('place')", '📍 면적으로 놓기', '입력한 면적의 정사각형 건물을 지도에서 클릭한 자리에 놓음')}${b(XB.mode === 'draw', "xbStart('draw')", '✏ 모양 그리기', '지도에서 건물 모양을 직접 그림(면적 자동 계산)')}${XB.mode ? b(false, 'xbCancel()', '취소') : ''}</div>
-    ${hint ? `<div style="font-size:11.5px;color:#444;margin:2px 0;">${hint}</div>` : ''}
-    ${XB.list.map(x => `<div style="font-size:12px;border-top:1px dashed var(--card-line);padding:3px 0;"><input value="${escLand(x.name)}" style="width:92px;font-size:12px;" onchange="xbSet(${x.id}, 'name', this.value)" aria-label="건물 이름"> ${Math.round(shoelaceArea(x.path)).toLocaleString('ko-KR')}㎡ · 높이 <input type="number" step="0.5" min="0" value="${x.h}" style="width:50px;" onchange="xbSet(${x.id}, 'h', this.value)">m <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'del')" title="삭제">🗑</button></div>`).join('')}
-    <div class="s4-row" style="font-size:12px;"><label><input type="checkbox" id="xbLabels" ${(document.getElementById('xbLabels') || { checked: true }).checked ? 'checked' : ''} onchange="xbRender()"> 지도에 건물 높이 표시</label> <span class="sum-muted">주변 건물 높이 라벨을 클릭하면 고칠 수 있음</span></div>`;
+  if(!bx) return; const num = (v, js, w, step, lab) => `<input type="number" step="${step || 1}" value="${v}" style="width:${w || 50}px;font-size:12px;" onchange="${js}" aria-label="${lab}">`;
+  bx.innerHTML = `<div class="s4-row"><b>➕ 건물 놓기</b> <span class="sum-muted" style="font-size:11.5px;">지도에 없는 건물·지을 예정 건물</span></div>
+    <div class="s4-row" style="font-size:12px;">가로 ${num(XB.w, 'XB.w = Math.max(1, parseFloat(this.value) || 1); xbRender()', 50, 1, '가로(m)')}m × 세로 ${num(XB.d, 'XB.d = Math.max(1, parseFloat(this.value) || 1); xbRender()', 50, 1, '세로(m)')}m · 높이 ${num(XB.h, 'XB.h = Math.max(0, parseFloat(this.value) || 0)', 50, 0.5, '높이(m)')}m <span class="sum-muted">= ${Math.round(XB.w * XB.d).toLocaleString('ko-KR')}㎡</span></div>
+    <div class="s4-row"><button type="button" class="pp-btn${XB.mode === 'place' ? ' on' : ''}" onclick="xbStart()" style="font-weight:700;">${XB.mode === 'place' ? '지도에서 놓을 자리를 클릭하세요 (Esc 취소)' : '📍 지도에 놓기'}</button>${XB.mode === 'move' ? ' <span style="color:#B45309;font-size:12px;">옮길 자리를 지도에서 클릭하세요 (Esc 취소)</span>' : ''}</div>
+    ${XB.list.map(x => `<div style="font-size:12px;border-top:1px dashed var(--card-line);padding:4px 0;"><input value="${escLand(x.name)}" style="width:70px;font-size:12px;" onchange="xbSet(${x.id}, 'name', this.value)" aria-label="건물 이름"> ${num(x.w, `xbSet(${x.id}, 'w', this.value)`, 44, 1, '가로')}×${num(x.d, `xbSet(${x.id}, 'd', this.value)`, 44, 1, '세로')}m 높이 ${num(x.h, `xbSet(${x.id}, 'h', this.value)`, 44, 0.5, '높이')}m<br>방향 ${num(x.rot || 0, `xbSet(${x.id}, 'rot', this.value)`, 44, 5, '방향(도)')}° <button type="button" class="pp-btn" onclick="xbMove(${x.id})">📍 옮기기</button> <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'del')" title="삭제">🗑</button></div>`).join('')}
+    <div class="s4-row" style="font-size:12px;"><label><input type="checkbox" id="xbLabels" ${(document.getElementById('xbLabels') || { checked: true }).checked ? 'checked' : ''} onchange="xbRender()"> 지도에 건물 높이 표시</label> <span class="sum-muted">주변 건물 라벨 클릭 = 높이 고치기</span></div>`;
 }
 // ===== 🧱 파라펫·구조물 편집(지도) =====
 // 지도에서 건물 테두리 변을 클릭하면 그 변에 파라펫을 켜고/끔. 선 그리기 = 테두리와 다른 위치의 벽(일부 구간 파라펫 등), 면 그리기 = 계단실·기계실 같은 지붕 위 상자. 높이는 지붕면 기준.
@@ -7513,8 +7493,9 @@ function ppEditEnd(){ if(!PP.ed) return; PP.ed = null; PP.pts = []; PP.mode = 'e
 function ppClearOv(){ PP.ovs.concat(PP.drawOv).forEach(o => { try{ o.setMap(null); }catch(e){} }); PP.ovs = []; PP.drawOv = []; }
 function ppHook(){
   if(PP.hooked) return; PP.hooked = true; const el = document.getElementById('kakaoMap'); if(!el) return;
-  el.addEventListener('mousedown', e => { if(PP.ed) PP.down = { x: e.clientX, y: e.clientY }; }, true);
-  el.addEventListener('click', e => { if(!PP.ed || !PP.down) return; if(Math.hypot(e.clientX - PP.down.x, e.clientY - PP.down.y) > 5) return; const r = el.getBoundingClientRect(); ppClick(e.clientX - r.left, e.clientY - r.top); e.stopPropagation(); e.preventDefault(); }, true);
+  el.addEventListener('pointerdown', e => { if(PP.ed && e.button === 0) PP.down = { x: e.clientX, y: e.clientY }; }, true);
+  el.addEventListener('pointerup', e => { if(!PP.ed || !PP.down) return; const d = Math.hypot(e.clientX - PP.down.x, e.clientY - PP.down.y); PP.down = null; if(d > 5) return; const r = el.getBoundingClientRect(); PP.eat = Date.now(); ppClick(e.clientX - r.left, e.clientY - r.top); }, true);
+  el.addEventListener('click', e => { if(PP.eat && Date.now() - PP.eat < 400){ e.stopPropagation(); e.preventDefault(); } }, true);
   el.addEventListener('dblclick', e => { if(PP.ed && PP.mode !== 'edge'){ ppFinishDraw(); e.stopPropagation(); e.preventDefault(); } }, true);
   el.addEventListener('contextmenu', e => { if(PP.ed && PP.mode !== 'edge' && PP.pts.length){ PP.pts.pop(); ppRender(); e.preventDefault(); e.stopPropagation(); } }, true);
 }
@@ -7586,7 +7567,10 @@ function s4Build3D(force){
   const shapeOf = P => { const s = new T.Shape(); P.forEach((p, i) => i ? s.lineTo(p.x, p.y) : s.moveTo(p.x, p.y)); s.closePath(); return s; };
   const prism = (P, z0, h, color, op) => { if(!(h > 0)) return; const g = new T.ExtrudeGeometry(shapeOf(P), { depth: h, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, z0, 0); const wallM = new T.MeshStandardMaterial({ color, roughness: 0.9, transparent: op < 1, opacity: op }), roofM = new T.MeshStandardMaterial({ color: new T.Color(color).multiplyScalar(0.86), roughness: 0.95, transparent: op < 1, opacity: op }); const m = new T.Mesh(g, [roofM, wallM]); m.castShadow = true; m.receiveShadow = true; sc.add(m); sc.add(new T.LineSegments(new T.EdgesGeometry(g, 30), new T.LineBasicMaterial({ color: sk ? 0x1a1a1a : 0x333333, transparent: true, opacity: sk ? 0.9 : 0.5 }))); };
   const wall = (A, Bq, z0, h, color) => { const L = Math.hypot(Bq.x - A.x, Bq.y - A.y); if(L < 0.05 || !(h > 0)) return; const w = new T.Mesh(new T.BoxGeometry(L, h, 0.2), new T.MeshStandardMaterial({ color, roughness: 0.9 })); w.position.set((A.x + Bq.x) / 2, z0 + h / 2, -(A.y + Bq.y) / 2); w.rotation.y = Math.atan2(Bq.y - A.y, Bq.x - A.x); w.castShadow = true; w.receiveShadow = true; sc.add(w); };
-  D.B.forEach(b => { prism(b.P, 0, b.H, sk ? 0xf7f5ef : 0xd9d4c7, 1); b.segs.forEach(s => wall(s.A, s.B, b.H, s.h, 0x8f8a82)); b.areas.forEach(a => prism(a.P, b.H, a.h, 0xa58fb8, 1)); });
+  D.B.forEach(b => { if(b.land){ // 토지: 건물 상자 없이 필지 바닥만 표시
+      const lg2 = new T.ShapeGeometry(shapeOf(b.P)); lg2.rotateX(-Math.PI / 2); const lm = new T.Mesh(lg2, new T.MeshStandardMaterial({ color: sk ? 0xcfe0bd : 0x9fb58a, roughness: 1, transparent: !sk, opacity: sk ? 1 : 0.35 })); lm.position.y = 0.04; lm.receiveShadow = true; sc.add(lm);
+      const lp = []; b.P.forEach((p, i) => { const q = b.P[(i + 1) % b.P.length]; lp.push(p.x, 0.08, -p.y, q.x, 0.08, -q.y); }); const lgeo = new T.BufferGeometry(); lgeo.setAttribute('position', new T.Float32BufferAttribute(lp, 3)); sc.add(new T.LineSegments(lgeo, new T.LineBasicMaterial({ color: 0xE8702A }))); return; }
+    prism(b.P, 0, b.H, sk ? 0xf7f5ef : 0xd9d4c7, 1); b.segs.forEach(s => wall(s.A, s.B, b.H, s.h, 0x8f8a82)); b.areas.forEach(a => prism(a.P, b.H, a.h, 0xa58fb8, 1)); });
   D.nb.forEach(n => prism(n.P, 0, n.H, n.extra ? 0x8fc3d9 : (sk ? 0xe9edf1 : 0xb9c2cc), sk ? 1 : 0.95));
   const pos = [], col = [], line = [], cell = []; S4.mods = []; const cellsOn = D.mods.length <= 6000; // 모듈이 아주 많으면 셀 선은 생략
   D.mods.forEach((o, k) => { if(o.P.length < 4) return; const v = o.P.slice(0, 4).map((p, i) => [p.x, o.zs[i] + 0.02, -p.y]); const at = pos.length / 3; [0, 1, 2, 0, 2, 3].forEach(i => pos.push(...v[i])); for(let i = 0; i < 6; i++) col.push(0.07, 0.16, 0.36); for(let i = 0; i < 4; i++) line.push(...v[i], ...v[(i + 1) % 4]);
@@ -7648,9 +7632,9 @@ async function s4Record(){
   const caption = (t) => { const sp = s4Sun(t); const { m, d } = s4MD(); const live = S4.D.mods.filter(o => !o.m.removed).length; const sh = S4.now ? S4.now.filter(f => f != null && f > 0).length : 0;
     g.drawImage(cv, 0, 0, RW, RH);
     g.fillStyle = 'rgba(10,18,28,.72)'; const bw = 620 * u, bh = 118 * u, bx = 36 * u, by = 36 * u; g.beginPath(); if(g.roundRect) g.roundRect(bx, by, bw, bh, 14 * u); else g.rect(bx, by, bw, bh); g.fill();
-    g.fillStyle = '#fff'; g.textBaseline = 'top'; g.font = `700 ${40 * u}px Pretendard, "Noto Sans KR", sans-serif`; g.fillText(`${m}월 ${d}일  ${s4Hm(t)}`, bx + 22 * u, by + 14 * u);
-    g.font = `400 ${22 * u}px Pretendard, "Noto Sans KR", sans-serif`; g.fillStyle = '#D5DEE8'; g.fillText(`해 고도 ${sp.alt.toFixed(1)}° · 방위 ${Math.round(sp.az)}°(${dir(sp.az)}) · 그늘 모듈 ${sh.toLocaleString('ko-KR')} / ${live.toLocaleString('ko-KR')}장`, bx + 22 * u, by + 70 * u);
-    if(name){ g.font = `600 ${22 * u}px Pretendard, "Noto Sans KR", sans-serif`; const tw = g.measureText(name).width; g.fillStyle = 'rgba(10,18,28,.6)'; g.fillRect(RW - tw - 60 * u, RH - 64 * u, tw + 36 * u, 40 * u); g.fillStyle = '#fff'; g.fillText(name, RW - tw - 42 * u, RH - 56 * u); }
+    g.fillStyle = '#fff'; g.textBaseline = 'top'; g.font = `700 ${40 * u}px "Noto Sans KR", "IBM Plex Sans KR", sans-serif`; g.fillText(`${m}월 ${d}일  ${s4Hm(t)}`, bx + 22 * u, by + 14 * u);
+    g.font = `400 ${22 * u}px "Noto Sans KR", "IBM Plex Sans KR", sans-serif`; g.fillStyle = '#D5DEE8'; g.fillText(`해 고도 ${sp.alt.toFixed(1)}° · 방위 ${Math.round(sp.az)}°(${dir(sp.az)}) · 그늘 모듈 ${sh.toLocaleString('ko-KR')} / ${live.toLocaleString('ko-KR')}장`, bx + 22 * u, by + 70 * u);
+    if(name){ g.font = `600 ${22 * u}px "Noto Sans KR", "IBM Plex Sans KR", sans-serif`; const tw = g.measureText(name).width; g.fillStyle = 'rgba(10,18,28,.6)'; g.fillRect(RW - tw - 60 * u, RH - 64 * u, tw + 36 * u, 40 * u); g.fillStyle = '#fff'; g.fillText(name, RW - tw - 42 * u, RH - 56 * u); }
     // 하루 진행 막대
     const r0 = s4Rise(), r1 = s4Set(); g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(bx, RH - 30 * u, RW - 2 * bx, 6 * u); g.fillStyle = '#F59E0B'; g.fillRect(bx, RH - 30 * u, (RW - 2 * bx) * Math.max(0, Math.min(1, (t - r0) / Math.max(1, r1 - r0))), 6 * u); };
   rec.start(); if(btn) btn.textContent = '■ 녹화 끝내기';
