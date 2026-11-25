@@ -1420,7 +1420,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-26c';
+const APP_VERSION = '2026-11-26d';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -7224,7 +7224,7 @@ function ppEnsure(ed){
   if(ed.parapetOn && ed.parapetH > 0 && !Object.keys(ed.ppEdges).length && ed.boundary){ ed.boundary.forEach((_, i) => { ed.ppEdges[i] = ed.parapetH; }); ed.parapetOn = false; } // 이전 방식(전체 한 높이) → 변별로 옮김
   return ed;
 }
-function ppSummary(ed){ ppEnsure(ed); const n = Object.keys(ed.ppEdges).length, L = ed.obst.filter(o => o.kind === 'line').length, A = ed.obst.filter(o => o.kind === 'area').length; const hs = [...new Set(Object.values(ed.ppEdges))]; return (n ? `파라펫 ${n}/${ed.boundary.length}변 ${hs.map(h => h.toFixed(1) + 'm').join('·')}` : '파라펫 없음') + (L ? ` · 선 ${L}` : '') + (A ? ` · 구조물 ${A}` : ''); }
+function ppSummary(ed){ ppEnsure(ed); const n = Object.keys(ed.ppEdges).length, L = ed.obst.filter(o => o.kind === 'line').length, A = ed.obst.filter(o => o.kind === 'area').length; const hs = [...new Set(Object.values(ed.ppEdges))]; let sd = []; try{ sd = ppSides(ed).filter(x => x.on); }catch(e){} return (n ? `파라펫 ${sd.map(x => x.dir).join('·')}쪽 ${hs.map(h => h.toFixed(1) + 'm').join('·')}` : '파라펫 없음') + (L ? ` · 선 ${L}` : '') + (A ? ` · 구조물 ${A}` : ''); }
 function ppHas(ed){ ppEnsure(ed); return Object.keys(ed.ppEdges).length + ed.obst.length > 0; }
 function s4LoadThree(){
   if(window.THREE) return Promise.resolve(); if(S4.three) return S4.three;
@@ -7452,10 +7452,13 @@ function xbCancel(){ XB.mode = null; XB.moveId = null; xbRender(); }
 function xbClick(px, py){
   const map = ensureKakaoMap(), pr = map.getProjection(); const ll = pr.coordsFromContainerPoint(new kakao.maps.Point(px, py));
   if(XB.mode === 'move'){ const b = XB.list.find(x => x.id === XB.moveId); if(b) b.c = ll; }
-  else { XB.list.push({ id: ++XB.seq, c: ll, w: XB.w, d: XB.d, h: XB.h, rot: 0, name: '건물 ' + XB.seq }); }
+  else { XB.list.push({ id: ++XB.seq, c: ll, w: XB.w, d: XB.d, h: XB.h, rot: xbSiteRot(ll), name: '건물 ' + XB.seq }); /* 처음 방향은 설치 건물과 같게 */ }
   XB.mode = null; XB.moveId = null; xbRender(); s4Rebuild();
 }
 function xbSet(id, k, v){ const b = XB.list.find(x => x.id === id); if(!b) return; if(k === 'del') XB.list = XB.list.filter(x => x.id !== id); else if(k === 'name') b.name = String(v).slice(0, 30); else { const n = parseFloat(v); if(!isFinite(n)) return; if(k === 'rot') b.rot = Math.round(n); else if(n >= 0) b[k] = Math.round(n * 100) / 100; } xbRender(); s4Rebuild(); }
+// 놓는 건물의 기본 방위각 = 가장 가까운 설치 건물(배치)의 방향 — 지도 북쪽 기준 시계 방향 각도
+function xbSiteRot(ll){ let best = null, bd = Infinity; layoutRegistry.forEach(ed => { if(!ed.boundary || !ed.boundary.length) return; const q = ed.boundary[0]; const d = Math.hypot(q.getLat() - ll.getLat(), q.getLng() - ll.getLng()); if(d < bd){ bd = d; best = ed; } }); if(!best) return 0; let deg = -(best.azRad || 0) * 180 / Math.PI; deg = ((deg % 90) + 90) % 90; if(deg > 45) deg -= 90; return Math.round(deg); }
+function xbAlign(id){ const b = XB.list.find(x => x.id === id); if(!b) return; xbSet(id, 'rot', xbSiteRot(b.c)); }
 function xbNbEdit(key){ const cur = XB.nbH[key]; const v = prompt('이 주변 건물의 높이(m)를 입력하세요. 비우면 자동 값(층수 × 층당 높이)으로 돌아갑니다.', cur != null ? cur : ''); if(v === null) return; const n = parseFloat(v); if(String(v).trim() === '' || !(n >= 0)) delete XB.nbH[key]; else XB.nbH[key] = Math.round(n * 100) / 100; s4Rebuild(); }
 function xbClear(){ XB.ovs.concat(XB.lbls).forEach(o => { try{ o.setMap(null); }catch(e){} }); XB.ovs = []; XB.lbls = []; }
 function xbRender(){
@@ -7463,7 +7466,7 @@ function xbRender(){
   const mapEl = document.getElementById('kakaoMap'); if(mapEl) mapEl.style.cursor = XB.mode ? 'crosshair' : '';
   if(on){
     XB.list.forEach(b => { XB.ovs.push(new kakao.maps.Polygon({ map, path: xbPath(b), strokeWeight: 2.5, strokeColor: '#0B6E99', strokeStyle: 'shortdash', fillColor: '#0B6E99', fillOpacity: XB.moveId === b.id ? 0.5 : 0.28, zIndex: 5 })); });
-    const show = (document.getElementById('xbLabels') || {}).checked !== false; const D = S4.D;
+    const show = (document.getElementById('xbLabels') || {}).checked !== false && !(typeof PP !== 'undefined' && PP.ed); const D = S4.D;
     if(show && D){ const lbl = (pos, html, bg, js) => XB.lbls.push(new kakao.maps.CustomOverlay({ map, position: pos, yAnchor: 0.5, zIndex: 35, content: `<div ${js ? `onclick="${js}" onmousedown="kakao.maps.event.preventMap();" title="클릭하면 높이를 고칩니다" style="cursor:pointer;` : 'style="pointer-events:none;'}font-size:11px;line-height:1.25;padding:1px 5px;border-radius:4px;white-space:nowrap;text-align:center;background:${bg};color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);">${html}</div>` }));
       const ctr = P => { const x = P.reduce((a, p) => a + p.x, 0) / P.length, y = P.reduce((a, p) => a + p.y, 0) / P.length; return { x, y, ll: D.toLL(x, y) }; };
       D.B.forEach(b => { const tops = D.mods.filter(o => o.ed === b.ed && !o.m.removed).map(o => Math.max(...o.zs)); const mt = tops.length ? Math.max(...tops) : null; const p0 = b.ed.boundary[0];
@@ -7478,7 +7481,7 @@ function xbRender(){
   bx.innerHTML = `<div class="s4-row"><b>➕ 건물 놓기</b> <span class="sum-muted" style="font-size:11.5px;">지도에 없는 건물·지을 예정 건물</span></div>
     <div class="s4-row" style="font-size:12px;">가로 ${num(XB.w, 'XB.w = Math.max(1, parseFloat(this.value) || 1); xbRender()', 50, 1, '가로(m)')}m × 세로 ${num(XB.d, 'XB.d = Math.max(1, parseFloat(this.value) || 1); xbRender()', 50, 1, '세로(m)')}m · 높이 ${num(XB.h, 'XB.h = Math.max(0, parseFloat(this.value) || 0)', 50, 0.5, '높이(m)')}m <span class="sum-muted">= ${Math.round(XB.w * XB.d).toLocaleString('ko-KR')}㎡</span></div>
     <div class="s4-row"><button type="button" class="pp-btn${XB.mode === 'place' ? ' on' : ''}" onclick="xbStart()" style="font-weight:700;">${XB.mode === 'place' ? '지도에서 놓을 자리를 클릭하세요 (Esc 취소)' : '📍 지도에 놓기'}</button>${XB.mode === 'move' ? ' <span style="color:#B45309;font-size:12px;">옮길 자리를 지도에서 클릭하세요 (Esc 취소)</span>' : ''}</div>
-    ${XB.list.map(x => `<div style="font-size:12px;border-top:1px dashed var(--card-line);padding:4px 0;"><input value="${escLand(x.name)}" style="width:70px;font-size:12px;" onchange="xbSet(${x.id}, 'name', this.value)" aria-label="건물 이름"> ${num(x.w, `xbSet(${x.id}, 'w', this.value)`, 44, 1, '가로')}×${num(x.d, `xbSet(${x.id}, 'd', this.value)`, 44, 1, '세로')}m 높이 ${num(x.h, `xbSet(${x.id}, 'h', this.value)`, 44, 0.5, '높이')}m<br>방향 ${num(x.rot || 0, `xbSet(${x.id}, 'rot', this.value)`, 44, 5, '방향(도)')}° <button type="button" class="pp-btn" onclick="xbMove(${x.id})">📍 옮기기</button> <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'del')" title="삭제">🗑</button></div>`).join('')}
+    ${XB.list.map(x => `<div style="font-size:12px;border-top:1px dashed var(--card-line);padding:4px 0;"><input value="${escLand(x.name)}" style="width:70px;font-size:12px;" onchange="xbSet(${x.id}, 'name', this.value)" aria-label="건물 이름"> ${num(x.w, `xbSet(${x.id}, 'w', this.value)`, 44, 1, '가로')}×${num(x.d, `xbSet(${x.id}, 'd', this.value)`, 44, 1, '세로')}m 높이 ${num(x.h, `xbSet(${x.id}, 'h', this.value)`, 44, 0.5, '높이')}m<br>방위각 <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'rot', ${(x.rot || 0) - 5})" title="왼쪽(반시계)으로 5° 돌리기">⟲ 5°</button> ${num(x.rot || 0, `xbSet(${x.id}, 'rot', this.value)`, 46, 1, '방위각(도, 시계 방향)')}° <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'rot', ${(x.rot || 0) + 5})" title="오른쪽(시계)으로 5° 돌리기">⟳ 5°</button> <button type="button" class="pp-btn" onclick="xbAlign(${x.id})" title="설치 건물(배치)과 같은 방향으로 맞춤">설치 건물과 같게</button><br><button type="button" class="pp-btn" onclick="xbMove(${x.id})">📍 옮기기</button> <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'del')" title="삭제">🗑</button></div>`).join('')}
     <div class="s4-row" style="font-size:12px;"><label><input type="checkbox" id="xbLabels" ${(document.getElementById('xbLabels') || { checked: true }).checked ? 'checked' : ''} onchange="xbRender()"> 지도에 건물 높이 표시</label> <span class="sum-muted">주변 건물 라벨 클릭 = 높이 고치기</span></div>`;
 }
 // ===== 🧱 파라펫·구조물 편집(지도) =====
@@ -7499,14 +7502,35 @@ function ppHook(){
   el.addEventListener('dblclick', e => { if(PP.ed && PP.mode !== 'edge'){ ppFinishDraw(); e.stopPropagation(); e.preventDefault(); } }, true);
   el.addEventListener('contextmenu', e => { if(PP.ed && PP.mode !== 'edge' && PP.pts.length){ PP.pts.pop(); ppRender(); e.preventDefault(); e.stopPropagation(); } }, true);
 }
+// 건물 테두리를 '면'으로 묶음: 잘게 쪼개진 변(곡선·모따기)은 방향이 35° 넘게 바뀔 때까지 한 면으로. 면 이름 = 바깥쪽이 향하는 방위(남쪽 면 등)
+function ppSides(ed){
+  const la = ed.boundary[0].getLat() * Math.PI / 180; const P = ed.boundary.map(q => solarToXY(q, la)); const n = P.length;
+  let area2 = 0; for(let i = 0; i < n; i++){ const a = P[i], b = P[(i + 1) % n]; area2 += a.x * b.y - b.x * a.y; } const ccw = area2 > 0;
+  const E = P.map((a, i) => { const b = P[(i + 1) % n]; const dx = b.x - a.x, dy = b.y - a.y; return { i, len: Math.hypot(dx, dy), ang: Math.atan2(dy, dx) }; });
+  const diff = (a, b) => { let d = Math.abs(a - b) % (2 * Math.PI); return d > Math.PI ? 2 * Math.PI - d : d; };
+  // 시작점: 가장 크게 꺾이는 꼭짓점 다음 변부터(면이 꼭짓점 0에서 어색하게 잘리지 않게)
+  let st = 0, mx = -1; for(let i = 0; i < n; i++){ const t = diff(E[i].ang, E[(i + n - 1) % n].ang); if(t > mx){ mx = t; st = i; } }
+  const sides = []; let cur = null;
+  for(let k = 0; k < n; k++){ const e = E[(st + k) % n]; if(e.len < 0.05){ if(cur) cur.edges.push(e.i); continue; }
+    if(!cur || diff(e.ang, cur.ang0) > 35 * Math.PI / 180){ cur = { edges: [], ang0: e.ang, len: 0, sx: 0, sy: 0 }; sides.push(cur); }
+    cur.edges.push(e.i); cur.len += e.len; cur.sx += Math.cos(e.ang) * e.len; cur.sy += Math.sin(e.ang) * e.len; }
+  const names = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+  sides.forEach((sd, k) => { const ang = Math.atan2(sd.sy, sd.sx); const nx = ccw ? Math.sin(ang) : -Math.sin(ang), ny = ccw ? -Math.cos(ang) : Math.cos(ang); // 바깥쪽 방향
+    const az = (Math.atan2(nx, ny) * 180 / Math.PI + 360) % 360; sd.dir = names[Math.round(az / 45) % 8]; sd.k = k;
+    const mid = sd.edges[Math.floor(sd.edges.length / 2)]; const A = ed.boundary[mid], B = ed.boundary[(mid + 1) % n]; sd.mid = new kakao.maps.LatLng((A.getLat() + B.getLat()) / 2, (A.getLng() + B.getLng()) / 2);
+    const hs = sd.edges.map(i => ed.ppEdges[i]).filter(h => h > 0); sd.on = hs.length > 0; sd.h = hs.length ? hs[0] : null; });
+  // 같은 방위 이름이 여러 면이면 번호를 붙임(남 1, 남 2)
+  const cnt = {}; sides.forEach(sd => { cnt[sd.dir] = (cnt[sd.dir] || 0) + 1; }); const seen = {}; sides.forEach(sd => { if(cnt[sd.dir] > 1){ seen[sd.dir] = (seen[sd.dir] || 0) + 1; sd.name = `${sd.dir}쪽 면 ${seen[sd.dir]}`; } else sd.name = `${sd.dir}쪽 면`; });
+  return sides;
+}
+function ppSideSet(k, on, h){ const ed = PP.ed; if(!ed) return; const sd = ppSides(ed)[k]; if(!sd) return; const hh = h != null ? h : (sd.h || PP.h); sd.edges.forEach(i => { if(on && hh > 0) ed.ppEdges[i] = hh; else delete ed.ppEdges[i]; }); ppRender(); }
 function ppClick(px, py){
   const map = ensureKakaoMap(), pr = map.getProjection(), ed = PP.ed; const ll = pr.coordsFromContainerPoint(new kakao.maps.Point(px, py));
   if(PP.mode === 'edge'){
-    const P = ed.boundary.map(q => pr.containerPointFromCoords(q)); let best = -1, bd = 14;
+    const P = ed.boundary.map(q => pr.containerPointFromCoords(q)); let best = -1, bd = 16;
     for(let i = 0; i < P.length; i++){ const A = P[i], B = P[(i + 1) % P.length]; const d = distPointToSegment({ x: px, y: py }, A, B); if(d < bd){ bd = d; best = i; } }
-    if(best < 0) return; if(ed.ppEdges[best] > 0) delete ed.ppEdges[best]; else ed.ppEdges[best] = PP.h; ppRender(); return;
+    if(best < 0) return; const sd = ppSides(ed).find(x => x.edges.includes(best)); if(sd) ppSideSet(sd.k, !sd.on); return;
   }
-  // 선·면 그리기: 첫 점 가까이 다시 누르면(면) 끝
   if(PP.mode === 'area' && PP.pts.length >= 3){ const f = pr.containerPointFromCoords(PP.pts[0]); if(Math.hypot(f.x - px, f.y - py) < 12){ ppFinishDraw(); return; } }
   PP.pts.push(ll); ppRender();
 }
@@ -7517,25 +7541,27 @@ function ppApplyH(){ const ed = PP.ed; if(!ed) return; Object.keys(ed.ppEdges).f
 function ppObSet(i, k, v){ const ed = PP.ed; if(!ed || !ed.obst[i]) return; if(k === 'del') ed.obst.splice(i, 1); else { const n = parseFloat(v); if(n >= 0) ed.obst[i].h = Math.round(n * 100) / 100; } ppRender(); }
 function ppEdgeH(i, v){ const ed = PP.ed; if(!ed) return; const n = parseFloat(v); if(n > 0) ed.ppEdges[i] = Math.round(n * 100) / 100; else delete ed.ppEdges[i]; ppRender(); }
 function ppRender(){
-  const ed = PP.ed; ppClearOv(); const bx = document.getElementById('ppEditBox'); if(!ed){ if(bx) bx.innerHTML = ''; return; } const map = ensureKakaoMap(); const P = ed.boundary;
-  for(let i = 0; i < P.length; i++){ const A = P[i], B = P[(i + 1) % P.length], h = ed.ppEdges[i];
-    PP.ovs.push(new kakao.maps.Polyline({ map, path: [A, B], strokeWeight: h > 0 ? 7 : 4, strokeColor: h > 0 ? '#3D3D3D' : '#FFFFFF', strokeOpacity: h > 0 ? 0.95 : 0.8, strokeStyle: h > 0 ? 'solid' : 'shortdash', zIndex: 40 }));
-    const mid = new kakao.maps.LatLng((A.getLat() + B.getLat()) / 2, (A.getLng() + B.getLng()) / 2);
-    PP.ovs.push(new kakao.maps.CustomOverlay({ map, position: mid, yAnchor: 0.5, zIndex: 41, content: `<div style="pointer-events:none;font-size:10.5px;padding:0 4px;border-radius:4px;white-space:nowrap;${h > 0 ? 'background:#3D3D3D;color:#fff;' : 'background:rgba(255,255,255,.85);color:#555;'}">${i + 1}${h > 0 ? ' · ' + h.toFixed(1) + 'm' : ''}</div>` })); }
+  const ed = PP.ed; ppClearOv(); const bx = document.getElementById('ppEditBox'); if(!ed){ if(bx) bx.innerHTML = ''; return; } const map = ensureKakaoMap(); const P = ed.boundary; const sides = ppSides(ed);
+  // 지도: 파라펫이 있는 면만 굵은 진회색 선 + "남쪽 1.0m" 라벨 하나, 없는 면은 가는 흰 점선(글자 없음)
+  sides.forEach(sd => { const path = sd.edges.map(i => P[i]).concat([P[(sd.edges[sd.edges.length - 1] + 1) % P.length]]);
+    PP.ovs.push(new kakao.maps.Polyline({ map, path, strokeWeight: sd.on ? 8 : 3, strokeColor: sd.on ? '#2B2B2B' : '#FFFFFF', strokeOpacity: sd.on ? 0.95 : 0.85, strokeStyle: sd.on ? 'solid' : 'shortdash', zIndex: 40 }));
+    if(sd.on) PP.ovs.push(new kakao.maps.CustomOverlay({ map, position: sd.mid, yAnchor: 0.5, zIndex: 41, content: `<div style="pointer-events:none;font-size:12px;font-weight:700;padding:1px 7px;border-radius:5px;white-space:nowrap;background:#2B2B2B;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4);">🧱 ${sd.dir}쪽 ${sd.h.toFixed(1)}m</div>` })); });
   ed.obst.forEach((ob, i) => { if(ob.kind === 'line') PP.ovs.push(new kakao.maps.Polyline({ map, path: ob.path, strokeWeight: 6, strokeColor: '#7B3FA0', strokeOpacity: 0.95, zIndex: 40 })); else PP.ovs.push(new kakao.maps.Polygon({ map, path: ob.path, strokeWeight: 2, strokeColor: '#7B3FA0', fillColor: '#7B3FA0', fillOpacity: 0.45, zIndex: 40 }));
-    PP.ovs.push(new kakao.maps.CustomOverlay({ map, position: ob.path[0], yAnchor: 1.3, zIndex: 41, content: `<div style="pointer-events:none;font-size:10.5px;padding:0 4px;border-radius:4px;background:#7B3FA0;color:#fff;white-space:nowrap;">${ob.kind === 'line' ? '선' : '구조물'} ${i + 1} · ${ob.h.toFixed(1)}m</div>` })); });
+    PP.ovs.push(new kakao.maps.CustomOverlay({ map, position: ob.path[0], yAnchor: 1.3, zIndex: 41, content: `<div style="pointer-events:none;font-size:11.5px;padding:0 5px;border-radius:4px;background:#7B3FA0;color:#fff;white-space:nowrap;">${ob.kind === 'line' ? '벽' : '구조물'} ${i + 1} · ${ob.h.toFixed(1)}m</div>` })); });
   if(PP.pts.length){ PP.drawOv.push(new kakao.maps.Polyline({ map, path: PP.mode === 'area' && PP.pts.length >= 3 ? PP.pts.concat([PP.pts[0]]) : PP.pts, strokeWeight: 4, strokeColor: '#E8702A', strokeOpacity: 1, strokeStyle: 'shortdash', zIndex: 42 })); }
-  const n = Object.keys(ed.ppEdges).length; const b = (on, js, t, tip) => `<button type="button" class="pp-btn${on ? ' on' : ''}" onclick="${js}" title="${tip || ''}">${t}</button>`;
-  const hint = PP.mode === 'edge' ? '지도에서 <b>건물 테두리 변</b>을 클릭하면 파라펫 켜기/끄기 (진회색 = 파라펫, 흰 점선 = 없음)' : PP.mode === 'line' ? '<b>선 그리기</b>: 지도를 차례로 클릭 → 더블클릭 또는 [그리기 끝] · 오른쪽 클릭 = 마지막 점 취소' : '<b>구조물 면 그리기</b>: 꼭짓점을 차례로 클릭 → 첫 점을 다시 클릭(또는 더블클릭)하면 끝 · 오른쪽 클릭 = 마지막 점 취소';
-  if(bx) bx.innerHTML = `<div style="border:2px solid #3D3D3D;border-radius:8px;padding:8px;margin:6px 0;background:#fff;font-size:12px;">
-    <div class="s4-row"><b>🧱 ${escLand(ed.bldName || '')}</b> <span class="sum-muted">파라펫 ${n}/${P.length}변</span></div>
-    <div class="s4-row">높이 <input type="number" step="0.1" min="0.1" value="${PP.h}" style="width:52px;" onchange="PP.h = Math.max(0.1, parseFloat(this.value) || 1); ppRender()" aria-label="파라펫·구조물 높이(m)">m <span class="sum-muted">(지붕면에서, 새로 켜는 변·그리는 선·면에 적용)</span></div>
-    <div class="s4-row">${b(PP.mode === 'edge', "ppSetMode('edge')", '변 클릭')}${b(false, 'ppAll(true)', '모든 변 켜기')}${b(false, 'ppAll(false)', '모두 끄기')}${b(false, 'ppApplyH()', '켜진 변 높이 = ' + PP.h + 'm')}</div>
-    <div class="s4-row">${b(PP.mode === 'line', "ppSetMode('line')", '✏ 선 그리기', '테두리와 다른 위치의 벽·일부 구간 파라펫')}${b(PP.mode === 'area', "ppSetMode('area')", '▭ 구조물 면 그리기', '계단실·기계실·물탱크 등 지붕 위 상자')}${PP.mode !== 'edge' ? b(false, 'ppFinishDraw()', '그리기 끝') : ''}</div>
-    <div style="margin:4px 0;color:#444;">${hint}</div>
-    ${n ? `<div style="margin:2px 0;">${Object.keys(ed.ppEdges).map(Number).sort((a, c) => a - c).map(i => `<span style="display:inline-block;margin:1px 4px 1px 0;">변 ${i + 1} <input type="number" step="0.1" min="0" value="${ed.ppEdges[i]}" style="width:44px;" onchange="ppEdgeH(${i}, this.value)">m</span>`).join('')}</div>` : ''}
-    ${ed.obst.length ? `<div style="margin:2px 0;">${ed.obst.map((ob, i) => `<div>${ob.kind === 'line' ? '선' : '구조물'} ${i + 1} <input type="number" step="0.1" min="0" value="${ob.h}" style="width:44px;" onchange="ppObSet(${i}, 'h', this.value)">m <button type="button" class="pp-btn" onclick="ppObSet(${i}, 'del')">🗑</button></div>`).join('')}</div>` : ''}
-    <div class="s4-row"><button type="button" class="pp-btn on" onclick="ppEditEnd()">✔ 편집 끝 (Esc)</button> <span class="sum-muted">↶ 이전으로 = 편집 전으로</span></div></div>`;
+  const nOn = sides.filter(x => x.on).length; const b = (on, js, t, tip) => `<button type="button" class="pp-btn${on ? ' on' : ''}" onclick="${js}" title="${tip || ''}">${t}</button>`;
+  const hint = PP.mode === 'line' ? '<b>벽 선 그리기</b>: 지도를 차례로 클릭 → 더블클릭 또는 [그리기 끝] · 오른쪽 클릭 = 마지막 점 취소' : PP.mode === 'area' ? '<b>구조물 그리기</b>: 꼭짓점을 차례로 클릭 → 첫 점을 다시 클릭(또는 더블클릭)하면 끝 · 오른쪽 클릭 = 마지막 점 취소' : '';
+  if(bx) bx.innerHTML = `<div style="border:2px solid #2B2B2B;border-radius:8px;padding:8px;margin:6px 0;background:#fff;font-size:12.5px;">
+    <div class="s4-row"><b>🧱 ${escLand(ed.bldName || '')} 파라펫</b> <span class="sum-muted">${nOn ? `${nOn}개 면에 있음` : '없음'}</span></div>
+    <div style="color:#444;margin:2px 0 6px;">파라펫이 있는 면에 체크하세요. 지도에서 건물 테두리를 클릭해도 켜고 꺼집니다.</div>
+    ${sides.map(sd => `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;border-top:1px dashed var(--card-line);"><input type="checkbox" ${sd.on ? 'checked' : ''} onchange="ppSideSet(${sd.k}, this.checked)"> <span style="min-width:74px;font-weight:${sd.on ? 700 : 400};">${sd.name}</span> <span class="sum-muted" style="min-width:44px;">${sd.len.toFixed(0)}m</span> ${sd.on ? `높이 <input type="number" step="0.1" min="0.1" value="${sd.h}" style="width:52px;" onchange="ppSideSet(${sd.k}, true, Math.max(0.1, parseFloat(this.value) || 1))" onclick="event.preventDefault()" aria-label="${sd.name} 파라펫 높이(m)">m` : ''}</label>`).join('')}
+    <div class="s4-row" style="margin-top:6px;">${b(false, 'ppAll(true)', '모든 면 켜기')}${b(false, 'ppAll(false)', '모두 끄기')} 새로 켤 때 높이 <input type="number" step="0.1" min="0.1" value="${PP.h}" style="width:50px;" onchange="PP.h = Math.max(0.1, parseFloat(this.value) || 1)" aria-label="기본 파라펫 높이(m)">m</div>
+    <details style="margin-top:6px;"${(ed.obst.length || PP.mode !== 'edge') ? ' open' : ''}><summary style="cursor:pointer;font-size:12px;">테두리가 아닌 곳의 벽·지붕 위 구조물(계단실 등) 추가</summary>
+      <div class="s4-row">${b(PP.mode === 'line', "ppSetMode('line')", '✏ 벽 선 그리기')}${b(PP.mode === 'area', "ppSetMode('area')", '▭ 구조물 그리기')}${PP.mode !== 'edge' ? b(false, 'ppFinishDraw()', '그리기 끝') : ''}</div>
+      ${hint ? `<div style="margin:3px 0;color:#444;">${hint}</div>` : ''}
+      ${ed.obst.map((ob, i) => `<div>${ob.kind === 'line' ? '벽' : '구조물'} ${i + 1} 높이 <input type="number" step="0.1" min="0" value="${ob.h}" style="width:48px;" onchange="ppObSet(${i}, 'h', this.value)">m <button type="button" class="pp-btn" onclick="ppObSet(${i}, 'del')">🗑</button></div>`).join('')}</details>
+    <div class="s4-row" style="margin-top:6px;"><button type="button" class="pp-btn on" onclick="ppEditEnd()">✔ 완료</button> <span class="sum-muted">↶ 이전으로 = 편집 전으로</span></div></div>`;
+  try{ xbRender(); }catch(e){} // 편집 중에는 건물 높이 라벨을 숨김
 }
 // ===== 🧊 3D 보기(선택): 같은 자료를 three.js로 =====
 async function s4Open3D(){
