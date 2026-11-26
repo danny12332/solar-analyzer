@@ -1421,7 +1421,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-26f';
+const APP_VERSION = '2026-11-26g';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -13325,18 +13325,22 @@ async function kepcoHedgedFetch(url, opts, waits, totalMs){
 // 2026-11-23 실측: Worker에 캐시가 없는 리·동의 지번목록은 매번 약 20초(20.4/19.8/20.5/20.6초), 캐시된 같은 주소는 0.4~0.9초.
 // 같은 요청을 겹쳐 보내도 모두 20초라 재요청은 쓰지 않음 → 한 번만 보내고, 주소를 찾자마자 미리 받아 둠(prefetchKepcoList)
 const kepcoListCache = new Map();
+// (2026-11-26) 실측: 같은 날 대부분 0.2~0.7초인데 가끔 한 요청만 20~41초 멈춤(무작위) → 1.5초 안에 답이 없으면 같은 요청을 다시 보내 먼저 온 답을 씀.
+// 한 번 받은 지번목록은 이 브라우저에 7일 보관(localStorage) → 같은 리·동은 다음부터 목록을 받지 않음
+const KEPCO_LS = 'kepcoJibunLists1';
+function kepcoListLoad(key){ try{ const all = JSON.parse(localStorage.getItem(KEPCO_LS) || '{}'); const e = all[key]; if(e && Date.now() - e.t < 7 * 86400000 && Array.isArray(e.l) && e.l.length) return e.l; }catch(e){} return null; }
+function kepcoListSave(key, list){ try{ const all = JSON.parse(localStorage.getItem(KEPCO_LS) || '{}'); all[key] = { t: Date.now(), l: list }; const ks = Object.keys(all); if(ks.length > 80) ks.sort((a, b) => all[a].t - all[b].t).slice(0, ks.length - 80).forEach(k => delete all[k]); localStorage.setItem(KEPCO_LS, JSON.stringify(all)); }catch(e){} }
 function fetchJibunList(admin, lidong, li){
   const params = new URLSearchParams({ do: admin.do, si: admin.si, gu: admin.gu, lidong, li });
   const key = params.toString();
   if(kepcoListCache.has(key)) return kepcoListCache.get(key);
+  const saved = kepcoListLoad(key); if(saved){ const ps = Promise.resolve(saved); kepcoListCache.set(key, ps); return ps; }
   const p = (async () => {
-    const ctl = new AbortController(); const tid = setTimeout(() => ctl.abort(), 60000);
-    try{
-      const res = await fetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-jibun-list?' + key, { signal: ctl.signal });
-      if(!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      return data.jibunList || [];
-    } finally { clearTimeout(tid); }
+    const res = await kepcoHedgedFetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-jibun-list?' + key, {}, [1500, 3500], 60000);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json(); const list = data.jibunList || [];
+    if(list.length) kepcoListSave(key, list);
+    return list;
   })();
   kepcoListCache.set(key, p);
   p.then(l => { if(!l.length) kepcoListCache.delete(key); }, () => kepcoListCache.delete(key)); // 실패·0건은 기억하지 않음(다시 조회하면 새로 받음)
@@ -13559,7 +13563,7 @@ async function checkKepcoCapacityInner(){
           const r0 = await kepcoHedgedFetch('https://rough-moon-e02c.ruwk66.workers.dev/kepco-nearest', {
             method: 'POST', headers: { 'Content-Type': 'application/json;charset=UTF-8' },
             body: JSON.stringify({ do: admin.do, si: admin.si, gu: admin.gu, attempts: [{ lidong, li, jibun }] })
-          }, [4000, 6000]);
+          }, [1500, 3500]);
           const j0 = r0.ok ? await r0.json() : null;
           if(j0 && j0.matched && j0.dlt_resultList && j0.dlt_resultList.length){
             kepcoDebug.steps.push({ lidong, li, listCount: 0, skipList: true, listErr: '', attempts: jibun, nearest: '일치: ' + j0.matched.jibun + ' (입력 지번 바로 조회)', calls: [Math.round(performance.now() - tE)] });
@@ -13610,7 +13614,7 @@ async function checkKepcoCapacityInner(){
             method: 'POST',
             headers: { 'Content-Type': 'application/json;charset=UTF-8' },
             body: JSON.stringify({ do: admin.do, si: admin.si, gu: admin.gu, attempts })
-          }, [4000, 6000]);
+          }, [1500, 3500]);
         } finally { step.calls.push(Math.round(performance.now() - tC)); }
         if(!res.ok){ step.nearest = 'HTTP ' + res.status; throw new Error('HTTP ' + res.status); }
         const result = await res.json();
