@@ -1421,7 +1421,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-26m';
+const APP_VERSION = '2026-11-27a';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -7466,6 +7466,18 @@ function xbSet(id, k, v){ const b = XB.list.find(x => x.id === id); if(!b) retur
 function xbSiteRot(ll){ let best = null, bd = Infinity; layoutRegistry.forEach(ed => { if(!ed.boundary || !ed.boundary.length) return; const q = ed.boundary[0]; const d = Math.hypot(q.getLat() - ll.getLat(), q.getLng() - ll.getLng()); if(d < bd){ bd = d; best = ed; } }); if(!best) return 0; let deg = -(best.azRad || 0) * 180 / Math.PI; deg = ((deg % 90) + 90) % 90; if(deg > 45) deg -= 90; return Math.round(deg); }
 function xbAlign(id){ const b = XB.list.find(x => x.id === id); if(!b) return; xbSet(id, 'rot', xbSiteRot(b.c)); }
 function xbNbEdit(key){ const cur = XB.nbH[key]; const v = prompt('이 주변 건물의 높이(m)를 입력하세요. 비우면 자동 값(층수 × 층당 높이)으로 돌아갑니다.', cur != null ? cur : ''); if(v === null) return; const n = parseFloat(v); if(String(v).trim() === '' || !(n >= 0)) delete XB.nbH[key]; else XB.nbH[key] = Math.round(n * 100) / 100; s4Rebuild(); }
+function xbLblHide(key){ XB.lblHide[key] = true; xbRender(); }
+function xbLblReset(){ XB.lblHide = {}; XB.lblPos = {}; xbRender(); }
+function xbLblDown(ev, key){
+  const js = (XB.lblJs || {})[key]; const ov = XB.lblMap && XB.lblMap[key]; if(!ov) return; const map = ensureKakaoMap(); const proj = map.getProjection(); const k = (typeof mapZoomK === 'number' && mapZoomK > 0) ? mapZoomK : 1;
+  const p0 = proj.containerPointFromCoords(ov.getPosition()); const sx = ev.clientX, sy = ev.clientY; let moved = false;
+  try{ ev.preventDefault(); }catch(e){}
+  const mv = e => { const dx = (e.clientX - sx) / k, dy = (e.clientY - sy) / k; if(!moved && Math.hypot(dx, dy) < 4) return; moved = true;
+    ov.setPosition(proj.coordsFromContainerPoint(new kakao.maps.Point(p0.x + dx, p0.y + dy))); };
+  const up = () => { document.removeEventListener('pointermove', mv, true); document.removeEventListener('pointerup', up, true);
+    if(moved){ XB.lblPos[key] = ov.getPosition(); xbRender(); } else if(js){ try{ (new Function(js))(); }catch(e){} } };
+  document.addEventListener('pointermove', mv, true); document.addEventListener('pointerup', up, true);
+}
 function xbClear(){ XB.ovs.concat(XB.lbls).forEach(o => { try{ o.setMap(null); }catch(e){} }); XB.ovs = []; XB.lbls = []; }
 function xbRender(){
   xbClear(); const on = typeof SM !== 'undefined' && SM.on; const bx = document.getElementById('xbBox'); const map = on ? ensureKakaoMap() : null;
@@ -7473,14 +7485,16 @@ function xbRender(){
   if(on){
     XB.list.forEach(b => { XB.ovs.push(new kakao.maps.Polygon({ map, path: xbPath(b), strokeWeight: 2.5, strokeColor: '#0B6E99', strokeStyle: 'shortdash', fillColor: '#0B6E99', fillOpacity: XB.moveId === b.id ? 0.5 : 0.28, zIndex: 5 })); });
     const show = (document.getElementById('xbLabels') || {}).checked !== false && !(typeof PP !== 'undefined' && PP.ed); const D = S4.D;
-    if(show && D){ const lbl = (pos, html, bg, js) => XB.lbls.push(new kakao.maps.CustomOverlay({ map, position: pos, yAnchor: 0.5, zIndex: 35, content: `<div ${js ? `onclick="${js}" onmousedown="kakao.maps.event.preventMap();" title="클릭하면 높이를 고칩니다" style="cursor:pointer;` : 'style="pointer-events:none;'}font-size:11px;line-height:1.25;padding:1px 5px;border-radius:4px;white-space:nowrap;text-align:center;background:${bg};color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);">${html}</div>` }));
+    XB.lblMap = {}; XB.lblJs = {}; XB.lblPos = XB.lblPos || {}; XB.lblHide = XB.lblHide || {};
+    /* 높이 라벨: 끌어서 옮기기 · ×로 지우기(2026-11-27). 옮긴 자리·지운 표시는 key별로 기억, 아래 '되살리기'로 복구 */
+    if(show && D){ const lbl = (pos, html, bg, js, key) => { key = String(key).replace(/[^0-9A-Za-z가-힣._-]/g, '_'); if(XB.lblHide[key]) return; XB.lblJs[key] = js || ''; const ov = new kakao.maps.CustomOverlay({ map, position: XB.lblPos[key] || pos, yAnchor: 0.5, zIndex: 35, content: `<div onpointerdown="xbLblDown(event, '${key}')" onmousedown="kakao.maps.event.preventMap();" title="끌어서 옮기기${js ? ' · 클릭하면 높이 고치기' : ''}" style="cursor:move;touch-action:none;user-select:none;font-size:11px;line-height:1.25;padding:1px 4px 1px 5px;border-radius:4px;white-space:nowrap;text-align:center;background:${bg};color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;gap:4px;"><span>${html}</span><span onpointerdown="event.stopPropagation();" onmousedown="kakao.maps.event.preventMap();" onclick="xbLblHide('${key}')" title="이 표시 지우기" style="cursor:pointer;opacity:.75;font-size:12px;padding:0 2px;">✕</span></div>` }); XB.lbls.push(ov); XB.lblMap[key] = ov; };
       const ctr = P => { const x = P.reduce((a, p) => a + p.x, 0) / P.length, y = P.reduce((a, p) => a + p.y, 0) / P.length; return { x, y, ll: D.toLL(x, y) }; };
       D.B.forEach(b => { const tops = D.mods.filter(o => o.ed === b.ed && !o.m.removed).map(o => Math.max(...o.zs)); const mt = tops.length ? Math.max(...tops) : null; const p0 = b.ed.boundary[0];
-        if(b.land){ if(mt != null) lbl(p0, `🌱 토지 · 모듈 상단 <b>${mt.toFixed(1)}m</b>`, '#3E6B2F'); return; }
-        lbl(p0, `🏢 설치 건물 <b>${b.H.toFixed(1)}m</b> <span style="opacity:.8;">(${b.src})</span>${mt != null ? `<br>모듈 상단 <b>${mt.toFixed(1)}m</b> (지붕 +${(mt - b.H).toFixed(1)}m)` : ''}`, '#1B3A5C'); });
+        if(b.land){ if(mt != null) lbl(p0, `🌱 토지 · 모듈 상단 <b>${mt.toFixed(1)}m</b>`, '#3E6B2F', '', 's' + b.ed.groupId); return; }
+        lbl(p0, `🏢 설치 건물 <b>${b.H.toFixed(1)}m</b> <span style="opacity:.8;">(${b.src})</span>${mt != null ? `<br>모듈 상단 <b>${mt.toFixed(1)}m</b> (지붕 +${(mt - b.H).toFixed(1)}m)` : ''}`, '#1B3A5C', '', 's' + b.ed.groupId); });
       const site = D.B.flatMap(b => b.P); const sc = { x: site.reduce((a, p) => a + p.x, 0) / site.length, y: site.reduce((a, p) => a + p.y, 0) / site.length };
       D.nb.map(n => ({ n, c: ctr(n.P) })).filter(o => o.n.H > 0).sort((a, c) => Math.hypot(a.c.x - sc.x, a.c.y - sc.y) - Math.hypot(c.c.x - sc.x, c.c.y - sc.y)).slice(0, 60).forEach(o => { const n = o.n;
-        lbl(o.c.ll, `${n.extra ? escLand(n.name) + ' ' : ''}<b>${n.H.toFixed(1)}m</b>${n.extra ? '' : ` <span style="opacity:.8;">${escLand(n.short || '')}</span>`}`, n.extra ? '#0B6E99' : (n.manual ? '#7A4E05' : '#5A6470'), n.extra ? '' : `xbNbEdit('${n.key}')`); });
+        lbl(o.c.ll, `${n.extra ? escLand(n.name) + ' ' : ''}<b>${n.H.toFixed(1)}m</b>${n.extra ? '' : ` <span style="opacity:.8;">${escLand(n.short || '')}</span>`}`, n.extra ? '#0B6E99' : (n.manual ? '#7A4E05' : '#5A6470'), n.extra ? '' : `xbNbEdit('${n.key}')`, n.extra ? 'x' + n.name : 'n' + n.key); });
     }
   }
   if(!bx) return; const num = (v, js, w, step, lab) => `<input type="number" step="${step || 1}" value="${v}" style="width:${w || 50}px;font-size:12px;" onchange="${js}" aria-label="${lab}">`;
@@ -7488,7 +7502,7 @@ function xbRender(){
     <div class="s4-row" style="font-size:12px;">가로 ${num(XB.w, 'XB.w = Math.max(1, parseFloat(this.value) || 1); xbRender()', 50, 1, '가로(m)')}m × 세로 ${num(XB.d, 'XB.d = Math.max(1, parseFloat(this.value) || 1); xbRender()', 50, 1, '세로(m)')}m · 높이 ${num(XB.h, 'XB.h = Math.max(0, parseFloat(this.value) || 0)', 50, 0.5, '높이(m)')}m <span class="sum-muted">= ${Math.round(XB.w * XB.d).toLocaleString('ko-KR')}㎡</span></div>
     <div class="s4-row"><button type="button" class="pp-btn${XB.mode === 'place' ? ' on' : ''}" onclick="xbStart()" style="font-weight:700;">${XB.mode === 'place' ? '지도에서 놓을 자리를 클릭하세요 (Esc 취소)' : '📍 지도에 놓기'}</button>${XB.mode === 'move' ? ' <span style="color:#B45309;font-size:12px;">옮길 자리를 지도에서 클릭하세요 (Esc 취소)</span>' : ''}</div>
     ${XB.list.map(x => `<div style="font-size:12px;border-top:1px dashed var(--card-line);padding:4px 0;"><input value="${escLand(x.name)}" style="width:70px;font-size:12px;" onchange="xbSet(${x.id}, 'name', this.value)" aria-label="건물 이름"> ${num(x.w, `xbSet(${x.id}, 'w', this.value)`, 44, 1, '가로')}×${num(x.d, `xbSet(${x.id}, 'd', this.value)`, 44, 1, '세로')}m 높이 ${num(x.h, `xbSet(${x.id}, 'h', this.value)`, 44, 0.5, '높이')}m<br>방위각 <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'rot', ${(x.rot || 0) - 5})" title="왼쪽(반시계)으로 5° 돌리기">⟲ 5°</button> ${num(x.rot || 0, `xbSet(${x.id}, 'rot', this.value)`, 46, 1, '방위각(도, 시계 방향)')}° <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'rot', ${(x.rot || 0) + 5})" title="오른쪽(시계)으로 5° 돌리기">⟳ 5°</button> <button type="button" class="pp-btn" onclick="xbAlign(${x.id})" title="설치 건물(배치)과 같은 방향으로 맞춤">설치 건물과 같게</button><br><button type="button" class="pp-btn" onclick="xbMove(${x.id})">📍 옮기기</button> <button type="button" class="pp-btn" onclick="xbSet(${x.id}, 'del')" title="삭제">🗑</button></div>`).join('')}
-    <div class="s4-row" style="font-size:12px;"><label><input type="checkbox" id="xbLabels" ${(document.getElementById('xbLabels') || { checked: true }).checked ? 'checked' : ''} onchange="xbRender()"> 지도에 건물 높이 표시</label> <span class="sum-muted">주변 건물 라벨 클릭 = 높이 고치기</span></div>`;
+    <div class="s4-row" style="font-size:12px;"><label><input type="checkbox" id="xbLabels" ${(document.getElementById('xbLabels') || { checked: true }).checked ? 'checked' : ''} onchange="xbRender()"> 지도에 건물 높이 표시</label> <span class="sum-muted" style="font-size:11px;">끌어서 옮기기 · ✕ 지우기</span>${(XB.lblHide && Object.keys(XB.lblHide).length) || (XB.lblPos && Object.keys(XB.lblPos).length) ? ` <button type="button" onclick="xbLblReset()" style="font-size:11px;padding:1px 6px;">↺ 지운·옮긴 표시 되살리기</button>` : ''} <span class="sum-muted">주변 건물 라벨 클릭 = 높이 고치기</span></div>`;
 }
 // ===== 🧱 파라펫·구조물 편집(지도) =====
 // 지도에서 건물 테두리 변을 클릭하면 그 변에 파라펫을 켜고/끔. 선 그리기 = 테두리와 다른 위치의 벽(일부 구간 파라펫 등), 면 그리기 = 계단실·기계실 같은 지붕 위 상자. 높이는 지붕면 기준.
@@ -11295,7 +11309,9 @@ function applyAddSpace(path){
   histMuted = true; addSpaceGen = true;
   try{
     if(preset && LAYOUT_PRESETS[preset]) applyLayoutPreset(preset);
-    const sb = document.getElementById('panelSetback'); if(sb) sb.value = 0; // 그린 선이 곧 배치 범위
+    /* 2026-11-27: 그린 선이 건물 외곽선이면 지붕 끝 이격(유형 표준값, 최소 0.5m)을 두고 배치. 토지·주차장은 예전처럼 그린 선 끝까지(0) */
+    const sb = document.getElementById('panelSetback'); const pm = (preset && LAYOUT_PRESETS[preset] && LAYOUT_PRESETS[preset].mount) || '';
+    if(sb){ if(pm === 'ground' || pm === 'parking' || !pm) sb.value = 0; else sb.value = Math.max(parseFloat(sb.value) || 0, 0.5); }
     onGenerateLayoutClick();
   }catch(e){ console.warn('add space', e); }
   finally{ histMuted = false; addSpaceGen = false; }
