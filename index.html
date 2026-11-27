@@ -1421,7 +1421,7 @@ body.mod-drag #kakaoMap, body.mod-drag #kakaoMap * { cursor: grabbing !important
 
 <script>
 // 버전: 파일을 고쳐 올릴 때마다 바꿈. 열린 페이지가 서버의 최신 파일과 다르면 위에 "새 버전" 띠를 보여 새로 고치게 함(다른 PC·브라우저 캐시 때문에 옛 화면이 남는 일 방지)
-const APP_VERSION = '2026-11-27a';
+const APP_VERSION = '2026-11-27b';
 document.addEventListener('DOMContentLoaded', () => {
   const v = document.getElementById('appVer'); if(v) v.textContent = 'v' + APP_VERSION; const vc = document.getElementById('verCur'); if(vc) vc.textContent = 'v' + APP_VERSION;
   if(!/^https?:/.test(location.protocol)) return;
@@ -2234,6 +2234,7 @@ function ui2Toggle(){ try{ localStorage.setItem(UI2_KEY, ui2On() ? '0' : '1'); }
 // 0.5초마다: 단계(경계 없음 → ①, 경계만 → ②, 배치 있음 → ④)가 바뀌면 그 단계를 펼치고, 단계 제목 옆에 현재 상태를 적음
 function ui2Tick(){
   if(!document.body.classList.contains('ui2')) return;
+  try{ pinSync(); }catch(e){}
   const hasB = !!(typeof lastAreaPolygonPath !== 'undefined' && lastAreaPolygonPath && lastAreaPolygonPath.length >= 3);
   const lays = (typeof layoutRegistry !== 'undefined') ? layoutRegistry : [];
   const stage = lays.length ? '4' : (hasB ? '2' : '1');
@@ -2817,11 +2818,19 @@ let lastLandInfo = null;       // fetchLandInfo() 결과
 let lastMarket = null;         // /market 응답
 let lastLatLng = null; // 마지막으로 확인된 좌표 (카카오 실시간 법정동코드 조회용)
 
+/* 2026-11-27: 배치도 탭에서는 위치 핀(파란 표시)이 건물 모서리·모듈을 가려서 숨김. 다른 탭으로 가면 다시 보임 */
+function pinSync(){
+  if(typeof kakaoMarker === 'undefined' || !kakaoMarker) return;
+  const hide = document.body.getAttribute('data-rail') === 'railPaneLayout';
+  if(!!kakaoMarker.__hid === hide) return;
+  kakaoMarker.__hid = hide; kakaoMarker.setMap(hide ? null : ensureKakaoMap());
+}
 function setMarkerPosition(pos, geocodeInfo){
   const map = ensureKakaoMap();
   if(kakaoMarker){ kakaoMarker.setMap(null); }
   kakaoMarker = new kakao.maps.Marker({ position: pos, map: map });
   lastPosition = pos;
+  try{ pinSync(); }catch(e){}
   if(geocodeInfo){
     // 주소 검색으로 이미 지번/도로명 정보를 받은 경우 — 재조회(coord2Address) 없이 바로 사용 (더 정확함)
     renderAddressLabel(pos, geocodeInfo.jibun, geocodeInfo.road);
